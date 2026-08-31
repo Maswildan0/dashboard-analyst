@@ -130,6 +130,10 @@ function renderChartBPie(slices) {
                 backgroundColor: slices.map((s) => s.color),
                 borderWidth: 2,
                 borderColor: '#ffffff',
+                // Slice "explodes" away from center when hovered (pop).
+                hoverOffset: 16,
+                hoverBorderWidth: 4,
+                hoverBorderColor: '#ffffff',
             }],
         },
         options: {
@@ -162,7 +166,21 @@ function renderKpis(kpis) {
         const data = kpis[idx];
         if (!data) return;
         card.querySelector('[data-kpi-title]').textContent = data.title;
-        card.querySelector('[data-kpi-value]').textContent = 'Rp' + Number(data.value).toLocaleString('id-ID');
+        const valueEl = card.querySelector('[data-kpi-value]');
+        const target = Number(data.value) || 0;
+        // Count-up animation for the displayed value.
+        const prev = Number(card.dataset.prevValue || 0);
+        const duration = 600;
+        const start = performance.now();
+        const step = (now) => {
+            const t = Math.min(1, (now - start) / duration);
+            const eased = 1 - Math.pow(1 - t, 3);
+            const cur = Math.round(prev + (target - prev) * eased);
+            valueEl.textContent = 'Rp' + cur.toLocaleString('id-ID');
+            if (t < 1) requestAnimationFrame(step);
+        };
+        card.dataset.prevValue = String(target);
+        requestAnimationFrame(step);
         const cap = card.querySelector('[data-kpi-capaian]');
         if (cap) {
             cap.textContent = data.capaian[0];
