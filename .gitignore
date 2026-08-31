@@ -11,7 +11,6 @@ db.sqlite3
 
 # Node (build inputs retained for rebuilding assets)
 node_modules/
-/public/build
 /public/hot
 
 # Environment & tooling
