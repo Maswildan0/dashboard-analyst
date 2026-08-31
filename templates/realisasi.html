@@ -198,6 +198,12 @@
 {% block scripts %}
 <script>
     const filterForm = document.getElementById('filter-form');
+    // Per-page selector: changing the value submits the hidden perpage form
+    // (which carries the full filter state) so the new page size applies.
+    const perPageSel = document.querySelector('select[name="per_page"]');
+    perPageSel?.addEventListener('change', () => {
+        document.getElementById('perpage')?.submit();
+    });
 
     // Enter in the search box filters (export is a separate plain link).
     filterForm?.querySelector('input[name="q"]')?.addEventListener('keydown', (e) => {
