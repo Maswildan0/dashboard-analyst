@@ -9,6 +9,9 @@ Maps 1:1 to the original Laravel routes:
 
 The /build/ prefix serves the Vite build output (same as Laravel's public/
 root): the hashed assets referenced by the templates.
+
+When DEBUG=False (e.g. Vercel production) the built-in staticfiles serving is
+disabled, so /static/ (the logo) is served directly from public/ here.
 """
 
 from django.conf import settings
@@ -18,15 +21,24 @@ from django.urls import path, re_path
 from . import views
 
 
-def _build_file(request, path):
-    """Serve a file from public/build, mirroring the original public/build
-    URL layout (Vite emits relative 'assets/...' paths there)."""
+def _serve_file(request, root, path):
     from pathlib import Path
-    root = settings.BASE_DIR / 'public' / 'build'
+    root = Path(root)
     candidate = (root / path).resolve()
     if not str(candidate).startswith(str(root.resolve())) or not candidate.is_file():
         raise Http404
     return FileResponse(candidate.open('rb'))
+
+
+def _build_file(request, path):
+    """Serve a file from public/build (Vite output)."""
+    return _serve_file(request, settings.BASE_DIR / 'public' / 'build', path)
+
+
+def _static_file(request, path):
+    """Serve a file from public/ (static assets like the logo) so the app
+    works without collectstatic when DEBUG=False."""
+    return _serve_file(request, settings.BASE_DIR / 'public', path)
 
 
 urlpatterns = [
@@ -35,4 +47,5 @@ urlpatterns = [
     path('data', views.realisasi, name='realisasi'),
     path('data/export', views.export, name='realisasi-export'),
     re_path(r'^build/(?P<path>.*)$', _build_file, name='build-assets'),
+    re_path(r'^static/(?P<path>.*)$', _static_file, name='static-fallback'),
 ]

@@ -5,17 +5,20 @@ Migrated from the original Laravel 13 application; the routes, filter
 logic, and mock dataset are preserved 1:1 (see dashboard/views.py).
 """
 
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-g(r9e+!%wd$#q+2wn)@nzaq0e4bf#=mk=0r9kub9%m5x6u$&wc'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g(r9e+!%wd$#q+2wn)@nzaq0e4bf#=mk=0r9kub9%m5x6u$&wc')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+# Vercel sends the deployment host (e.g. dashboard-orpin-iota-64.vercel.app)
+# as HTTP_HOST; allow any host here — the app serves public mock data only.
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -58,6 +61,9 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'public',
 ]
+# When DEBUG=False (production) collectstatic is used; see dashboard/urls.py
+# for the /static/ fallback that serves the same files directly.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Internationalization
 
