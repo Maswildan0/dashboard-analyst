@@ -115,34 +115,7 @@ function renderChartB(items) {
 
 function renderChartBPie(slices) {
     const el = document.getElementById('chartB');
-    // Pie mode stacks children vertically (detail panel below the chart);
-    // bars mode uses a row layout instead.
-    el.classList.remove('flex-row');
-    el.style.flexDirection = 'column';
-    const total = slices.reduce((a, s) => a + s.value, 0);
-    const detailRows = slices.map((s) => {
-        const pct = total ? Math.round((s.value / total) * 100) : 0;
-        return `
-            <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;width:100%;">
-                <span style="display:flex;align-items:center;gap:8px;">
-                    <span style="width:10px;height:10px;border-radius:50%;background:${s.color};display:inline-block;"></span>
-                    <span style="font-size:12px;font-weight:600;color:#334155;">${s.label}</span>
-                </span>
-                <span style="font-size:12px;font-weight:700;color:#0F172A;font-variant-numeric:tabular-nums;">
-                    Rp ${s.value.toLocaleString('id-ID')} <span style="color:#94A3B8;font-weight:600;">(${pct}%)</span>
-                </span>
-            </div>`;
-    }).join('');
-    el.innerHTML = `
-        <div class="relative flex-1 flex items-center justify-center min-h-[310px]"><canvas id="chartBPie" class="block max-h-[330px] max-w-full"></canvas></div>
-        <div class="pie-detail flex flex-col gap-2 px-2 pb-1" style="margin-top:4px;border-top:1px solid #E2E8F0;padding-top:10px;">
-            <div style="font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em;">Rincian Realisasi</div>
-            ${detailRows}
-            <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:2px;">
-                <span style="font-size:12px;font-weight:700;color:#0F172A;">Total</span>
-                <span style="font-size:12px;font-weight:800;color:#EB3237;font-variant-numeric:tabular-nums;">Rp ${total.toLocaleString('id-ID')}</span>
-            </div>
-        </div>`;
+    el.innerHTML = '<div class="relative flex-1 flex items-center justify-center min-h-[310px]"><canvas id="chartBPie" class="block max-h-[300px] max-w-full"></canvas></div>';
     const card = el.closest('.rounded-2xl');
     const h2 = card?.querySelector('h2');
     if (h2) h2.textContent = 'Komposisi Realisasi per Tipe';
@@ -167,18 +140,11 @@ function renderChartBPie(slices) {
             responsive: true,
             maintainAspectRatio: false,
             cutout: '55%',
-            // Entrance animation: pie rotates & scales in on load/filter change.
-            animation: {
-                animateRotate: true,
-                animateScale: true,
-                duration: 900,
-                easing: 'easeOutQuart',
-            },
             plugins: {
-                // Legend hidden: the detail panel below the chart already
-                // shows NTF/TF with color dots + values, so the pie itself
-                // keeps its full size (no bottom legend eating canvas space).
-                legend: { display: false },
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#0F172A', font: { size: 12, weight: 600 }, usePointStyle: true, pointStyle: 'circle', padding: 14 },
+                },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => {
