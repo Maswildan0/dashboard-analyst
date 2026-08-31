@@ -543,36 +543,47 @@ function toggleChartFullscreen(canvas, card) {
     `;
     document.body.appendChild(fs);
     const body = fs.querySelector('.fs-body');
-    // Move the chart into fullscreen
+    // Move the chart into fullscreen: clone the canvas and rebuild the chart
+    // with responsive options so it fills the fullscreen body.
     const clone = canvas.cloneNode(false);
     clone.id = canvas.id + '-fs';
+    clone.style.width = '100%';
+    clone.style.height = '100%';
     body.appendChild(clone);
-    // For canvas-based charts, rebuild on the clone
     const srcChart = getChartForCanvas(canvas);
-    if (srcChart && canvas.id !== 'chartB') {
-        const cfg = JSON.parse(JSON.stringify(srcChart.config));
-        cfg.data = JSON.parse(JSON.stringify(srcChart.data));
-        new Chart(clone, cfg);
-    } else if (canvas.id === 'chartB') {
-        // bars mode: copy innerHTML
-        body.innerHTML = '';
-        const holder = document.createElement('div');
-        holder.className = 'fs-body';
-        holder.style.display = 'flex';
-        holder.style.alignItems = 'center';
-        holder.style.justifyContent = 'center';
-        holder.innerHTML = canvas.outerHTML;
-        body.parentNode.replaceChild(holder, body);
-        // render bars again into it
-        const items = window.__DASHBOARD__.chartB.items;
-        renderChartBToCanvas(items);
+    const fsCharts = [];
+    if (canvas.id === 'chartB' && !document.getElementById('chartBPie')) {
+        // bars mode: render CSS bars into a canvas at fullscreen size
+        const items = (window.__DASHBOARD__ && window.__DASHBOARD__.chartB && window.__DASHBOARD__.chartB.items) || [];
+        const tmp = renderChartBToCanvas(items);
+        clone.width = body.clientWidth || 1200;
+        clone.height = body.clientHeight || 600;
+        clone.getContext('2d').drawImage(tmp, 0, 0, clone.width, clone.height);
+    } else if (srcChart) {
+        // Rebuild sharing the live config object graph (functions intact),
+        // overriding the sizing so the chart fills the fullscreen body.
+        const cfg = srcChart.config;
+        const opts = cfg.options || {};
+        opts.responsive = true;
+        opts.maintainAspectRatio = false;
+        const chart = new Chart(clone, cfg);
+        fsCharts.push(chart);
     }
-    // Also handle pie: rebuild doughnut on clone
-    if (canvas.id === 'chartBPie' && charts.B) {
-        const cfg = JSON.parse(JSON.stringify(charts.B.config));
-        cfg.data = JSON.parse(JSON.stringify(charts.B.data));
-        new Chart(clone, cfg);
-    }
+    // Resize the chart when the fullscreen container resizes (window resize
+    // while in fullscreen, or container growth).
+    const ro = new ResizeObserver(() => {
+        fsCharts.forEach((c) => c.resize());
+        if (canvas.id === 'chartB' && !document.getElementById('chartBPie')) {
+            // redraw the bars canvas at new size
+            const items = (window.__DASHBOARD__ && window.__DASHBOARD__.chartB && window.__DASHBOARD__.chartB.items) || [];
+            const tmp = renderChartBToCanvas(items);
+            const c = clone;
+            c.width = body.clientWidth || 1200;
+            c.height = body.clientHeight || 600;
+            c.getContext('2d').drawImage(tmp, 0, 0, c.width, c.height);
+        }
+    });
+    ro.observe(body);
     // fullscreen API on the container
     if (fs.requestFullscreen) fs.requestFullscreen();
     fs.querySelector('[data-close]').addEventListener('click', () => {
