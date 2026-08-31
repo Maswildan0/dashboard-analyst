@@ -37,13 +37,28 @@ _FONT_FACE_TEMPLATE = """@font-face {{
 }}"""
 
 
+# Stable hashed filenames from the committed Vite build (public/build). Kept
+# hardcoded so the asset tags render even when the manifest file is not on
+# the Lambda filesystem (Vercel serves public/** as CDN static files).
+_CSS_FILE = 'assets/app-Dw6Tt2IU.css'
+_JS_FILE = 'assets/app-muYFZFiw.js'
+
+
 def _asset_url(name):
-    manifest = BUILD_DIR / 'manifest.json'
+    """Resolve an entry name to its /build/ URL from the Vite manifest,
+    falling back to the known stable hashed files."""
     try:
+        manifest = BUILD_DIR / 'manifest.json'
         entry = json.loads(manifest.read_text(encoding='utf-8')).get(name)
-        return f"/build/{entry['file']}" if entry else ''
+        if entry:
+            return f"/build/{entry['file']}"
     except (OSError, ValueError, KeyError, TypeError):
-        return ''
+        pass
+    if name == 'resources/css/app.css':
+        return f'/build/{_CSS_FILE}'
+    if name == 'resources/js/app.js':
+        return f'/build/{_JS_FILE}'
+    return ''
 
 
 def _fonts_head():
