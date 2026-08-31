@@ -356,10 +356,19 @@ def _realisasi_rows(request):
     sort_col = request.GET.get('sort') if request.GET.get('sort') in SORTABLE else None
     dir_ = 'desc' if (request.GET.get('dir') or 'asc').lower() == 'desc' else 'asc'
     if sort_col is not None:
-        # PHP's sortBy('bulan') sorts by the month *name* string; the rows key
-        # is 'month' ('bulan' maps to it via the SORTABLE alias).
-        key = 'month' if sort_col == 'bulan' else sort_col
-        filtered.sort(key=lambda r: r[key], reverse=(dir_ == 'desc'))
+        # Bulan sorts chronologically (Januari -> Desember) via monthIdx, not
+        # by month *name* (which would be alphabetical: Agustus, April, ...).
+        # Tahun sorts by year with monthIdx as a stable secondary key so the
+        # months inside each year stay chronological.
+        if sort_col == 'bulan':
+            filtered.sort(key=lambda r: r['monthIdx'], reverse=(dir_ == 'desc'))
+        elif sort_col == 'tahun':
+            # Desc keeps months chronological inside each year: negate monthIdx
+            # so (year desc, month asc) — (2026, Jan) ... (2026, Des).
+            key = lambda r: (r['tahun'], -r['monthIdx'] if dir_ == 'desc' else r['monthIdx'])
+            filtered.sort(key=key, reverse=(dir_ == 'desc'))
+        else:
+            filtered.sort(key=lambda r: r[sort_col], reverse=(dir_ == 'desc'))
 
     return {
         'filters': filters,
