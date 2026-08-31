@@ -115,6 +115,10 @@ function renderChartB(items) {
 
 function renderChartBPie(slices) {
     const el = document.getElementById('chartB');
+    // Pie mode stacks children vertically (detail panel below the chart);
+    // bars mode uses a row layout instead.
+    el.classList.remove('flex-row');
+    el.style.flexDirection = 'column';
     const total = slices.reduce((a, s) => a + s.value, 0);
     const detailRows = slices.map((s) => {
         const pct = total ? Math.round((s.value / total) * 100) : 0;
@@ -130,8 +134,8 @@ function renderChartBPie(slices) {
             </div>`;
     }).join('');
     el.innerHTML = `
-        <div class="relative flex-1 flex items-center justify-center min-h-[240px]"><canvas id="chartBPie" class="block max-h-[260px] max-w-full"></canvas></div>
-        <div class="pie-detail flex flex-col gap-2 px-2 pb-1" style="margin-top:6px;">
+        <div class="relative flex-1 flex items-center justify-center min-h-[310px]"><canvas id="chartBPie" class="block max-h-[300px] max-w-full"></canvas></div>
+        <div class="pie-detail flex flex-col gap-2 px-2 pb-1" style="margin-top:4px;border-top:1px solid #E2E8F0;padding-top:10px;">
             <div style="font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em;">Rincian Realisasi</div>
             ${detailRows}
             <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:2px;">
@@ -163,6 +167,13 @@ function renderChartBPie(slices) {
             responsive: true,
             maintainAspectRatio: false,
             cutout: '55%',
+            // Entrance animation: pie rotates & scales in on load/filter change.
+            animation: {
+                animateRotate: true,
+                animateScale: true,
+                duration: 900,
+                easing: 'easeOutQuart',
+            },
             plugins: {
                 legend: {
                     position: 'bottom',
