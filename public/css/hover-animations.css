@@ -1,0 +1,80 @@
+/* Hover pop animations for dashboard charts + KPI cards.
+   Loaded after the Vite bundle; pure CSS transitions on the chart wrappers
+   and a floating value label that follows the cursor. */
+
+.chart-hover-wrap {
+    position: relative;
+    border-radius: 14px;
+    transition: transform .28s cubic-bezier(.22,.9,.35,1.4), box-shadow .28s ease, background .28s ease;
+    will-change: transform;
+}
+
+/* Pop: scale up + brand-tinted glow. */
+.chart-hover-wrap.chart-popped {
+    transform: scale(1.045);
+    box-shadow: 0 14px 34px rgba(235, 50, 55, .16), 0 4px 12px rgba(0, 0, 0, .06);
+    background: #fff;
+    z-index: 5;
+}
+
+.chart-hover-wrap canvas {
+    transition: transform .28s cubic-bezier(.22,.9,.35,1.4);
+}
+
+/* Floating value label that follows the cursor. */
+.chart-value-label {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    display: none;
+    background: rgba(15, 23, 42, .92);
+    color: #fff;
+    font-family: 'Inter', 'Open Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    padding: 7px 11px;
+    border-radius: 9px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .25);
+    white-space: nowrap;
+    max-width: 320px;
+    transform: translate(-50%, calc(-100% - 14px));
+    transition: opacity .16s ease;
+    opacity: 0;
+}
+
+.chart-value-label.label-visible {
+    display: block;
+    opacity: 1;
+}
+
+.chart-value-label .lbl-title {
+    display: block;
+    color: rgba(255, 255, 255, .75);
+    font-weight: 500;
+    font-size: 11px;
+    margin-bottom: 2px;
+}
+
+.chart-value-label .lbl-value {
+    display: block;
+    color: #fff;
+}
+
+/* KPI cards: subtle lift instead of scale (they're already tappable). */
+[data-kpi] {
+    transition: transform .25s cubic-bezier(.22,.9,.35,1.3), box-shadow .25s ease;
+}
+
+[data-kpi]:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, .10);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chart-hover-wrap,
+    .chart-hover-wrap canvas,
+    [data-kpi] {
+        transition: none !important;
+    }
+}
