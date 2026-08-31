@@ -246,6 +246,7 @@ async function refresh() {
     const res = await fetch(window.__DASHBOARD_URL__ + '?' + params.toString());
     if (!res.ok) return;
     const payload = await res.json();
+    window.__DASHBOARD__ = payload; // keep global in sync for download/fullscreen tools
     applyPayload(payload);
 }
 
@@ -366,6 +367,223 @@ function initDashboardDrill() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Chart toolbar: fullscreen + download (PNG/JPG) for each chart card.
+// ---------------------------------------------------------------------------
+const CHART_TOOLBAR_CSS = `
+.chart-toolbar { position: absolute; top: 10px; right: 10px; z-index: 20; display: flex; gap: 6px; opacity: 0; transition: opacity .2s ease; }
+.chart-card:hover .chart-toolbar { opacity: 1; }
+.chart-toolbar button {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(15, 23, 42, .85); color: #fff;
+    border: 0; border-radius: 8px; padding: 5px 10px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    font-family: 'Inter', 'Open Sans', ui-sans-serif, system-ui, sans-serif;
+    transition: background .15s ease, transform .15s ease;
+}
+.chart-toolbar button:hover { background: #EB3237; transform: translateY(-1px); }
+.chart-fullscreen { position: fixed; inset: 0; z-index: 10000; background: #fff; padding: 24px; display: flex; flex-direction: column; }
+.chart-fullscreen .fs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.chart-fullscreen .fs-title { font-size: 16px; font-weight: 700; color: #0F172A; font-family: 'Inter','Open Sans',sans-serif; }
+.chart-fullscreen .fs-body { flex: 1; min-height: 0; position: relative; }
+.chart-fullscreen .fs-close {
+    background: #EB3237; color: #fff; border: 0; border-radius: 8px; padding: 6px 14px;
+    font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+`;
+
+function injectToolbarCss() {
+    if (document.getElementById('chart-toolbar-style')) return;
+    const st = document.createElement('style');
+    st.id = 'chart-toolbar-style';
+    st.textContent = CHART_TOOLBAR_CSS;
+    document.head.appendChild(st);
+}
+
+function getChartForCanvas(canvas) {
+    // charts map holds instances by id; chartBPie lives under charts.B
+    if (canvas.id === 'chartBPie') return charts.B;
+    return charts[canvas.id] || null;
+}
+
+function chartTitleFor(canvas) {
+    const card = canvas.closest('.rounded-2xl, .chart-card');
+    const h2 = card && card.querySelector('h2');
+    return (h2 && h2.textContent.trim()) || canvas.id || 'chart';
+}
+
+function renderChartBToCanvas(items) {
+    // Re-render the CSS bar chart (chartB in bars mode) onto a temp canvas.
+    const canvas = document.createElement('canvas');
+    canvas.width = 1000; canvas.height = 500;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const maxPct = Math.max(...items.map(i => i.pct), 1);
+    const chartW = canvas.width - 120, chartH = canvas.height - 90;
+    const left = 60, top = 40, bottom = canvas.height - 40;
+    items.forEach((it, i) => {
+        const slot = chartW / items.length;
+        const x = left + i * slot + slot * 0.2;
+        const w = slot * 0.6;
+        const h = (it.pct / 120) * chartH; // scale to 120% max
+        const y = bottom - h;
+        ctx.fillStyle = '#10B981';
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = '#1E293B';
+        ctx.font = 'bold 16px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(it.pct + '%', x + w / 2, y - 8);
+        ctx.fillStyle = '#64748B';
+        ctx.font = '13px Inter, sans-serif';
+        ctx.fillText(it.label, x + w / 2, bottom + 22);
+    });
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '12px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Capaian Realisasi per Triwulan (%)', left, top - 10);
+    return canvas;
+}
+
+function downloadChart(canvas, format) {
+    const isChartB = canvas.id === 'chartB' && !document.getElementById('chartBPie');
+    let source = canvas;
+    if (isChartB) {
+        // bars mode: no canvas exists; render from current payload
+        const items = (window.__DASHBOARD__ && window.__DASHBOARD__.chartB && window.__DASHBOARD__.chartB.type !== 'pie')
+            ? window.__DASHBOARD__.chartB.items
+            : null;
+        if (!items) return;
+        source = renderChartBToCanvas(items);
+    }
+    const ext = format === 'jpg' ? 'jpeg' : 'png';
+    const quality = format === 'jpg' ? 0.92 : undefined;
+    const dataUrl = source.toDataURL('image/' + ext, quality);
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = chartTitleFor(canvas).replace(/[^a-z0-9]+/gi, '_') + '.' + (format === 'jpg' ? 'jpg' : 'png');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+function addChartToolbar() {
+    injectToolbarCss();
+    document.querySelectorAll('#chartA, #chartD, #chartE').forEach((canvas) => {
+        if (canvas.closest('.chart-card')) return;
+        const card = canvas.closest('.rounded-2xl');
+        if (!card || card.__toolbar) return;
+        card.classList.add('chart-card');
+        card.style.position = 'relative';
+        const tb = document.createElement('div');
+        tb.className = 'chart-toolbar';
+        tb.innerHTML = `
+            <button data-action="fullscreen" title="Fullscreen">⛶ Fullscreen</button>
+            <button data-action="png" title="Download PNG">⬇ PNG</button>
+            <button data-action="jpg" title="Download JPG">⬇ JPG</button>
+        `;
+        card.appendChild(tb);
+        card.__toolbar = true;
+        tb.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            if (action === 'fullscreen') toggleChartFullscreen(canvas, card);
+            else if (action === 'png') downloadChart(canvas, 'png');
+            else if (action === 'jpg') downloadChart(canvas, 'jpg');
+        });
+    });
+    // Chart B card (pie or bars)
+    const bCanvas = document.getElementById('chartBPie');
+    const bCard = document.getElementById('chartB')?.closest('.rounded-2xl');
+    if (bCard && !bCard.__toolbar) {
+        bCard.classList.add('chart-card');
+        bCard.style.position = 'relative';
+        const tb = document.createElement('div');
+        tb.className = 'chart-toolbar';
+        tb.innerHTML = `
+            <button data-action="fullscreen" title="Fullscreen">⛶ Fullscreen</button>
+            <button data-action="png" title="Download PNG">⬇ PNG</button>
+            <button data-action="jpg" title="Download JPG">⬇ JPG</button>
+        `;
+        bCard.appendChild(tb);
+        bCard.__toolbar = true;
+        tb.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            const target = document.getElementById('chartBPie') || document.getElementById('chartB');
+            if (action === 'fullscreen') toggleChartFullscreen(target, bCard);
+            else if (action === 'png') downloadChart(target, 'png');
+            else if (action === 'jpg') downloadChart(target, 'jpg');
+        });
+    }
+}
+
+function toggleChartFullscreen(canvas, card) {
+    const existing = document.querySelector('.chart-fullscreen');
+    if (existing) {
+        document.exitFullscreen && document.exitFullscreen();
+        existing.remove();
+        return;
+    }
+    const title = chartTitleFor(canvas);
+    const fs = document.createElement('div');
+    fs.className = 'chart-fullscreen';
+    fs.innerHTML = `
+        <div class="fs-header">
+            <span class="fs-title">${title}</span>
+            <div style="display:flex;gap:8px;">
+                <button data-dl="png" class="fs-close" style="background:#0F172A;">⬇ PNG</button>
+                <button data-dl="jpg" class="fs-close" style="background:#0F172A;">⬇ JPG</button>
+                <button data-close class="fs-close">✕ Tutup</button>
+            </div>
+        </div>
+        <div class="fs-body"></div>
+    `;
+    document.body.appendChild(fs);
+    const body = fs.querySelector('.fs-body');
+    // Move the chart into fullscreen
+    const clone = canvas.cloneNode(false);
+    clone.id = canvas.id + '-fs';
+    body.appendChild(clone);
+    // For canvas-based charts, rebuild on the clone
+    const srcChart = getChartForCanvas(canvas);
+    if (srcChart && canvas.id !== 'chartB') {
+        const cfg = JSON.parse(JSON.stringify(srcChart.config));
+        cfg.data = JSON.parse(JSON.stringify(srcChart.data));
+        new Chart(clone, cfg);
+    } else if (canvas.id === 'chartB') {
+        // bars mode: copy innerHTML
+        body.innerHTML = '';
+        const holder = document.createElement('div');
+        holder.className = 'fs-body';
+        holder.style.display = 'flex';
+        holder.style.alignItems = 'center';
+        holder.style.justifyContent = 'center';
+        holder.innerHTML = canvas.outerHTML;
+        body.parentNode.replaceChild(holder, body);
+        // render bars again into it
+        const items = window.__DASHBOARD__.chartB.items;
+        renderChartBToCanvas(items);
+    }
+    // Also handle pie: rebuild doughnut on clone
+    if (canvas.id === 'chartBPie' && charts.B) {
+        const cfg = JSON.parse(JSON.stringify(charts.B.config));
+        cfg.data = JSON.parse(JSON.stringify(charts.B.data));
+        new Chart(clone, cfg);
+    }
+    // fullscreen API on the container
+    if (fs.requestFullscreen) fs.requestFullscreen();
+    fs.querySelector('[data-close]').addEventListener('click', () => {
+        if (document.fullscreenElement) document.exitFullscreen();
+        fs.remove();
+    });
+    fs.querySelectorAll('[data-dl]').forEach((b) => {
+        b.addEventListener('click', () => downloadChart(clone, b.dataset.dl));
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initSidebar();
 
@@ -466,6 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         initDashboardDrill();
+        addChartToolbar();
     }
 });
 
