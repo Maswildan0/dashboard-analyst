@@ -1,7 +1,6 @@
 # Dashboard Analyst
 
-Dashboard analisis realisasi proyek (Telkom) dengan halaman dashboard interaktif dan tabel Data Realisasi. Migrasi dari Laravel 13 → Django 6.
-
+Dashboard analisis realisasi proyek (Telkom) dengan halaman dashboard interaktif dan tabel Data Realisasi.
 ## Teknologi
 
 - **Django 6.1** (Python 3.13) — backend, routing, template
