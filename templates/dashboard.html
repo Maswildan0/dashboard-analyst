@@ -1,0 +1,149 @@
+{% extends 'layouts/app.html' %}
+{% load dashboard_filters %}
+{% block content %}
+<main class="px-8 py-6">
+    {# Title + chart filter chips #}
+    <div class="flex items-center justify-between gap-4 mb-6">
+        <h1 class="font-display font-bold text-[20px] leading-[27px] text-[#0F172A]" style="font-family:'Open Sans';">
+            Dashboard Analysis
+        </h1>
+        <div class="flex items-center gap-3">
+            <select data-filter="tipe" class="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 h-[32px] text-[12px] font-sans focus:outline-none focus:ring-2 focus:ring-[#EB3237]/20">
+                {% for v in options.tipe %}
+                    <option value="{{ v }}"{% if filters.tipe == v %} selected{% endif %}>Tipe: {{ v }}</option>
+                {% endfor %}
+            </select>
+            <select data-filter="direktorat" class="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 h-[32px] text-[12px] font-sans focus:outline-none focus:ring-2 focus:ring-[#EB3237]/20">
+                {% for v in options.direktorat %}
+                    <option value="{{ v }}"{% if filters.direktorat == v %} selected{% endif %}>Direktorat: {{ v }}</option>
+                {% endfor %}
+            </select>
+            <select data-filter="kode_pp" class="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 h-[32px] text-[12px] font-sans focus:outline-none focus:ring-2 focus:ring-[#EB3237]/20">
+                {% for v in options.kodePP %}
+                    <option value="{{ v }}"{% if filters.kodePP == v %} selected{% endif %}>Kode PP: {{ v }}</option>
+                {% endfor %}
+            </select>
+            <select data-filter="tahun" class="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 h-[32px] text-[12px] font-sans focus:outline-none focus:ring-2 focus:ring-[#EB3237]/20">
+                <option value="Semua"{% if filters.tahun == 'Semua' %} selected{% endif %}>Tahun: Semua</option>
+                {% for v in options.tahun %}
+                    <option value="{{ v }}"{% if filters.tahun == v %} selected{% endif %}>Tahun: {{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    {# KPI row #}
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+        {% for kpi in payload.kpis %}
+            <div class="relative overflow-hidden rounded-2xl bg-white border border-[#E2E8F0] p-5 cursor-pointer"
+                 data-kpi="{{ forloop.counter0 }}"
+                 data-period="{{ kpi.period }}"
+                 style="box-shadow:0px 4px 12px rgba(0,0,0,0.0313726);">
+                <span class="absolute top-0 left-0 right-0 h-[4px]" style="background:{{ kpi.accent }};"></span>
+                <div class="flex items-center justify-between">
+                    <span class="text-[#64748B] text-[13px] font-semibold leading-[16px]" data-kpi-title>{{ kpi.title }}</span>
+                    <span class="flex items-center justify-center w-[30px] h-[30px] rounded-lg" style="background:{{ kpi.iconBg }};">
+                        {% if kpi.icon == 'wallet' %}
+                            <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none">
+                                <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2v-8a2 2 0 00-2-2H6" stroke="{{ kpi.iconColor }}" stroke-width="2" stroke-linecap="round"/>
+                                <rect x="15" y="9" width="6" height="5" rx="1" fill="none" stroke="{{ kpi.iconColor }}" stroke-width="2"/>
+                            </svg>
+                        {% else %}
+                            <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none">
+                                <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="{{ kpi.iconColor }}" stroke-width="2" stroke-linejoin="round"/>
+                            </svg>
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="mt-4 flex flex-col gap-1">
+                    <span class="text-[#1E293B] text-[22px] font-bold leading-[27px]" data-kpi-value>
+                        Rp{{ kpi.value|floatformat:"0"|intcomma }}
+                    </span>
+                    {% if kpi.capaian %}
+                        <span class="text-[12px] font-extrabold leading-[15px]" data-kpi-capaian style="color:{{ kpi.capaian.1 }};">
+                            {{ kpi.capaian.0 }}
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {# Row 2: Chart A + Chart B #}
+    <div class="flex gap-6 mt-6">
+        <div class="flex-1 rounded-2xl bg-white border border-[#E2E8F0] p-6"
+             style="box-shadow:0px 4px 12px rgba(0,0,0,0.0313726);">
+            <div class="flex items-start justify-between">
+                <div class="flex flex-col gap-1">
+                    <h2 class="text-[#0F172A] text-[16px] font-bold leading-[19px]">Realisasi vs RKA per Bulan</h2>
+                </div>
+                <div class="flex items-center gap-5">
+                    <span class="flex items-center gap-2"><span class="w-[10px] h-[10px] rounded-full bg-[#94A3B8]"></span><span class="text-[#64748B] text-[12px] font-medium">RKA</span></span>
+                    <span class="flex items-center gap-2"><span class="w-[10px] h-[10px] rounded-full bg-[#EB3237]"></span><span class="text-[#64748B] text-[12px] font-medium">Realisasi</span></span>
+                    <span class="flex flex-col gap-[4px]">
+                        <span class="block w-[18px] h-[2px] rounded bg-[#94A3B8]"></span>
+                        <span class="block w-[18px] h-[2px] rounded bg-[#94A3B8]"></span>
+                        <span class="block w-[18px] h-[2px] rounded bg-[#94A3B8]"></span>
+                    </span>
+                </div>
+            </div>
+            <div class="relative mt-5 h-[280px] overflow-hidden"><canvas id="chartA" class="block" style="max-width:100%;"></canvas></div>
+            <div class="flex justify-center mt-2">
+                <span class="text-[#64748B] text-[12px] font-semibold">Bulan</span>
+            </div>
+        </div>
+
+        <div class="w-[480px] shrink-0 rounded-2xl bg-white border border-[#E2E8F0] p-6"
+             style="box-shadow:0px 4px 12px rgba(0,0,0,0.0313726); flex-direction:column; display:flex; gap:20px;">
+            <h2 class="text-[#0F172A] text-[16px] font-bold leading-[19px]">Capaian Realisasi per Triwulan</h2>
+            <div id="chartB" class="flex items-end gap-4 flex-1 min-h-[310px]"></div>
+            <p id="chartBNote" class="text-[#64748B] text-[12px] font-normal leading-[15px]">{{ payload.chartB.note }}</p>
+        </div>
+    </div>
+
+
+    {# Chart D #}
+    <div class="mt-6 rounded-2xl bg-white border border-[#E2E8F0] p-6"
+         style="box-shadow:0px 4px 12px rgba(0,0,0,0.0313726);">
+                    <div class="flex items-start justify-between">
+            <div class="flex flex-col gap-1">
+                <h2 class="text-[#0F172A] text-[16px] font-bold leading-[19px]">Realisasi Tiap Bulan YoY</h2>
+            </div>
+            <div class="flex items-center gap-5">
+                <span class="flex items-center gap-2"><span class="w-[14px] h-[2px] rounded bg-[#EB3237]"></span><span class="text-[#64748B] text-[12px] font-medium">Tahun Ini</span></span>
+                <span class="flex items-center gap-2"><span class="w-[14px] h-[2px] rounded bg-[#5F5F60]"></span><span class="text-[#64748B] text-[12px] font-medium">Tahun Sebelum</span></span>
+                <span class="flex items-center gap-2"><span class="w-[14px] h-[2px] rounded bg-[#3B82F6]"></span><span class="text-[#64748B] text-[12px] font-medium">Capaian</span></span>
+            </div>
+        </div>
+        <div class="relative mt-5 h-[280px] overflow-hidden"><canvas id="chartD" class="block" style="max-width:100%;"></canvas></div>
+        <div class="flex justify-center mt-2">
+            <span class="text-[#64748B] text-[12px] font-semibold">Bulan</span>
+        </div>
+    </div>
+
+    {# Chart E: Realisasi YoY batang (versi bar, di bawah grafik garis) #}
+    <div class="mt-6 rounded-2xl bg-white border border-[#E2E8F0] p-6"
+         style="box-shadow:0px 4px 12px rgba(0,0,0,0.0313726);">
+                    <div class="flex items-start justify-between">
+            <div class="flex flex-col gap-1">
+                <h2 class="text-[#0F172A] text-[16px] font-bold leading-[19px]">Realisasi Tiap Bulan YoY</h2>
+            </div>
+            <div class="flex items-center gap-5">
+                <span class="flex items-center gap-2"><span class="w-[10px] h-[10px] rounded-full bg-[#5F5F60]"></span><span class="text-[#64748B] text-[12px] font-medium">Tahun Sebelum</span></span>
+                <span class="flex items-center gap-2"><span class="w-[10px] h-[10px] rounded-full bg-[#EB3237]"></span><span class="text-[#64748B] text-[12px] font-medium">Tahun Ini</span></span>
+                <span class="flex items-center gap-2"><span class="w-[14px] h-[4px] rounded bg-[#3B82F6]"></span><span class="text-[#64748B] text-[12px] font-medium">Capaian</span></span>
+            </div>
+        </div>
+        <div class="relative mt-5 h-[280px] overflow-hidden"><canvas id="chartE" class="block" style="max-width:100%;"></canvas></div>
+        <div class="flex justify-center mt-2">
+            <span class="text-[#64748B] text-[12px] font-semibold">Bulan</span>
+        </div>
+    </div>
+</main>
+
+<script>
+    window.__DASHBOARD__ = {{ payload_json|safe }};
+    window.__DASHBOARD_URL__ = "{% url 'dashboard-data' %}";
+    window.__DETAIL_URL__ = "{% url 'realisasi' %}";
+</script>
+{% endblock %}

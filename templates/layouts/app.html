@@ -1,0 +1,65 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard Analysis</title>
+    <link rel="icon" type="image/png" href="{% static 'img/telkom-logo.png' %}">
+    {{ fonts_head|safe }}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    {{ assets_head|safe }}
+</head>
+<body class="bg-[#F8FAFC] text-[#0F172A] font-sans antialiased">
+
+    {# Navbar: hamburger (left), Telkom logo (center), avatar (right) #}
+    <nav class="sticky top-0 z-40 h-[64px] bg-[#F8FAFC] shadow-[0_4px_4px_rgba(0,0,0,0.25)] flex items-center justify-between px-8">
+        <button id="sidebar-toggle" class="w-[40px] h-[40px] flex flex-col items-start justify-center gap-[5px] cursor-pointer" aria-label="Menu">
+            <span class="block h-[2px] w-[22px] bg-[#0F172A]"></span>
+            <span class="block h-[2px] w-[15px] bg-[#0F172A]"></span>
+            <span class="block h-[2px] w-[22px] bg-[#0F172A]"></span>
+        </button>
+        <div class="absolute left-1/2 -translate-x-1/2 flex items-center" style="filter:drop-shadow(0 4px 4px rgba(0,0,0,0.25));">
+            <img src="{% static 'img/telkom-logo.png' %}" alt="Telkom University" class="h-[44px] w-auto object-contain">
+        </div>
+        <div class="w-[40px] h-[40px] rounded-full bg-[#956AFF] overflow-hidden flex items-center justify-center">
+            <span class="text-white font-semibold text-base">B</span>
+        </div>
+    </nav>
+
+    <div class="relative min-h-[calc(100vh-64px)] overflow-x-clip">
+        {# Sidebar (overlay drawer) #}
+        <aside id="sidebar" class="fixed left-0 top-[64px] bottom-0 z-50 w-[250px] bg-[#EB3237] border-r border-[#EB3237] will-change-transform">
+            <div class="h-full flex flex-col">
+            <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+                <a href="{% url 'dashboard' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active == 'dashboard' %}bg-white/20 text-white{% else %}text-white/80 hover:bg-white/10 hover:text-white{% endif %}">
+                    <svg class="w-[18px] h-[18px]" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="2" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="11" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="11" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+                    Dashboard
+                </a>
+                <a href="{% url 'realisasi' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active == 'realisasi' %}bg-white/20 text-white{% else %}text-white/80 hover:bg-white/10 hover:text-white{% endif %}">
+                    <svg class="w-[18px] h-[18px]" viewBox="0 0 20 20" fill="none"><path d="M4 4h12v2H4zM6 8h8v1H6zM8 11h4v1H8z" fill="currentColor"/></svg>
+                    Data Realisasi
+                </a>
+            </nav>
+            <div class="px-3 py-4 border-t border-white/20">
+                <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/80 text-sm hover:bg-white/10 hover:text-white">
+                    <svg class="w-[18px] h-[18px]" viewBox="0 0 20 20" fill="none"><path d="M7 4a5 5 0 006 0M10 3v5M5 17h10M8 17v-1a2 2 0 012-2h0a2 2 0 012 2v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Keluar
+                </a>
+            </div>
+            </div>
+        </aside>
+
+        {# Dim overlay behind the drawer #}
+        <div id="sidebar-scrim" class="fixed inset-0 top-[64px] z-40 bg-slate-900/40 transition-opacity pointer-events-none"></div>
+
+        {# Main content #}
+        <div id="content" class="relative min-h-[calc(100vh-64px)]">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+</body>
+</html>

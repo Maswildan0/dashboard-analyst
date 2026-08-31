@@ -1,0 +1,288 @@
+{% extends 'layouts/app.html' %}
+{% load dashboard_filters %}
+{% block content %}
+<main class="px-8 py-6">
+    {# Title + filter bar on one row #}
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+            <h1 class="font-display font-bold text-[20px] leading-[27px] text-[#0F172A]" style="font-family:'Open Sans';">
+                Data Realisasi
+            </h1>
+            <p class="text-[#64748B] text-[13px] leading-[18px] mt-1">Menampilkan {{ total }} data</p>
+        </div>
+
+        <form id="filter-form" method="GET" action="{% url 'realisasi' %}" class="flex flex-wrap items-center gap-3">
+            {# Search #}
+            <div class="flex items-center gap-2 bg-white border border-[#E2E8F0] rounded-lg px-3 h-[34px] w-[200px]">
+                <svg class="w-[14px] h-[14px] text-[#64748B]" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="2"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="2"/></svg>
+                <input type="text" name="q" value="{{ q }}" placeholder="Cari proyek..." class="w-full bg-transparent text-[13px] text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none" />
+            </div>
+
+            {# Tahun #}
+            {% include 'components/multi-select.html' with name='tahun' label='Tahun' options=tahunOptions selected=tahun %}
+
+            {# Bulan #}
+            {% include 'components/multi-select.html' with name='bulan' label='Bulan' options=bulanOptions selected=bulan %}
+
+            {# Direktorat #}
+            {% include 'components/multi-select.html' with name='direktorat' label='Direktorat' options=direktoratOptions selected=direktorat %}
+
+            {# Kode PP #}
+            {% include 'components/multi-select.html' with name='kode_pp' label='Kode PP' options=kodePPOptions selected=kodePP %}
+
+            <input type="hidden" name="tipe" value="{{ tipe }}">
+            <input type="hidden" name="per_page" value="{{ perPage }}">
+            {% if triwulan != None %}
+                <input type="hidden" name="triwulan" value="{{ triwulan }}">
+            {% endif %}
+
+            {# Export: submits the form with all current filters to /data/export #}
+            <button type="submit" formaction="{% url 'realisasi-export' %}"
+                    class="flex items-center gap-2 bg-white border border-[#E2E8F0] rounded-lg px-4 h-[34px] text-[#0F172A] text-[13px] font-semibold hover:bg-[#F8FAFC]">
+                <svg class="w-[14px] h-[14px]" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0l3-3m-3 3L5 7M3 12v1a1 1 0 001 1h8a1 1 0 001-1v-1" stroke="#0F172A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Export
+            </button>
+        </form>
+    </div>
+
+    {# Active filter badges #}
+    <div class="flex flex-wrap items-center gap-2 mb-4">
+        <span class="text-[#64748B] text-[12px] font-semibold uppercase tracking-wide mr-1">Filter aktif:</span>
+        <span class="inline-flex items-center gap-1 rounded-full bg-[#EFF6FF] border border-[#BFDBFE] px-3 py-1 text-[12px] font-semibold text-[#1D4ED8]">Tahun {{ tahun|join:", " }}</span>
+        {% if triwulan != None %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-[#EFF6FF] border border-[#BFDBFE] px-3 py-1 text-[12px] font-semibold text-[#1D4ED8]">Triwulan {{ triwulan_labels|index:triwulan }}</span>
+        {% elif bulan|length > 0 %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-[#EFF6FF] border border-[#BFDBFE] px-3 py-1 text-[12px] font-semibold text-[#1D4ED8]">Bulan {{ bulan|join:", " }}</span>
+        {% endif %}
+        {% if direktorat|length > 0 %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-[#F0FDF4] border border-[#BBF7D0] px-3 py-1 text-[12px] font-semibold text-[#15803D]">Direktorat {{ direktorat|join:", " }}</span>
+        {% endif %}
+        {% if kodePP|length > 0 %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-[#F0FDF4] border border-[#BBF7D0] px-3 py-1 text-[12px] font-semibold text-[#15803D]">Kode PP {{ kodePP|join:", " }}</span>
+        {% endif %}
+        {% if tipe != 'Semua' %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-[#F0FDF4] border border-[#BBF7D0] px-3 py-1 text-[12px] font-semibold text-[#15803D]">Tipe {{ tipe }}</span>
+        {% endif %}
+    </div>
+
+    {# Table Card #}
+    <div class="bg-white border border-[#E2E8F0] rounded-xl">
+        {% if rows|length == 0 %}
+            {# Empty state #}
+            <div class="flex flex-col items-center justify-center gap-6 py-20">
+                <div class="w-[80px] h-[80px] rounded-full bg-[#F1F5F9] flex items-center justify-center">
+                    <svg class="w-[36px] h-[36px] text-[#94A3B8]" viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="text-center">
+                    <h3 class="text-[#0F172A] text-[16px] font-bold">Data Tidak Ditemukan</h3>
+                    <p class="text-[#64748B] text-[14px] mt-2 max-w-[560px]">Tidak ada data yang cocok dengan filter yang dipilih. Coba ubah kriteria pencarian Anda.</p>
+                </div>
+                <a href="{% url 'realisasi' %}" class="flex items-center gap-2 bg-[#3B82F6] text-white rounded-lg px-5 py-2.5 text-[14px] font-semibold">
+                    <svg class="w-[14px] h-[14px]" viewBox="0 0 16 16" fill="none"><path d="M1 8a7 7 0 111.2 3.9M1 1v3h3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Reset Filter
+                </a>
+            </div>
+        {% else %}
+            <div class="overflow-x-auto">
+            {# Table Header (sortable columns) #}
+            {% with arrow=arrow_map %}
+            <div class="bg-[#F8FAFC] border-b border-[#E2E8F0] grid grid-cols-[44px_64px_84px_112px_92px_112px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 h-[39px] items-center text-[11px] font-bold uppercase text-[#334155]">
+                <span class="flex items-center justify-center gap-1">No</span>
+                <a href="{% sort_link 'tahun' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Tahun <span class="text-[9px]">{{ arrow.tahun }}</span></a>
+                <a href="{% sort_link 'bulan' %}" class="flex items-center gap-1 min-w-0 hover:text-[#EB3237]">Bulan <span class="text-[9px]">{{ arrow.bulan }}</span></a>
+                <a href="{% sort_link 'unit' %}" class="flex items-center gap-1 min-w-0 hover:text-[#EB3237]">Unit <span class="text-[9px]">{{ arrow.unit }}</span></a>
+                <a href="{% sort_link 'noPP' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">No PP <span class="text-[9px]">{{ arrow.noPP }}</span></a>
+                <a href="{% sort_link 'kodePP' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Kode PP <span class="text-[9px]">{{ arrow.kodePP }}</span></a>
+                <a href="{% sort_link 'direktorat' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Direktorat <span class="text-[9px]">{{ arrow.direktorat }}</span></a>
+                <a href="{% sort_link 'nama' %}" class="flex items-center gap-1 min-w-0 pl-4 hover:text-[#EB3237]">Nama Proyek <span class="text-[9px]">{{ arrow.nama }}</span></a>
+                <a href="{% sort_link 'nilai' %}" class="justify-self-end min-w-0 px-2 overflow-hidden truncate hover:text-[#EB3237]">Nilai Proyek <span class="text-[9px]">{{ arrow.nilai }}</span></a>
+                <a href="{% sort_link 'totalPendapatan' %}" class="justify-self-end text-right min-w-0 px-2 overflow-hidden truncate hover:text-[#EB3237]">Total Pendapatan <span class="text-[9px]">{{ arrow.totalPendapatan }}</span></a>
+                <a href="{% sort_link 'pendapatanBerjalan' %}" class="justify-self-end text-right min-w-0 px-2 overflow-hidden truncate hover:text-[#EB3237]">Pendapatan Berjalan <span class="text-[9px]">{{ arrow.pendapatanBerjalan }}</span></a>
+            </div>
+
+            {# Table Body #}
+            <div>
+                {% for row in rows %}
+                    <div class="grid grid-cols-[44px_64px_84px_112px_92px_112px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 items-center h-[55px] border-b border-[#E2E8F0] {% if forloop.counter0|divisibleby:2 %}bg-white{% else %}bg-[#F8FAFC]{% endif %} text-[13px]">
+                        <span class="text-[#64748B] text-center">{{ forloop.counter0|add:start_row }}</span>
+                        <span class="text-center">{{ row.tahun }}</span>
+                        <span>{{ row.month }}</span>
+                        <span class="text-[#334155]">{{ row.unit }}</span>
+                        <span class="text-center font-brand text-[12px] font-bold text-[#475569]" style="font-family:'Cousine',monospace;">{{ row.noPP }}</span>
+                        <span class="text-center font-brand text-[12px] font-bold text-[#475569]" style="font-family:'Cousine',monospace;">{{ row.kodePP }}</span>
+                        <span class="text-[#334155] text-center">{{ row.direktorat }}</span>
+                        <span class="font-semibold text-[#0F172A] truncate min-w-0 pl-4 pr-2">{{ row.nama }}</span>
+                        <span class="text-right whitespace-nowrap min-w-0 px-2 overflow-hidden">Rp{{ row.nilai|floatformat:"0"|intcomma }}</span>
+                        <span class="text-right whitespace-nowrap min-w-0 px-2 overflow-hidden">Rp{{ row.totalPendapatan|floatformat:"0"|intcomma }}</span>
+                        <span class="text-right flex flex-col items-end gap-[6px] min-w-0 px-2 overflow-hidden">
+                            <span class="whitespace-nowrap">Rp{{ row.pendapatanBerjalan|floatformat:"0"|intcomma }}</span>
+                            {% with fill=row.pendapatanBerjalan|fill_pct:row.nilai %}
+                            <span class="block w-[120px] h-[3px] rounded bg-[#E2E8F0]">
+                                <span class="block h-[3px] rounded" style="width:{{ fill.width }}%; background:{{ fill.color }};"></span>
+                            </span>
+                            {% endwith %}
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="bg-[#F1F5F9] border-b border-[#E2E8F0] grid grid-cols-[44px_64px_84px_112px_92px_112px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 items-center h-[49px] text-[13px] font-bold text-[#0F172A]">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                <span class="pl-4">Grand Total</span>
+                <span class="text-right min-w-0 px-2 overflow-hidden">Rp{{ grandTotal.nilai|floatformat:"0"|intcomma }}</span>
+                <span class="text-right min-w-0 px-2 overflow-hidden">Rp{{ grandTotal.totalPendapatan|floatformat:"0"|intcomma }}</span>
+                <span class="text-right min-w-0 px-2 overflow-hidden">Rp{{ grandTotal.pendapatanBerjalan|floatformat:"0"|intcomma }}</span>
+            </div>
+            </div>
+            {% endwith %}
+        {% endif %}
+    </div>
+
+    {# Pagination #}
+    {% if rows|length > 0 %}
+    <div class="flex items-center justify-between mt-6">
+        <span class="text-[#64748B] text-[13px]">
+            Menampilkan {{ first_display }}-{{ last_display }} dari {{ total }} data
+        </span>
+        <div class="flex items-center gap-1">
+            {# Prev #}
+            <a href="{% page_link prev_page %}"
+               class="w-[30px] h-[30px] flex items-center justify-center bg-white border border-[#E2E8F0] rounded-md text-[#64748B] {% if page <= 1 %}pointer-events-none opacity-40{% endif %}">
+                <svg class="w-[14px] h-[14px]" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            {% for p in page_list %}
+                {% if p == 0 %}
+                    <span class="px-1 text-[#64748B]">...</span>
+                {% else %}
+                    <a href="{% page_link p %}"
+                       class="min-w-[32px] h-[30px] flex items-center justify-center rounded-md text-[13px] {% if p == page %}bg-[#3B82F6] text-white font-bold{% else %}bg-white border border-[#E2E8F0] text-[#0F172A]{% endif %}">
+                        {{ p }}
+                    </a>
+                {% endif %}
+            {% endfor %}
+            {# Next #}
+            <a href="{% page_link next_page %}"
+               class="w-[30px] h-[30px] flex items-center justify-center bg-white border border-[#E2E8F0] rounded-md text-[#64748B] {% if page >= pages %}pointer-events-none opacity-40{% endif %}">
+                <svg class="w-[14px] h-[14px]" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+        </div>
+        {# Per page #}
+        <select name="per_page" form="perpage" class="bg-white border border-[#E2E8F0] rounded-md px-3 h-[30px] text-[13px]">
+            <option value="8"{% if perPage == 8 %} selected{% endif %}>Baris per halaman: 8</option>
+            <option value="20"{% if perPage == 20 %} selected{% endif %}>Baris per halaman: 20</option>
+            <option value="50"{% if perPage == 50 %} selected{% endif %}>Baris per halaman: 50</option>
+        </select>
+    </div>
+    <form id="perpage" method="GET" action="{% url 'realisasi' %}">
+        <input type="hidden" name="q" value="{{ q }}">
+        {% for t in tahun %}
+            <input type="hidden" name="tahun[]" value="{{ t }}">
+        {% endfor %}
+        {% for b in bulan %}
+            <input type="hidden" name="bulan[]" value="{{ b }}">
+        {% endfor %}
+        {% for d in direktorat %}
+            <input type="hidden" name="direktorat[]" value="{{ d }}">
+        {% endfor %}
+        {% for k in kodePP %}
+            <input type="hidden" name="kode_pp[]" value="{{ k }}">
+        {% endfor %}
+        <input type="hidden" name="tipe" value="{{ tipe }}">
+        {% if triwulan != None %}
+            <input type="hidden" name="triwulan" value="{{ triwulan }}">
+        {% endif %}
+    </form>
+    {% endif %}
+    </div>{# /table card #}
+</main>
+{% block scripts %}
+<script>
+    const filterForm = document.getElementById('filter-form');
+
+    // Enter in the search box filters (export is a separate plain link).
+    filterForm?.querySelector('input[name="q"]')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            filterForm.submit();
+        }
+    });
+
+    // Multi-select dropdowns: open/close, search filter, "Semua" master toggle,
+    // apply and reset. Each checkbox lives in the parent form (name="<n>[]").
+    document.querySelectorAll('[data-multiselect]').forEach((ms) => {
+        const trigger = ms.querySelector('[data-ms-trigger]');
+        const panel = ms.querySelector('[data-ms-panel]');
+        const search = ms.querySelector('[data-ms-search]');
+        const list = ms.querySelector('[data-ms-list]');
+        const label = ms.querySelector('[data-ms-label]');
+        const allBox = ms.querySelector('[data-ms-all] input');
+        const optionBoxes = [...ms.querySelectorAll('[data-ms-option] input')].filter((b) => b !== allBox);
+
+        const refreshLabel = () => {
+            const checked = optionBoxes.filter((b) => b.checked).length;
+            label.textContent = (ms.dataset.msLabel || 'Filter') + ': ' + (checked ? checked + ' dipilih' : 'Semua');
+        };
+
+        const open = () => panel.classList.remove('hidden');
+        const close = () => panel.classList.add('hidden');
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            panel.classList.contains('hidden') ? open() : close();
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!ms.contains(e.target)) close();
+        });
+
+        search.addEventListener('input', () => {
+            const q = search.value.toLowerCase();
+            ms.querySelectorAll('[data-ms-option]').forEach((opt) => {
+                opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
+        });
+
+        // "Semua" master: checking it clears all specific options; checking any
+        // specific option clears the master.
+        allBox?.addEventListener('change', () => {
+            if (allBox.checked) {
+                optionBoxes.forEach((b) => { b.checked = false; });
+            }
+            refreshLabel();
+        });
+        optionBoxes.forEach((b) => {
+            b.addEventListener('change', () => {
+                if (b.checked && allBox) allBox.checked = false;
+                refreshLabel();
+            });
+        });
+
+        // Any option change applies immediately (no "Terapkan" button).
+        list.addEventListener('change', () => {
+            close();
+            // Drop the "Semua" masters from the submitted form (they mean "no
+            // filter"), EXCEPT for tahun: "Tahun: Semua" is meaningful and the
+            // backend aggregates every year for it.
+            filterForm.querySelectorAll('[data-ms-all] input').forEach((b) => {
+                if (b.name !== 'tahun[]') b.checked = false;
+            });
+            // Picking a specific month clears a quarter drill-through so it
+            // isn't silently ignored by the backend (triwulan wins over bulan).
+            if (ms.dataset.msName === 'bulan' && optionBoxes.some((b) => b.checked)) {
+                filterForm.querySelector('input[name="triwulan"]')?.remove();
+            }
+            filterForm.submit();
+        });
+
+        ms.querySelector('[data-ms-reset]')?.addEventListener('click', () => {
+            if (allBox) allBox.checked = true;
+            optionBoxes.forEach((b) => b.checked = false);
+            // Apply immediately: the master becomes checked and submits.
+            list.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        refreshLabel();
+    });
+</script>
+{% endblock %}
+{% endblock %}

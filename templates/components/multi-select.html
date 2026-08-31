@@ -1,0 +1,35 @@
+<div class="relative" data-multiselect data-ms-name="{{ name }}" data-ms-label="{{ label }}">
+    <button type="button" data-ms-trigger
+            class="flex items-center gap-2 bg-white border border-[#E2E8F0] rounded-lg px-3 h-[32px] text-[12px] text-[#0F172A] hover:border-[#CBD5E1] focus:outline-none">
+        <span data-ms-label class="whitespace-nowrap">{{ label }}: {% if selected|length == 0 %}Semua{% elif 'Semua' in selected %}Semua{% else %}{{ selected|length }} dipilih{% endif %}</span>
+        <svg class="w-[12px] h-[12px] text-[#64748B]" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <div data-ms-panel
+         class="absolute z-30 mt-1 hidden w-[260px] bg-white border border-[#E2E8F0] rounded-lg shadow-lg">
+        <div class="flex items-center gap-2 px-3 py-2 border-b border-[#E2E8F0]">
+            <svg class="w-[13px] h-[13px] text-[#64748B]" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="2"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="2"/></svg>
+            <input type="text" data-ms-search placeholder="Cari..." class="w-full bg-transparent text-[12px] text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none" />
+        </div>
+        <div data-ms-list class="max-h-[200px] overflow-y-auto p-1.5">
+            {# "Semua" master: checking it clears every other option #}
+            <label data-ms-option data-ms-all
+                   class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[#F1F5F9] cursor-pointer text-[12px] font-semibold text-[#0F172A] border-b border-[#E2E8F0] mb-1">
+                <input type="checkbox" name="{{ name }}[]" value="Semua"{% if selected|length == 0 or 'Semua' in selected %} checked{% endif %}
+                       class="h-[14px] w-[14px] rounded border-[#CBD5E1] text-[#EB3237] focus:ring-[#EB3237]/20" />
+                <span>Semua</span>
+            </label>
+            {% for v in options %}
+                <label data-ms-option class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[#F1F5F9] cursor-pointer text-[12px] text-[#0F172A]">
+                    <input type="checkbox" name="{{ name }}[]" value="{{ v }}"{% if v in selected %} checked{% endif %}
+                           class="h-[14px] w-[14px] rounded border-[#CBD5E1] text-[#EB3237] focus:ring-[#EB3237]/20" />
+                    <span class="truncate">{{ v }}</span>
+                </label>
+            {% endfor %}
+        </div>
+        <div class="flex items-center justify-between gap-2 px-2 py-2 border-t border-[#E2E8F0]">
+            <button type="button" data-ms-reset class="text-[12px] font-semibold text-[#64748B] hover:text-[#0F172A] px-2 py-1">Reset</button>
+            <span class="text-[11px] text-[#94A3B8]">Perubahan langsung diterapkan</span>
+        </div>
+    </div>
+</div>
