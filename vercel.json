@@ -4,9 +4,15 @@
       "src": "dashboard/wsgi.py",
       "use": "@vercel/python",
       "config": { "maxLambdaSize": "15mb" }
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
+    { "src": "/build/(.*)", "dest": "/public/build/$1" },
+    { "src": "/static/(.*)", "dest": "/public/$1" },
     { "src": "/(.*)", "dest": "dashboard/wsgi.py" }
   ]
 }
