@@ -134,7 +134,7 @@ function renderChartBPie(slices) {
             </div>`;
     }).join('');
     el.innerHTML = `
-        <div class="relative flex-1 flex items-center justify-center min-h-[310px]"><canvas id="chartBPie" class="block max-h-[300px] max-w-full"></canvas></div>
+        <div class="relative flex-1 flex items-center justify-center min-h-[310px]"><canvas id="chartBPie" class="block max-h-[330px] max-w-full"></canvas></div>
         <div class="pie-detail flex flex-col gap-2 px-2 pb-1" style="margin-top:4px;border-top:1px solid #E2E8F0;padding-top:10px;">
             <div style="font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em;">Rincian Realisasi</div>
             ${detailRows}
@@ -175,10 +175,10 @@ function renderChartBPie(slices) {
                 easing: 'easeOutQuart',
             },
             plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { color: '#0F172A', font: { size: 12, weight: 600 }, usePointStyle: true, pointStyle: 'circle', padding: 14 },
-                },
+                // Legend hidden: the detail panel below the chart already
+                // shows NTF/TF with color dots + values, so the pie itself
+                // keeps its full size (no bottom legend eating canvas space).
+                legend: { display: false },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => {
