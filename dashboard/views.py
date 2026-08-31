@@ -40,8 +40,8 @@ _FONT_FACE_TEMPLATE = """@font-face {{
 # Stable hashed filenames from the committed Vite build (public/build). Kept
 # hardcoded so the asset tags render even when the manifest file is not on
 # the Lambda filesystem (Vercel serves public/** as CDN static files).
-_CSS_FILE = 'assets/styles-BUsNEdPs.css'
-_JS_FILE = 'assets/app-B0u1rTPa.js'
+_CSS_FILE = 'assets/styles-BGep5N81.css'
+_JS_FILE = 'assets/app-Dku66FmO.js'
 
 
 def _asset_url(name):
