@@ -1,4 +1,5 @@
 import Chart from 'chart.js/auto';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 // Figma design tokens
 const GRAY = '#5F5F60';
@@ -15,6 +16,9 @@ const baseOptions = (max, unit) => ({
     resizeDelay: 100,
     plugins: {
         legend: { display: false },
+        // No value labels on the bar chart (ChartDataLabels is registered
+        // globally for the pie leader lines; keep bars clean).
+        datalabels: { display: false },
         tooltip: {
             callbacks: {
                 label: (ctx) => {
@@ -89,6 +93,7 @@ const barPopPlugin = {
 };
 
 Chart.register(barPopPlugin);
+Chart.register(ChartDataLabels);
 
 const MONTHS_FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
@@ -118,7 +123,7 @@ function renderChartBPie(slices) {
     el.innerHTML = '<div class="relative flex-1 flex items-center justify-center min-h-[310px]"><canvas id="chartBPie" class="block max-h-[300px] max-w-full"></canvas></div>';
     const card = el.closest('.rounded-2xl');
     const h2 = card?.querySelector('h2');
-    if (h2) h2.textContent = 'Komposisi Realisasi per Tipe';
+    if (h2) h2.textContent = 'Komposisi Realisasi TF & NTF';
     const canvas = document.getElementById('chartBPie');
     if (charts.B) charts.B.destroy();
     charts.B = new Chart(canvas, {
@@ -143,7 +148,52 @@ function renderChartBPie(slices) {
             plugins: {
                 legend: {
                     position: 'bottom',
-                    labels: { color: '#0F172A', font: { size: 12, weight: 600 }, usePointStyle: true, pointStyle: 'circle', padding: 14 },
+                    labels: {
+                        color: '#0F172A',
+                        font: { size: 12, weight: 600 },
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 14,
+                        boxWidth: 10,
+                        boxHeight: 10,
+                        // Label = "NTF: Rp 1.570 (58%)" using the slice values.
+                        generateLabels: (chart) => {
+                            const data = chart.data;
+                            const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+                            return data.labels.map((label, i) => {
+                                const value = data.datasets[0].data[i];
+                                const pct = total ? Math.round((value / total) * 100) : 0;
+                                return {
+                                    text: `${label}: Rp ${value.toLocaleString('id-ID')} (${pct}%)`,
+                                    fillStyle: data.datasets[0].backgroundColor[i],
+                                    strokeStyle: data.datasets[0].backgroundColor[i],
+                                    hidden: false,
+                                    index: i,
+                                };
+                            });
+                        },
+                    },
+                },
+                // Data labels with leader lines: the label sits outside the
+                // slice and a thin line connects it back to the arc.
+                datalabels: {
+                    color: '#0F172A',
+                    font: { size: 11, weight: 700 },
+                    formatter: (value, ctx) => {
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const pct = total ? Math.round((value / total) * 100) : 0;
+                        return `${ctx.chart.data.labels[ctx.dataIndex]}\n${pct}%`;
+                    },
+                    anchor: 'end',
+                    align: 'end',
+                    // Force labels to always show (with leader lines); 'auto'
+                    // hides them when the chart is small, which looked like the
+                    // labels vanished.
+                    display: true,
+                    // Leader line styling (plugin draws it between arc and label).
+                    clamp: true,
+                    textAlign: 'center',
+                    padding: 6,
                 },
                 tooltip: {
                     callbacks: {
@@ -343,6 +393,20 @@ function initDashboardDrill() {
             }
         };
         wireCursor(charts.E);
+    }
+
+    // Pie (Komposisi per Tipe): clicking a slice drills into Data Realisasi
+    // filtered by that tipe (NTF/TF), keeping the other global filters.
+    if (charts.B) {
+        charts.B.options.onClick = (evt, elements) => {
+            if (!elements.length) return;
+            const idx = elements[0].index;
+            const label = charts.B.data.labels[idx];
+            if (label === 'NTF' || label === 'TF') {
+                drillThrough({ tipe: label });
+            }
+        };
+        wireCursor(charts.B);
     }
 
     document.querySelectorAll('[data-kpi]').forEach((card) => {
@@ -637,6 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 resizeDelay: 100,
                 plugins: {
                     legend: { display: false },
+                    datalabels: { display: false },
                     tooltip: {
                         callbacks: {
                             label: (ctx) => {
@@ -672,6 +737,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 resizeDelay: 100,
                 plugins: {
                     legend: { display: false },
+                    datalabels: { display: false },
                     tooltip: {
                         callbacks: {
                             label: (ctx) => {

@@ -63,6 +63,8 @@ def realisasi_dataset(tahun: int) -> list[dict]:
     for i, p in enumerate(PROJECTS):
         row = dict(p)
         row['direktorat'] = DIREKTORAT_POOL[i % len(DIREKTORAT_POOL)]
+        # Tipe split ~58/42 (19 NTF / 13 TF of 32) mirroring the dashboard pie.
+        row['tipe'] = 'NTF' if i < 19 else 'TF'
         for idx, month in enumerate(MONTHS):
             r = dict(row)
             r['month'] = month

@@ -20,7 +20,7 @@ from django.shortcuts import render
 from .data import MONTHS, OPTIONS, realisasi_dataset
 
 # Sortable columns on the Data Realisasi table (key -> display name).
-SORTABLE = ['tahun', 'bulan', 'unit', 'noPP', 'kodePP', 'direktorat', 'nama', 'nilai', 'totalPendapatan', 'pendapatanBerjalan']
+SORTABLE = ['tahun', 'bulan', 'unit', 'noPP', 'kodePP', 'tipe', 'direktorat', 'nama', 'nilai', 'totalPendapatan', 'pendapatanBerjalan']
 
 BUILD_DIR = Path(__file__).resolve().parent.parent / 'public' / 'build'
 
@@ -40,8 +40,8 @@ _FONT_FACE_TEMPLATE = """@font-face {{
 # Stable hashed filenames from the committed Vite build (public/build). Kept
 # hardcoded so the asset tags render even when the manifest file is not on
 # the Lambda filesystem (Vercel serves public/** as CDN static files).
-_CSS_FILE = 'assets/styles-BUsNEdPs.css'
-_JS_FILE = 'assets/app-B0u1rTPa.js'
+_CSS_FILE = 'assets/styles-CTWp-iui.css'
+_JS_FILE = 'assets/app-Dee5HP9z.js'
 
 
 def _asset_url(name):
@@ -324,9 +324,13 @@ def _realisasi_rows(request):
         rows.extend(realisasi_dataset(t))
 
     direktorat_options = _distinct_values(rows, 'direktorat')
-    kode_pp_options = _distinct_values(rows, 'kodePP')
+    # The "Kode PP" filter now uses the No PP values (PP-001, ...) to match
+    # the swapped table columns (No PP column shows kodePP, Kode PP shows noPP).
+    kode_pp_options = _distinct_values(rows, 'noPP')
+    tipe_options = _distinct_values(rows, 'tipe')
     direktorat = _multi_filter(request, 'direktorat', direktorat_options)
     kode_pp = _multi_filter(request, 'kode_pp', kode_pp_options)
+    tipe_values = _multi_filter(request, 'tipe', tipe_options)
     bulan_values = _multi_filter(request, 'bulan', MONTHS)
     search = (request.GET.get('q') or '').strip()
 
@@ -345,10 +349,12 @@ def _realisasi_rows(request):
             continue
         if direktorat and r['direktorat'] not in direktorat:
             continue
-        if kode_pp and r['kodePP'] not in kode_pp:
+        if kode_pp and r['noPP'] not in kode_pp:
+            continue
+        if tipe_values and r['tipe'] not in tipe_values:
             continue
         if search:
-            hay = f"{r['nama']} {r['kodePP']}".lower()
+            hay = f"{r['nama']} {r['noPP']} {r['kodePP']}".lower()
             if search.lower() not in hay:
                 continue
         filtered.append(r)
@@ -379,8 +385,10 @@ def _realisasi_rows(request):
         'bulanOptions': MONTHS,
         'direktorat': direktorat,
         'kodePP': kode_pp,
+        'tipe': tipe_values,
         'direktoratOptions': direktorat_options,
         'kodePPOptions': kode_pp_options,
+        'tipeOptions': tipe_options,
         'search': search,
         'sort': sort_col,
         'dir': dir_,
@@ -496,6 +504,8 @@ def realisasi(request):
         'bulanOptions': d['bulanOptions'],
         'triwulan': filters['triwulan'],
         'tipe': filters['tipe'],
+        'tipeFilter': d['tipe'],
+        'tipeOptions': d['tipeOptions'],
         'direktorat': d['direktorat'],
         'kodePP': d['kodePP'],
         'direktoratOptions': d['direktoratOptions'],
@@ -530,5 +540,5 @@ def export(request):
     writer = csv.writer(response)
     writer.writerow(['No', 'Tahun', 'Bulan', 'Unit', 'No PP', 'Kode PP', 'Nama Proyek', 'Nilai Proyek (Rp)', 'Total Pendapatan Diakui (Rp)', 'Pendapatan Tahun Berjalan (Rp)'])
     for i, r in enumerate(filtered):
-        writer.writerow([i + 1, r['tahun'], r['month'], r['unit'], r['noPP'], r['kodePP'], r['nama'], r['nilai'], r['totalPendapatan'], r['pendapatanBerjalan']])
+        writer.writerow([i + 1, r['tahun'], r['month'], r['unit'], r['kodePP'], r['noPP'], r['nama'], r['nilai'], r['totalPendapatan'], r['pendapatanBerjalan']])
     return response

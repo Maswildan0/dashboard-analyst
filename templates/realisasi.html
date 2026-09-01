@@ -30,7 +30,8 @@
             {# Kode PP #}
             {% include 'components/multi-select.html' with name='kode_pp' label='Kode PP' options=kodePPOptions selected=kodePP %}
 
-            <input type="hidden" name="tipe" value="{{ tipe }}">
+            {# Tipe #}
+            {% include 'components/multi-select.html' with name='tipe' label='Tipe' options=tipeOptions selected=tipeFilter %}
             <input type="hidden" name="per_page" value="{{ perPage }}">
             {% if triwulan != None %}
                 <input type="hidden" name="triwulan" value="{{ triwulan }}">
@@ -60,8 +61,8 @@
         {% if kodePP|length > 0 %}
             <span class="inline-flex items-center gap-1 rounded-full bg-[#F0FDF4] border border-[#BBF7D0] px-3 py-1 text-[12px] font-semibold text-[#15803D]">Kode PP {{ kodePP|join:", " }}</span>
         {% endif %}
-        {% if tipe != 'Semua' %}
-            <span class="inline-flex items-center gap-1 rounded-full bg-[#F0FDF4] border border-[#BBF7D0] px-3 py-1 text-[12px] font-semibold text-[#15803D]">Tipe {{ tipe }}</span>
+        {% if tipeFilter|length > 0 %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-[#F0FDF4] border border-[#BBF7D0] px-3 py-1 text-[12px] font-semibold text-[#15803D]">Tipe {{ tipeFilter|join:", " }}</span>
         {% endif %}
     </div>
 
@@ -86,13 +87,14 @@
             <div class="overflow-x-auto">
             {# Table Header (sortable columns) #}
             {% with arrow=arrow_map %}
-            <div class="bg-[#F8FAFC] border-b border-[#E2E8F0] grid grid-cols-[44px_64px_84px_112px_92px_112px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 h-[39px] items-center text-[11px] font-bold uppercase text-[#334155]">
+            <div class="bg-[#F8FAFC] border-b border-[#E2E8F0] grid grid-cols-[44px_64px_84px_112px_92px_112px_64px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 h-[39px] items-center text-[11px] font-bold uppercase text-[#334155]">
                 <span class="flex items-center justify-center gap-1">No</span>
                 <a href="{% sort_link 'tahun' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Tahun <span class="text-[9px]">{{ arrow.tahun }}</span></a>
                 <a href="{% sort_link 'bulan' %}" class="flex items-center gap-1 min-w-0 hover:text-[#EB3237]">Bulan <span class="text-[9px]">{{ arrow.bulan }}</span></a>
                 <a href="{% sort_link 'unit' %}" class="flex items-center gap-1 min-w-0 hover:text-[#EB3237]">Unit <span class="text-[9px]">{{ arrow.unit }}</span></a>
                 <a href="{% sort_link 'noPP' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">No PP <span class="text-[9px]">{{ arrow.noPP }}</span></a>
                 <a href="{% sort_link 'kodePP' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Kode PP <span class="text-[9px]">{{ arrow.kodePP }}</span></a>
+                <a href="{% sort_link 'tipe' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Tipe <span class="text-[9px]">{{ arrow.tipe }}</span></a>
                 <a href="{% sort_link 'direktorat' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Direktorat <span class="text-[9px]">{{ arrow.direktorat }}</span></a>
                 <a href="{% sort_link 'nama' %}" class="flex items-center gap-1 min-w-0 pl-4 hover:text-[#EB3237]">Nama Proyek <span class="text-[9px]">{{ arrow.nama }}</span></a>
                 <a href="{% sort_link 'nilai' %}" class="justify-self-end min-w-0 px-2 overflow-hidden truncate hover:text-[#EB3237]">Nilai Proyek <span class="text-[9px]">{{ arrow.nilai }}</span></a>
@@ -103,13 +105,14 @@
             {# Table Body #}
             <div>
                 {% for row in rows %}
-                    <div class="grid grid-cols-[44px_64px_84px_112px_92px_112px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 items-center h-[55px] border-b border-[#E2E8F0] {% if forloop.counter0|divisibleby:2 %}bg-white{% else %}bg-[#F8FAFC]{% endif %} text-[13px]">
+                    <div class="grid grid-cols-[44px_64px_84px_112px_92px_112px_64px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 items-center h-[55px] border-b border-[#E2E8F0] {% if forloop.counter0|divisibleby:2 %}bg-white{% else %}bg-[#F8FAFC]{% endif %} text-[13px]">
                         <span class="text-[#64748B] text-center">{{ forloop.counter0|add:start_row }}</span>
                         <span class="text-center">{{ row.tahun }}</span>
                         <span>{{ row.month }}</span>
                         <span class="text-[#334155]">{{ row.unit }}</span>
-                        <span class="text-center font-brand text-[12px] font-bold text-[#475569]" style="font-family:'Cousine',monospace;">{{ row.noPP }}</span>
                         <span class="text-center font-brand text-[12px] font-bold text-[#475569]" style="font-family:'Cousine',monospace;">{{ row.kodePP }}</span>
+                        <span class="text-center font-brand text-[12px] font-bold text-[#475569]" style="font-family:'Cousine',monospace;">{{ row.noPP }}</span>
+                        <span class="text-center text-[12px] font-bold {% if row.tipe == 'NTF' %}text-[#EB3237]{% else %}text-[#5F5F60]{% endif %}">{{ row.tipe }}</span>
                         <span class="text-[#334155] text-center">{{ row.direktorat }}</span>
                         <span class="font-semibold text-[#0F172A] truncate min-w-0 pl-4 pr-2">{{ row.nama }}</span>
                         <span class="text-right whitespace-nowrap min-w-0 px-2 overflow-hidden">Rp{{ row.nilai|floatformat:"0"|intcomma }}</span>
@@ -126,8 +129,8 @@
                 {% endfor %}
             </div>
 
-            <div class="bg-[#F1F5F9] border-b border-[#E2E8F0] grid grid-cols-[44px_64px_84px_112px_92px_112px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 items-center h-[49px] text-[13px] font-bold text-[#0F172A]">
-                <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            <div class="bg-[#F1F5F9] border-b border-[#E2E8F0] grid grid-cols-[44px_64px_84px_112px_92px_112px_64px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 items-center h-[49px] text-[13px] font-bold text-[#0F172A]">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
                 <span class="pl-4">Grand Total</span>
                 <span class="text-right min-w-0 px-2 overflow-hidden">Rp{{ grandTotal.nilai|floatformat:"0"|intcomma }}</span>
                 <span class="text-right min-w-0 px-2 overflow-hidden">Rp{{ grandTotal.totalPendapatan|floatformat:"0"|intcomma }}</span>
@@ -187,7 +190,9 @@
         {% for k in kodePP %}
             <input type="hidden" name="kode_pp[]" value="{{ k }}">
         {% endfor %}
-        <input type="hidden" name="tipe" value="{{ tipe }}">
+        {% for t in tipeFilter %}
+            <input type="hidden" name="tipe[]" value="{{ t }}">
+        {% endfor %}
         {% if triwulan != None %}
             <input type="hidden" name="triwulan" value="{{ triwulan }}">
         {% endif %}
