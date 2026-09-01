@@ -41,7 +41,7 @@ _FONT_FACE_TEMPLATE = """@font-face {{
 # hardcoded so the asset tags render even when the manifest file is not on
 # the Lambda filesystem (Vercel serves public/** as CDN static files).
 _CSS_FILE = 'assets/styles-CTWp-iui.css'
-_JS_FILE = 'assets/app-Dee5HP9z.js'
+_JS_FILE = 'assets/app-BydxLu9t.js'
 
 
 def _asset_url(name):

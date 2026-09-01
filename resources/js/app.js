@@ -164,7 +164,7 @@ function renderChartBPie(slices) {
                                 const value = data.datasets[0].data[i];
                                 const pct = total ? Math.round((value / total) * 100) : 0;
                                 return {
-                                    text: `${label}: Rp ${value.toLocaleString('id-ID')} (${pct}%)`,
+                                    text: `${label}: Rp ${(value * 1_000_000).toLocaleString('id-ID')} (${pct}%)`,
                                     fillStyle: data.datasets[0].backgroundColor[i],
                                     strokeStyle: data.datasets[0].backgroundColor[i],
                                     hidden: false,
