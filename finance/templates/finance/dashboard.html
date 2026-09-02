@@ -68,20 +68,6 @@
     </div>
 </section>
 
-{# SECTION 3: Revenue Composition (#14) #}
-<section class="section" aria-label="Revenue Composition">
-    <h2 class="section-title">Revenue Composition</h2>
-    {% include 'finance/components/composition_bar.html' with card=m %}
-    <div class="source-row">
-        {% include 'finance/components/revenue_source_card.html' with card=m source='tf' %}
-        {% include 'finance/components/revenue_source_card.html' with card=m source='ntf_project' %}
-        {% include 'finance/components/revenue_source_card.html' with card=m source='ntf_research' %}
-    </div>
-    {% if not m.composition_ok %}
-    <div class="data-warning" role="alert"><i class="bi bi-exclamation-triangle"></i> Revenue composition does not match total revenue (data quality check).</div>
-    {% endif %}
-</section>
-
 {# SECTION 4: Financial Trend (#20) #}
 <section class="section" aria-label="Financial Trend">
     <h2 class="section-title">Revenue – Expense – SHU Trend</h2>
