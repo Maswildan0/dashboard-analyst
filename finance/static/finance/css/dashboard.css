@@ -273,16 +273,34 @@ main.content .items-center { align-items: center; }
 main.content .justify-between { justify-content: space-between; }
 main.content .grid { display: grid; }
 main.content .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
-main.content .grid-cols-table {
-    grid-template-columns: 34px 50px 56px 96px 66px 80px 46px 70px minmax(160px,1fr) 106px 128px 138px;
+/* ------------------------------------------------------------------
+   Project revenue table — reusable grid class.
+   Header, body rows and grand-total row share this exact template so
+   every column stays aligned. Minimum content width lives on the
+   scroll wrapper (.project-table-scroll), not on the grid, so the
+   outer container scrolls horizontally as one piece.
+   ------------------------------------------------------------------ */
+.project-table-grid {
+    display: grid;
+    grid-template-columns: 40px 64px 86px 120px 116px 96px 64px 90px minmax(320px, 1fr) 155px 180px 190px;
+    gap: 0;
+    align-items: center;
     width: 100%;
 }
-/* Numeric cells: right-aligned with comfortable padding, not glued to edge. */
-main.content .grid-cols-table > *:nth-child(n+10) {
-    padding-right: 14px !important;
-}
-main.content .grid-cols-table > *:nth-child(9) {
-    padding-right: 10px;
+/* Header / row / grand-total heights (kept from the original design). */
+.project-table-header { height: 39px; padding-left: 16px; padding-right: 16px; }
+.project-table-row { height: 55px; padding-left: 16px; padding-right: 16px; }
+.project-table-total { height: 49px; padding-left: 16px; padding-right: 16px; }
+/* One horizontal scroll container for header + body + total. */
+.project-table-scroll { min-width: 1560px; }
+/* Progress bar track in the Pendapatan Berjalan column. */
+.project-table-progress {
+    display: block;
+    height: 3px;
+    border-radius: 9999px;
+    background: #E2E8F0;
+    width: min(120px, 100%);
+    overflow: hidden;
 }
 
 main.content .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

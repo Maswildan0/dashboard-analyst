@@ -74,7 +74,7 @@
                     <svg class="w-[36px] h-[36px] text-[#94A3B8]" viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                 </div>
                 <div class="text-center">
-                    <h3 class="text-[#0F172A] text-[16px] font-bold">Data Tidak Ditemukan</h3>
+                    <h3 class="text-[#0F172A] text-[16px] font-bold">Data proyek tidak ditemukan.</h3>
                     <p class="text-[#64748B] text-[14px] mt-2 max-w-[560px]">Tidak ada data yang cocok dengan filter yang dipilih. Coba ubah kriteria pencarian Anda.</p>
                 </div>
                 <a href="{% url 'realisasi' %}" class="flex items-center gap-2 bg-[#3B82F6] text-white rounded-lg px-5 py-2.5 text-[14px] font-semibold">
@@ -83,60 +83,62 @@
                 </a>
             </div>
         {% else %}
+            {# Single scroll container: header, body and grand total move together #}
             <div class="overflow-x-auto">
-            {# Table Header (sortable columns) #}
-            {% with arrow=arrow_map %}
-            <div class="bg-[#F8FAFC] border-b border-[#E2E8F0] grid grid-cols-table gap-0 px-3 h-[39px] items-center text-[11px] font-bold uppercase text-[#334155]">
-                <span class="flex items-center justify-center gap-1">No</span>
-                <a href="{% sort_link 'tahun' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Tahun <span class="text-[9px]">{{ arrow.tahun }}</span></a>
-                <a href="{% sort_link 'bulan' %}" class="flex items-center gap-1 min-w-0 hover:text-[#EB3237]">Bulan <span class="text-[9px]">{{ arrow.bulan }}</span></a>
-                <a href="{% sort_link 'unit' %}" class="flex items-center gap-1 min-w-0 hover:text-[#EB3237]">Unit <span class="text-[9px]">{{ arrow.unit }}</span></a>
-                <a href="{% sort_link 'noPP' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">No PP <span class="text-[9px]">{{ arrow.noPP }}</span></a>
-                <a href="{% sort_link 'kodePP' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Kode PP <span class="text-[9px]">{{ arrow.kodePP }}</span></a>
-                <a href="{% sort_link 'tipe' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Tipe <span class="text-[9px]">{{ arrow.tipe }}</span></a>
-                <a href="{% sort_link 'direktorat' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Direktorat <span class="text-[9px]">{{ arrow.direktorat }}</span></a>
-                <a href="{% sort_link 'nama' %}" class="flex items-center gap-1 min-w-0 pl-4 hover:text-[#EB3237]">Nama Proyek <span class="text-[9px]">{{ arrow.nama }}</span></a>
-                <a href="{% sort_link 'nilai' %}" style="display:block;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px;" class="hover:text-[#EB3237]">Nilai Proyek <span class="text-[9px]">{{ arrow.nilai }}</span></a>
-                <a href="{% sort_link 'totalPendapatan' %}" style="display:block;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px;" class="hover:text-[#EB3237]">Total Pendapatan <span class="text-[9px]">{{ arrow.totalPendapatan }}</span></a>
-                <a href="{% sort_link 'pendapatanBerjalan' %}" style="display:block;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px;" class="hover:text-[#EB3237]">Pendapatan Berjalan <span class="text-[9px]">{{ arrow.pendapatanBerjalan }}</span></a>
-            </div>
+                <div class="project-table-scroll">
+                    {# Table Header (sortable columns) — same grid template as rows #}
+                    {% with arrow=arrow_map %}
+                    <div class="project-table-grid project-table-header bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold uppercase text-[#334155]">
+                        <span class="min-w-0 flex items-center justify-center">No</span>
+                        <a href="{% sort_link 'tahun' %}" class="min-w-0 flex items-center justify-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Tahun">Tahun <span class="shrink-0 text-[9px]">{{ arrow.tahun }}</span></a>
+                        <a href="{% sort_link 'bulan' %}" class="min-w-0 flex items-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Bulan">Bulan <span class="shrink-0 text-[9px]">{{ arrow.bulan }}</span></a>
+                        <a href="{% sort_link 'unit' %}" class="min-w-0 flex items-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Unit">Unit <span class="shrink-0 text-[9px]">{{ arrow.unit }}</span></a>
+                        <a href="{% sort_link 'noPP' %}" class="min-w-0 flex items-center justify-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan No PP">No PP <span class="shrink-0 text-[9px]">{{ arrow.noPP }}</span></a>
+                        <a href="{% sort_link 'kodePP' %}" class="min-w-0 flex items-center justify-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Kode PP">Kode PP <span class="shrink-0 text-[9px]">{{ arrow.kodePP }}</span></a>
+                        <a href="{% sort_link 'tipe' %}" class="min-w-0 flex items-center justify-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Tipe">Tipe <span class="shrink-0 text-[9px]">{{ arrow.tipe }}</span></a>
+                        <a href="{% sort_link 'direktorat' %}" class="min-w-0 flex items-center justify-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Direktorat">Direktorat <span class="shrink-0 text-[9px]">{{ arrow.direktorat }}</span></a>
+                        <a href="{% sort_link 'nama' %}" class="min-w-0 flex items-center gap-1 truncate pl-2 pr-1 hover:text-[#EB3237]" title="Urutkan Nama Proyek">Nama Proyek <span class="shrink-0 text-[9px]">{{ arrow.nama }}</span></a>
+                        <a href="{% sort_link 'nilai' %}" class="min-w-0 flex items-center justify-end gap-1 truncate px-2 hover:text-[#EB3237]" title="Urutkan Nilai Proyek">Nilai Proyek <span class="shrink-0 text-[9px]">{{ arrow.nilai }}</span></a>
+                        <a href="{% sort_link 'totalPendapatan' %}" class="min-w-0 flex items-center justify-end gap-1 truncate px-2 hover:text-[#EB3237]" title="Urutkan Total Pendapatan">Total Pendapatan <span class="shrink-0 text-[9px]">{{ arrow.totalPendapatan }}</span></a>
+                        <a href="{% sort_link 'pendapatanBerjalan' %}" class="min-w-0 flex items-center justify-end gap-1 truncate px-2 hover:text-[#EB3237]" title="Urutkan Pendapatan Berjalan">Pendapatan Berjalan <span class="shrink-0 text-[9px]">{{ arrow.pendapatanBerjalan }}</span></a>
+                    </div>
 
-            {# Table Body #}
-            <div>
-                {% for row in rows %}
-                    <div class="grid grid-cols-table gap-0 px-3 items-center h-[55px] border-b border-[#E2E8F0] {% if forloop.counter0|divisibleby:2 %}bg-white{% else %}bg-[#F8FAFC]{% endif %} text-[13px]">
-                        <span class="text-[#64748B] text-center">{{ forloop.counter0|add:start_row }}</span>
-                        <span class="text-center">{{ row.tahun }}</span>
-                        <span>{{ row.month }}</span>
-                        <span class="text-[#334155]">{{ row.unit }}</span>
-                        <span class="text-center font-brand text-[12px] font-bold text-[#475569]" style="font-family:'Cousine',monospace;">{{ row.kodePP }}</span>
-                        <span class="text-center font-brand text-[12px] font-bold text-[#475569]" style="font-family:'Cousine',monospace;">{{ row.noPP }}</span>
-                        <span class="text-center text-[12px] font-bold {% if row.tipe == 'NTF' %}text-[#EB3237]{% else %}text-[#5F5F60]{% endif %}">{{ row.tipe }}</span>
-                        <span class="text-[#334155] text-center">{{ row.direktorat }}</span>
-                        <span class="font-semibold text-[#0F172A] truncate min-w-0 pl-4 pr-2">{{ row.nama }}</span>
-                        <span style="display:block;text-align:right;white-space:nowrap;overflow:hidden;padding:0 8px;">Rp{{ row.nilai|floatformat:"0"|intcomma }}</span>
-                        <span style="display:block;text-align:right;white-space:nowrap;overflow:hidden;padding:0 8px;">Rp{{ row.totalPendapatan|floatformat:"0"|intcomma }}</span>
-                        <span class="text-right flex flex-col items-end gap-[6px] min-w-0 px-2 overflow-hidden">
-                            <span class="whitespace-nowrap">Rp{{ row.pendapatanBerjalan|floatformat:"0"|intcomma }}</span>
+                    {# Table Body #}
+                    {% for row in rows %}
+                    <div class="project-table-grid project-table-row border-b border-[#E2E8F0] text-[13px] {% if forloop.counter0|divisibleby:2 %}bg-white{% else %}bg-[#F8FAFC]{% endif %}">
+                        <span class="min-w-0 text-[#64748B] text-center">{{ forloop.counter0|add:start_row }}</span>
+                        <span class="min-w-0 text-center">{{ row.tahun }}</span>
+                        <span class="min-w-0 truncate" title="{{ row.month }}">{{ row.month }}</span>
+                        <span class="min-w-0 text-[#334155] truncate" title="{{ row.unit }}">{{ row.unit }}</span>
+                        <span class="min-w-0 text-center font-brand text-[12px] font-bold text-[#475569] truncate" style="font-family:'Cousine',monospace;" title="{{ row.noPP }}">{{ row.noPP }}</span>
+                        <span class="min-w-0 text-center font-brand text-[12px] font-bold text-[#475569] truncate" style="font-family:'Cousine',monospace;" title="{{ row.kodePP }}">{{ row.kodePP }}</span>
+                        <span class="min-w-0 text-center text-[12px] font-bold truncate {% if row.tipe == 'NTF' %}text-[#EB3237]{% else %}text-[#5F5F60]{% endif %}">{{ row.tipe }}</span>
+                        <span class="min-w-0 text-[#334155] text-center truncate" title="{{ row.direktorat }}">{{ row.direktorat }}</span>
+                        <span class="min-w-0 font-semibold text-[#0F172A] truncate pl-2 pr-2" title="{{ row.nama }}">{{ row.nama }}</span>
+                        <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2" title="Nilai Proyek: Rp{{ row.nilai|floatformat:"0"|intcomma }}">Rp{{ row.nilai|floatformat:"0"|intcomma }}</span>
+                        <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2" title="Total Pendapatan: Rp{{ row.totalPendapatan|floatformat:"0"|intcomma }}">Rp{{ row.totalPendapatan|floatformat:"0"|intcomma }}</span>
+                        <span class="min-w-0 flex flex-col items-end gap-[6px] px-2">
+                            <span class="whitespace-nowrap tabular-nums" title="Pendapatan Berjalan: Rp{{ row.pendapatanBerjalan|floatformat:"0"|intcomma }}">Rp{{ row.pendapatanBerjalan|floatformat:"0"|intcomma }}</span>
                             {% with fill=row.pendapatanBerjalan|fill_pct:row.nilai %}
-                            <span class="block w-[120px] h-[3px] rounded bg-[#E2E8F0]">
+                            <span class="project-table-progress">
                                 <span class="block h-[3px] rounded" style="width:{{ fill.width }}%; background:{{ fill.color }};"></span>
                             </span>
                             {% endwith %}
                         </span>
                     </div>
-                {% endfor %}
-            </div>
+                    {% endfor %}
 
-            <div class="bg-[#F1F5F9] border-b border-[#E2E8F0] grid grid-cols-table gap-0 px-3 items-center h-[49px] text-[13px] font-bold text-[#0F172A]">
-                <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-                <span class="pl-4">Grand Total</span>
-                <span style="display:block;text-align:right;overflow:hidden;padding:0 8px;">Rp{{ grandTotal.nilai|floatformat:"0"|intcomma }}</span>
-                <span style="display:block;text-align:right;overflow:hidden;padding:0 8px;">Rp{{ grandTotal.totalPendapatan|floatformat:"0"|intcomma }}</span>
-                <span style="display:block;text-align:right;overflow:hidden;padding:0 8px;">Rp{{ grandTotal.pendapatanBerjalan|floatformat:"0"|intcomma }}</span>
+                    {# Grand Total — same grid template #}
+                    <div class="project-table-grid project-table-total bg-[#F1F5F9] text-[13px] font-bold text-[#0F172A]">
+                        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                        <span class="min-w-0 pl-2">Grand Total</span>
+                        <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2">Rp{{ grandTotal.nilai|floatformat:"0"|intcomma }}</span>
+                        <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2">Rp{{ grandTotal.totalPendapatan|floatformat:"0"|intcomma }}</span>
+                        <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2">Rp{{ grandTotal.pendapatanBerjalan|floatformat:"0"|intcomma }}</span>
+                    </div>
+                    {% endwith %}
+                </div>
             </div>
-            </div>
-            {% endwith %}
         {% endif %}
     </div>
 
