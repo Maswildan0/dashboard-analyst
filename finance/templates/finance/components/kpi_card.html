@@ -1,5 +1,5 @@
 {% comment %}KPI card for Revenue / Expense / SHU (#7, #8, #9, #56).{% endcomment %}
-<div class="card kpi-card" {% if kpi == 'revenue' %}onclick="location.href='/revenue/'"{% elif kpi == 'expense' %}onclick="location.href='/expense/'"{% else %}onclick="location.href='/profitability/shu/'"{% endif %} role="button" tabindex="0" aria-label="{{ title }}">
+<div class="card kpi-card" {% if kpi == 'revenue' %}onclick="location.href='/dashboard/'"{% elif kpi == 'expense' %}onclick="location.href='/dashboard/'"{% else %}onclick="location.href='/dashboard/'"{% endif %} role="button" tabindex="0" aria-label="{{ title }}">
     <div class="kpi-top">
         <span class="kpi-title">
             {% if kpi == 'revenue' %}Total Revenue
