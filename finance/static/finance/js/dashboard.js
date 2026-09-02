@@ -2,20 +2,13 @@
 (function () {
     'use strict';
 
-    // Sidebar collapse (#3)
+    // Sidebar collapse (#3): hidden by default; toggle slides it in and out.
     const toggle = document.querySelector('.sidebar-toggle');
     const sidebar = document.getElementById('app-sidebar');
     if (toggle && sidebar) {
         toggle.addEventListener('click', () => {
-            const wide = window.innerWidth >= 1024;
-            if (wide) {
-                sidebar.classList.toggle('collapsed');
-                document.body.classList.toggle('sidebar-collapsed', sidebar.classList.contains('collapsed'));
-                document.body.classList.add('sidebar-active');
-            } else {
-                sidebar.classList.toggle('open');
-                document.body.classList.toggle('sidebar-active', sidebar.classList.contains('open'));
-            }
+            const open = sidebar.classList.toggle('open');
+            document.body.classList.toggle('sidebar-active', open);
         });
     }
 
