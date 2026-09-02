@@ -274,6 +274,15 @@ main.content .justify-between { justify-content: space-between; }
 main.content .grid { display: grid; }
 main.content .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
 /* ------------------------------------------------------------------
+   Dashboard content must never exceed the viewport; horizontal overflow
+   is confined to the table's own scroll container below.
+   ------------------------------------------------------------------ */
+main.content,
+main.content > div,
+.df-card,
+.revenue-table-card { width: 100%; max-width: 100%; min-width: 0; }
+
+/* ------------------------------------------------------------------
    Project revenue table — reusable grid class.
    Header, body rows and grand-total row share this exact template so
    every column stays aligned. Minimum content width lives on the
@@ -291,8 +300,13 @@ main.content .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
 .project-table-header { height: 39px; padding-left: 16px; padding-right: 16px; }
 .project-table-row { height: 55px; padding-left: 16px; padding-right: 16px; }
 .project-table-total { height: 49px; padding-left: 16px; padding-right: 16px; }
-/* One horizontal scroll container for header + body + total. */
-.project-table-scroll { min-width: 1560px; }
+/* One horizontal scroll container for header + body + total.
+   The scroll wrapper never exceeds its parent; the 1560px minimum lives
+   on the inner scroll content so the table scrolls inside this box only. */
+.revenue-table-card,
+main.content .rounded-xl { max-width: 100%; overflow: hidden; }
+.overflow-x-auto { max-width: 100%; }
+.project-table-scroll { min-width: 1560px; width: max-content; }
 /* Progress bar track in the Pendapatan Berjalan column. */
 .project-table-progress {
     display: block;
@@ -322,4 +336,9 @@ main.content .rounded-2xl h2 {
     .kpi-row, .source-row { grid-template-columns: 1fr; }
     .content { padding: 16px; }
     .filter-form { flex-direction: column; align-items: stretch; }
+    /* Pagination must wrap instead of overflowing the viewport. */
+    main.content .flex.items-center.justify-between.mt-6 {
+        flex-wrap: wrap; gap: 10px;
+    }
+    main.content select[name="per_page"] { max-width: 100%; }
 }
