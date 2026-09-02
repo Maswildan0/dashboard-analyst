@@ -1,0 +1,50 @@
+{% comment %}Revenue source card: TF / NTF Project / NTF Research (#16-18, #59).{% endcomment %}
+<div class="card source-card" {% if source == 'tf' %}onclick="location.href='/revenue/tf/'"{% elif source == 'ntf_project' %}onclick="location.href='/revenue/ntf-project/'"{% else %}onclick="location.href='/revenue/research/'"{% endif %} role="button" tabindex="0">
+    <div class="kpi-top">
+        <span class="kpi-title">
+            {% if source == 'tf' %}Tuition Fee
+            {% elif source == 'ntf_project' %}NTF Project
+            {% else %}NTF Research Income{% endif %}
+        </span>
+        <span class="kpi-icon {% if source == 'tf' %}icon-red{% elif source == 'ntf_project' %}icon-gray{% else %}icon-maroon{% endif %}">
+            {% if source == 'tf' %}<i class="bi bi-mortarboard"></i>
+            {% elif source == 'ntf_project' %}<i class="bi bi-briefcase"></i>
+            {% else %}<i class="bi bi-search"></i>{% endif %}
+        </span>
+    </div>
+
+    <div class="kpi-value source-value">
+        {% if source == 'tf' %}{{ card.disp.tf }}
+        {% elif source == 'ntf_project' %}{{ card.disp.ntf_project }}
+        {% else %}{{ card.disp.ntf_research }}{% endif %}
+    </div>
+
+    <div class="kpi-sub">Revenue Contribution</div>
+
+    <div class="source-metrics">
+        <div class="source-metric">
+            <span class="source-metric-label" data-tip="Composition = Source Revenue / Total Revenue x 100">Composition</span>
+            <span class="source-metric-value">
+                {% if source == 'tf' %}{{ card.disp.comp_tf }}
+                {% elif source == 'ntf_project' %}{{ card.disp.comp_ntfp }}
+                {% else %}{{ card.disp.comp_ntfr }}{% endif %}
+            </span>
+        </div>
+        <div class="source-metric">
+            <span class="source-metric-label" data-tip="Achievement = Actual / Target x 100">Achievement</span>
+            <span class="source-metric-value">
+                {% if source == 'tf' %}{{ card.disp.tf_achievement }}
+                {% elif source == 'ntf_project' %}{{ card.disp.ntf_project_achievement }}
+                {% else %}{{ card.disp.ntf_research_achievement }}{% endif %}
+            </span>
+        </div>
+        <div class="source-metric">
+            <span class="source-metric-label" data-tip="Compared with the same month in the previous year.">YoY</span>
+            <span class="source-metric-value yoy">
+                {% if source == 'tf' %}{{ card.disp.tf_yoy }}
+                {% elif source == 'ntf_project' %}{{ card.disp.ntf_project_yoy }}
+                {% else %}{{ card.disp.ntf_research_yoy }}{% endif %}
+            </span>
+        </div>
+    </div>
+</div>

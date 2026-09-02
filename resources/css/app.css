@@ -11,27 +11,16 @@
 /* Disable transitions during initial state restore (avoids chart-measure race). */
 .no-transition, .no-transition * { transition: none !important; }
 
-/* KPI cards: lift + glow on hover (pop). */
+/* KPI cards: no movement on hover — the number stays still. */
 [data-kpi] {
-    transition: transform .28s cubic-bezier(.22,.9,.35,1.35), box-shadow .28s ease;
+    transition: box-shadow .2s ease;
 }
 [data-kpi]:hover {
-    transform: translateY(-5px) scale(1.02);
-    box-shadow: 0 16px 32px rgba(235, 50, 55, .14), 0 6px 14px rgba(0, 0, 0, .06);
-    z-index: 2;
-}
-
-/* KPI value: subtle scale on hover for extra life. */
-[data-kpi]:hover [data-kpi-value] {
-    transform: scale(1.04);
-}
-[data-kpi-value] {
-    display: inline-block;
-    transition: transform .28s cubic-bezier(.22,.9,.35,1.35);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, .08);
 }
 
 @media (prefers-reduced-motion: reduce) {
-    [data-kpi], [data-kpi-value] {
+    [data-kpi] {
         transition: none !important;
     }
 }

@@ -1,0 +1,15 @@
+{% comment %}Stacked horizontal composition bar (#15).{% endcomment %}
+<div class="card composition-bar-card">
+    <div class="composition-bar" role="img" aria-label="Revenue composition: TF, NTF Project, NTF Research">
+        {% with tfp=card.composition.TF nfp=card.composition.NTF_PROJECT nrp=card.composition.NTF_RESEARCH %}
+        <div class="seg seg-tf" style="width: {{ card.disp.comp_tf_raw|default:0 }}%;" title="TF {{ card.disp.comp_tf_raw|default:0 }}%"></div>
+        <div class="seg seg-ntfp" style="width: {{ card.disp.comp_ntfp_raw|default:0 }}%;" title="NTF Project {{ card.disp.comp_ntfp_raw|default:0 }}%"></div>
+        <div class="seg seg-ntfr" style="width: {{ card.disp.comp_ntfr_raw|default:0 }}%;" title="NTF Research {{ card.disp.comp_ntfr_raw|default:0 }}%"></div>
+        {% endwith %}
+    </div>
+    <div class="composition-legend">
+        <span class="legend-item"><span class="dot dot-tf"></span> TF <b>{{ card.disp.comp_tf }}</b></span>
+        <span class="legend-item"><span class="dot dot-ntfp"></span> NTF Project <b>{{ card.disp.comp_ntfp }}</b></span>
+        <span class="legend-item"><span class="dot dot-ntfr"></span> NTF Research <b>{{ card.disp.comp_ntfr }}</b></span>
+    </div>
+</div>

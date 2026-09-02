@@ -1,0 +1,13 @@
+{% comment %}Rule-based analyst insights (#21).{% endcomment %}
+<div class="card insight-card">
+    <ul class="insight-list">
+        {% for ins in m.insights %}
+        <li class="insight-item">
+            <span class="insight-icon insight-{{ ins.tone }}"><i class="bi bi-{{ ins.icon }}"></i></span>
+            <span class="insight-text">{{ ins.text }}</span>
+        </li>
+        {% empty %}
+        <li class="insight-item"><span class="insight-text">No insights available for the selected period.</span></li>
+        {% endfor %}
+    </ul>
+</div>

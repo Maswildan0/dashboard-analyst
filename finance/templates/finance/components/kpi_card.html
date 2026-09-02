@@ -1,0 +1,49 @@
+{% comment %}KPI card for Revenue / Expense / SHU (#7, #8, #9, #56).{% endcomment %}
+<div class="card kpi-card" {% if kpi == 'revenue' %}onclick="location.href='/revenue/'"{% elif kpi == 'expense' %}onclick="location.href='/expense/'"{% else %}onclick="location.href='/profitability/shu/'"{% endif %} role="button" tabindex="0" aria-label="{{ title }}">
+    <div class="kpi-top">
+        <span class="kpi-title">
+            {% if kpi == 'revenue' %}Total Revenue
+            {% elif kpi == 'expense' %}Total Expense
+            {% else %}Total SHU{% endif %}
+        </span>
+        <span class="kpi-icon {% if kpi == 'revenue' or kpi == 'expense' %}icon-red{% else %}icon-maroon{% endif %}">
+            {% if kpi == 'revenue' %}<i class="bi bi-coin"></i>
+            {% elif kpi == 'expense' %}<i class="bi bi-receipt"></i>
+            {% else %}<i class="bi bi-graph-up-arrow"></i>{% endif %}
+        </span>
+    </div>
+
+    <div class="kpi-value">
+        {% if kpi == 'revenue' %}{{ card.disp.revenue }}
+        {% elif kpi == 'expense' %}{{ card.disp.expense }}
+        {% else %}{{ card.disp.shu }}{% endif %}
+    </div>
+
+    <div class="kpi-sub">
+        {% if kpi == 'revenue' %}
+            Achievement <span class="kpi-badge badge-{{ card.revenue_status.key|lower }}" data-tip="Revenue Achievement = Actual / Target x 100">{{ card.disp.revenue_achievement }}</span>
+        {% elif kpi == 'expense' %}
+            Budget Utilization <span class="kpi-badge badge-{{ card.expense_status.key|lower }}" data-tip="Budget Utilization = Actual Expense / Budget x 100">{{ card.disp.expense_utilization }}</span>
+        {% else %}
+            Achievement <span class="kpi-badge badge-{{ card.shu_status.key|lower }}" data-tip="SHU Achievement = Actual / Target x 100">{{ card.disp.shu_achievement }}</span>
+        {% endif %}
+    </div>
+
+    <div class="kpi-yoy" data-tip="Compared with the same month in the previous year.">
+        {% if kpi == 'revenue' %}
+            YoY Growth <span class="yoy {{ card.revenue_yoy_class }}">{{ card.disp.revenue_yoy }}</span>
+        {% elif kpi == 'expense' %}
+            YoY Growth <span class="yoy {{ card.expense_yoy_class }}">{{ card.disp.expense_yoy }}</span>
+        {% else %}
+            YoY Growth <span class="yoy {{ card.shu_yoy_class }}">{{ card.disp.shu_yoy }}</span>
+        {% endif %}
+    </div>
+
+    <div class="progress-track">
+        {% if kpi == 'expense' %}
+        <div class="progress-fill fill-{{ card.expense_progress_class }}" style="width: {{ card.expense_progress_width }}%;"></div>
+        {% else %}
+        <div class="progress-fill fill-{{ card.progress_class }}" style="width: {{ card.progress_width }}%;"></div>
+        {% endif %}
+    </div>
+</div>

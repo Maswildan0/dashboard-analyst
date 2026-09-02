@@ -1,54 +1,67 @@
-# Dashboard Analyst
+# Financial Analyst Dashboard
 
-Dashboard analisis realisasi proyek (Telkom) dengan halaman dashboard interaktif dan tabel Data Realisasi.
+Aplikasi monitoring & analisis kinerja keuangan organisasi/universitas — Revenue, Expense, SHU, Operating Ratio, SHU Margin, dan komposisi revenue (Tuition Fee / NTF Project / NTF Research). Dibangun dengan Django, ECharts, dan template Django.
+
+> Milestone 1: landing page Financial Performance Overview lengkap (KPI cards, profitability, revenue composition, monthly trend, analyst insights, filter global, unit tests).
+
 ## Teknologi
 
-- **Django 6.1** (Python 3.13) — backend, routing, template
-- **Chart.js** + Tailwind CSS 4 (via Vite build) — frontend; asset statis sudah di-*build* di `public/build/`
+- Python 3.13 + Django 6.1
+- SQLite (development) / PostgreSQL (production via env)
+- Apache ECharts (trend chart)
+- Bootstrap Icons + CSS kustom corporate
 
-## Menjalankan
+## Instalasi
 
 ```sh
-python -m venv .venv
-.venv\Scripts\activate        # Windows (PowerShell)
+python -m venv venv
+# Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-python manage.py runserver    # http://127.0.0.1:8000
+python manage.py migrate
+python manage.py seed_financial_data   # sample data 2025-2026 Jan-Agu, 4 campus
+python manage.py createsuperuser
+python manage.py runserver
 ```
 
-Route:
-
-| URL              | Fungsi                                              |
-| ---------------- | --------------------------------------------------- |
-| `/`              | Dashboard (grafik + KPI)                            |
-| `/dashboard/data`| JSON payload untuk filter dashboard                 |
-| `/data`          | Tabel Data Realisasi (filter, sort, pagination)     |
-| `/data/export`   | Ekspor CSV sesuai filter aktif                      |
+Buka `http://127.0.0.1:8000/financial/`.
 
 ## Struktur
 
 ```
-dashboard/
-  data.py       # dataset mock 32 proyek × 12 bulan (1:1 dari versi Laravel)
-  views.py      # logika filter, payload, tabel, export
-  urls.py       # routing
-templates/      # layout, dashboard, realisasi, komponen multi-select
-public/         # asset statis + hasil build Vite
+finance/
+  models.py            # master data + fact tables (DecimalField, index)
+  views.py             # FinancialDashboardView + context builder
+  selectors/           # optimized aggregate queries
+  services/
+    financial_metrics.py  # SEMUA formula KPI (achievement, YoY, ratio, margin, komposisi)
+    formatters.py         # Rp Miliar / persen Indonesia
+    insights.py           # rule-based analyst insights
+  management/commands/seed_financial_data.py
+  templates/finance/      # dashboard + komponen reusable
+  static/finance/         # dashboard.css + dashboard.js (sidebar, chart, tooltip)
+  tests/                  # 32 unit tests (formula + view)
 ```
 
-Data sepenuhnya deterministik (seed CRC32 + LCG) — tidak ada database; seluruhnya mock sesuai controller Laravel asli.
+## Aturan bisnis penting
 
-## Rebuild asset frontend
+- **YoY selalu bulan berjalan vs bulan sama tahun sebelumnya** (#53) — bukan YTD.
+- Operating Ratio achievement: **lower is better** (Target/Actual).
+- SHU Margin achievement: **higher is better** (Actual/Target).
+- Komposisi revenue divalidasi: TF + NTF Project + NTF Research ≈ Total Revenue.
+- Tidak ada KPI kalkulasi yang disimpan — semua dihitung service layer dari data dasar (#30).
+- Zero-denominator → `None` → tampil "N/A" (tidak pernah infinity).
 
-Jika ingin mengubah CSS/JS:
+## Admin
+
+Model terdaftar di Django admin: Campus, OrganizationUnit, FinancialPeriod, RevenueCategory, FinancialSummary, RevenueTransactionSummary, KpiTarget, FinancialDataAuditLog.
+
+## Test
 
 ```sh
-npm install
-npm run build      # menulis public/build/
+python manage.py test finance
 ```
 
-## Catatan migrasi
+## Postgres production
 
-- Kontrak URL & query string dipertahankan 1:1 (termasuk `tahun[0]=2025` dari link pagination Laravel, dan `tahun[]` dari form).
-- Filter divalidasi dengan allowlist yang sama; nilai tidak dikenal fallback ke default.
-- RNG seed `crc32` + LCG PHP direplikasi agar payload dashboard identik dengan versi Laravel.
+Set env: `DB_ENGINE=postgres DB_NAME DB_USER DB_PASSWORD DB_HOST DB_PORT`.

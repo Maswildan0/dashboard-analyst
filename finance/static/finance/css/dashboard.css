@@ -1,0 +1,299 @@
+/* Financial Analyst Dashboard — corporate UI (#2, #55) */
+
+:root {
+    --primary: #C8102E;
+    --primary-dark: #8B0D24;
+    --dark: #222222;
+    --gray: #6B7280;
+    --light-gray: #F5F6F8;
+    --white: #FFFFFF;
+    --border: #E5E7EB;
+    --success: #16A34A;
+    --warning: #F59E0B;
+    --danger: #DC2626;
+    --radius: 14px;
+    --shadow: 0 1px 3px rgba(34, 34, 34, .06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--light-gray);
+    color: var(--dark);
+    font-size: 14px;
+}
+
+.app-shell { display: flex; min-height: 100vh; }
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+    width: 250px;
+    background: var(--white);
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 200;
+    height: 100vh;
+    overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+}
+.sidebar.open,
+.sidebar.collapsed {
+    transform: translateX(0);
+}
+.main-area {
+    width: 100%;
+    transition: margin-left .25s ease;
+}
+@media (min-width: 1024px) {
+    /* Desktop: sidebar visible by default; .collapsed hides it. */
+    .sidebar { transform: translateX(0); }
+    .sidebar.collapsed { transform: translateX(-100%); }
+    body.sidebar-active .main-area { margin-left: 250px; }
+    body.sidebar-collapsed .main-area { margin-left: 0; }
+}
+.sidebar-brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 18px 20px; border-bottom: 1px solid var(--border);
+}
+.brand-mark {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: var(--primary); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 20px;
+}
+.brand-text { font-weight: 700; font-size: 13px; line-height: 1.2; color: var(--dark); }
+.sidebar-menu { padding: 12px 12px 24px; }
+.menu-group-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: #9CA3AF; padding: 14px 10px 6px;
+}
+.menu-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: 8px;
+    color: #4B5563; text-decoration: none; font-size: 13px; font-weight: 500;
+    transition: background .15s, color .15s;
+}
+.menu-item i { font-size: 15px; width: 18px; }
+.menu-item.active { background: var(--primary); color: #fff; font-weight: 600; }
+.menu-item.disabled { color: #9CA3AF; cursor: default; }
+
+/* ---------- Main ---------- */
+.main-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 24px; background: var(--white);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 50;
+}
+.topbar-title { font-weight: 700; font-size: 16px; color: var(--dark); }
+.topbar-right { margin-left: auto; }
+.period-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--light-gray); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--gray);
+}
+.icon-btn {
+    background: none; border: 1px solid var(--border); border-radius: 8px;
+    width: 36px; height: 36px; cursor: pointer; font-size: 16px; color: var(--dark);
+}
+.content { padding: 24px; max-width: 1400px; width: 100%; margin: 0 auto; }
+
+/* ---------- Cards ---------- */
+.card {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px; transition: box-shadow .2s, transform .2s;
+}
+.card[role="button"]:hover { box-shadow: 0 4px 14px rgba(34,34,34,.10); transform: translateY(-1px); cursor: pointer; }
+.section { margin-bottom: 28px; }
+.section-title { font-size: 15px; font-weight: 700; color: var(--dark); margin-bottom: 14px; }
+
+/* ---------- Filter bar ---------- */
+.filter-bar { padding: 16px 20px; margin-bottom: 24px; }
+.filter-form { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+.filter-group { display: flex; flex-direction: column; gap: 6px; }
+.filter-group label { font-size: 11px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: .04em; }
+.filter-row { display: flex; gap: 8px; }
+.filter-select {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    font-size: 13px; font-weight: 500; background: var(--white); color: var(--dark);
+    min-width: 110px; font-family: inherit;
+}
+.btn-primary {
+    background: var(--primary); color: #fff; border: 0; border-radius: 8px;
+    padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+}
+.btn-primary:hover { background: var(--primary-dark); }
+
+/* ---------- KPI cards ---------- */
+.kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.kpi-card { position: relative; overflow: hidden; }
+.kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: var(--primary);
+}
+.kpi-card:nth-child(3)::before { background: var(--primary-dark); }
+.kpi-top { display: flex; align-items: center; justify-content: space-between; }
+.kpi-title { font-size: 12px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: .04em; }
+.kpi-icon {
+    width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.icon-red { background: rgba(200,16,46,.10); color: var(--primary); }
+.icon-gray { background: rgba(107,114,128,.12); color: var(--gray); }
+.icon-maroon { background: rgba(139,13,36,.10); color: var(--primary-dark); }
+.kpi-value { font-size: 28px; font-weight: 700; color: var(--dark); margin: 12px 0 6px; letter-spacing: -.01em; }
+.kpi-sub { font-size: 12px; color: var(--gray); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.kpi-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+}
+.badge-ok, .badge-on_target { background: rgba(22,163,74,.12); color: var(--success); }
+.badge-watch { background: rgba(245,158,11,.15); color: #B45309; }
+.badge-low, .badge-attention { background: rgba(220,38,38,.12); color: var(--danger); }
+.badge-na { background: rgba(107,114,128,.12); color: var(--gray); }
+.kpi-yoy { font-size: 12px; color: var(--gray); margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+.yoy { font-weight: 700; }
+.yoy.pos { color: var(--success); }
+.yoy.neg { color: var(--danger); }
+.progress-track { height: 6px; background: var(--light-gray); border-radius: 999px; margin-top: 12px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 999px; background: var(--primary); }
+.progress-fill.fill-ok { background: var(--success); }
+.progress-fill.fill-watch { background: var(--warning); }
+.progress-fill.fill-low { background: var(--danger); }
+.progress-fill.fill-na { background: var(--gray); }
+
+/* ---------- Ratio cards ---------- */
+.ratio-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.ratio-value { font-size: 34px; font-weight: 800; color: var(--dark); margin: 10px 0 2px; display: flex; align-items: baseline; gap: 8px; }
+.ratio-label { font-size: 12px; font-weight: 600; color: var(--gray); }
+.ratio-badge-wrap { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; flex-wrap: wrap; }
+.badge-pill { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.direction-badge { font-size: 11px; font-weight: 600; color: var(--gray); }
+.ratio-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ratio-cell { background: var(--light-gray); border-radius: 10px; padding: 10px; text-align: center; }
+.ratio-cell-label { display: block; font-size: 10px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: .04em; }
+.ratio-cell-value { display: block; font-size: 18px; font-weight: 700; color: var(--dark); margin-top: 4px; }
+.ratio-formula { margin-top: 12px; font-size: 11px; color: #9CA3AF; display: flex; align-items: center; gap: 5px; }
+
+/* ---------- Composition ---------- */
+.composition-bar-card { margin-bottom: 18px; }
+.composition-bar { display: flex; height: 36px; border-radius: 10px; overflow: hidden; background: var(--light-gray); }
+.seg { height: 100%; transition: filter .2s; }
+.seg-tf { background: var(--primary); }
+.seg-ntfp { background: var(--gray); }
+.seg-ntfr { background: var(--primary-dark); }
+.composition-legend { display: flex; gap: 22px; margin-top: 12px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--gray); }
+.legend-item b { color: var(--dark); }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.dot-tf { background: var(--primary); }
+.dot-ntfp { background: var(--gray); }
+.dot-ntfr { background: var(--primary-dark); }
+.source-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.source-value { font-size: 24px; }
+.source-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.source-metric { background: var(--light-gray); border-radius: 9px; padding: 9px; text-align: center; }
+.source-metric-label { display: block; font-size: 10px; color: var(--gray); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.source-metric-value { display: block; font-size: 15px; font-weight: 700; color: var(--dark); margin-top: 3px; }
+.data-warning {
+    margin-top: 12px; padding: 10px 14px; border-radius: 10px;
+    background: rgba(245,158,11,.12); color: #B45309; font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+}
+
+/* ---------- Trend chart ---------- */
+.trend-chart { height: 320px; width: 100%; }
+.trend-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.trend-toggles { display: flex; gap: 8px; }
+.trend-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border); background: var(--white);
+    border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600;
+    color: var(--gray); cursor: pointer; font-family: inherit;
+}
+.trend-toggle.active { background: var(--light-gray); color: var(--dark); border-color: #D1D5DB; }
+.trend-toggle .tdot { width: 9px; height: 9px; border-radius: 50%; background: var(--dot); }
+
+/* ---------- Insights ---------- */
+.insight-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.insight-item { display: flex; align-items: flex-start; gap: 12px; }
+.insight-icon {
+    width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.insight-up { background: rgba(22,163,74,.12); color: var(--success); }
+.insight-down { background: rgba(220,38,38,.12); color: var(--danger); }
+.insight-neutral { background: rgba(107,114,128,.12); color: var(--gray); }
+.insight-text { font-size: 13px; color: #374151; line-height: 1.5; }
+
+/* ---------- Empty state ---------- */
+.empty-state { text-align: center; padding: 60px 20px; }
+.empty-state h2 { margin: 14px 0 6px; font-size: 17px; color: var(--dark); }
+.empty-state p { color: var(--gray); font-size: 13px; }
+
+/* ---------- Tooltip (custom, JS-driven) ---------- */
+[data-tip] { position: relative; cursor: help; }
+[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    background: var(--dark); color: #fff; font-size: 11px; font-weight: 500;
+    padding: 6px 10px; border-radius: 6px; white-space: nowrap; z-index: 100;
+    box-shadow: 0 4px 10px rgba(0,0,0,.2);
+}
+
+/* ---------- Old dashboard pages rendered inside finance layout ---------- */
+/* Tailwind v4 utilities are not reliably parsed here, so re-declare the
+   spacing classes used by the legacy dashboard content. */
+main.content .mt-6 { margin-top: 24px; }
+main.content .mb-6 { margin-bottom: 24px; }
+main.content .mt-2 { margin-top: 8px; }
+main.content .mt-3 { margin-top: 12px; }
+main.content .mt-4 { margin-top: 16px; }
+main.content .mt-5 { margin-top: 20px; }
+main.content .gap-4 { gap: 16px; }
+main.content .gap-5 { gap: 20px; }
+main.content .gap-6 { gap: 24px; }
+main.content .gap-3 { gap: 12px; }
+main.content .px-8 { padding-left: 32px; padding-right: 32px; }
+main.content .py-6 { padding-top: 24px; padding-bottom: 24px; }
+main.content .p-6 { padding: 24px; }
+main.content .p-5 { padding: 20px; }
+main.content .flex { display: flex; }
+main.content .flex-1 { flex: 1 1 0%; }
+main.content .shrink-0 { flex-shrink: 0; }
+main.content .items-center { align-items: center; }
+main.content .justify-between { justify-content: space-between; }
+main.content .grid { display: grid; }
+main.content .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+main.content .grid-cols-table {
+    grid-template-columns: 36px 54px 64px 86px 74px 86px 50px 74px minmax(80px,1fr) 108px 118px 128px;
+}
+main.content .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+main.content .rounded-2xl {
+    border-radius: 14px;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 1px 3px rgba(34,34,34,.06) !important;
+}
+main.content .rounded-2xl h2 {
+    font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* ---------- Responsive (#42) ---------- */
+@media (max-width: 1024px) {
+    .kpi-row, .source-row { grid-template-columns: repeat(2, 1fr); }
+    .ratio-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+    .kpi-row, .source-row { grid-template-columns: 1fr; }
+    .content { padding: 16px; }
+    .filter-form { flex-direction: column; align-items: stretch; }
+}

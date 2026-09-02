@@ -1,8 +1,10 @@
 """
 Django settings for the dashboard analyst project.
 
-Migrated from the original Laravel 13 application; the routes, filter
-logic, and mock dataset are preserved 1:1 (see dashboard/views.py).
+Hosts two applications:
+- `dashboard`: the original mock realisasi dashboard (no database).
+- `finance`: the Financial Analyst Dashboard (SQLite for development,
+  PostgreSQL for production — see DATABASES).
 """
 
 import os
@@ -23,7 +25,13 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
     'dashboard',
+    'finance',
     'django.contrib.staticfiles',
 ]
 
@@ -31,6 +39,9 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
 ]
 
 ROOT_URLCONF = 'dashboard.urls'
@@ -43,6 +54,8 @@ TEMPLATES = [
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
             ],
         },
     },
@@ -50,9 +63,26 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dashboard.wsgi.application'
 
-# No database: the dashboard is powered entirely by the deterministic mock
-# dataset in dashboard/views.py (same as the original Laravel controller).
-DATABASES = {}
+# SQLite for development; switch to PostgreSQL in production via env vars.
+# (The original dashboard app does not use the database.)
+if os.environ.get('DB_ENGINE') == 'postgres':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'financial_dashboard'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/ref/settings/#static-files
@@ -61,8 +91,6 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'public',
 ]
-# When DEBUG=False (production) collectstatic is used; see dashboard/urls.py
-# for the /static/ fallback that serves the same files directly.
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Internationalization
@@ -76,3 +104,10 @@ USE_I18N = True
 USE_TZ = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Caching (dashboard cache keys, see finance/services).
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}

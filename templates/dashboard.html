@@ -1,7 +1,37 @@
-{% extends 'layouts/app.html' %}
+{% extends 'finance/base.html' %}
 {% load dashboard_filters %}
+{% block title %}Revenue Overview{% endblock %}
+{% block topbar_title %}Revenue Overview{% endblock %}
 {% block content %}
-<main class="px-8 py-6">
+<div class="px-8 py-6">
+<style>
+.finance-comp{background:#fff;border:1px solid #E5E7EB;border-radius:14px;box-shadow:0 1px 3px rgba(34,34,34,.06);padding:20px;}
+.fc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.fc-head h2{font-size:16px;font-weight:700;color:#222;margin:0;}
+.fc-period{font-size:12px;color:#6B7280;}
+.fc-bar{display:flex;height:36px;border-radius:10px;overflow:hidden;background:#F5F6F8;}
+.fc-bar-row{display:flex;align-items:center;gap:12px;margin-top:16px;}
+.fc-bar-row + .fc-bar-row{margin-top:8px;}
+.fc-bar-label{width:64px;font-size:11px;font-weight:600;color:#6B7280;flex-shrink:0;font-variant-numeric:tabular-nums;}
+.fc-bar-row .fc-bar{flex:1;}
+.fc-bar-dim{opacity:.8;}
+.fc-legend{display:flex;gap:22px;margin-top:18px;flex-wrap:wrap;}
+.fc-legend span{display:flex;align-items:center;gap:7px;font-size:12px;color:#6B7280;}
+.fc-legend i{width:10px;height:10px;border-radius:50%;display:inline-block;}
+.fc-legend b{color:#222;}
+.fc-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:18px;}
+.fc-card{border:1px solid #E5E7EB;border-radius:14px;padding:20px;background:#fff;box-shadow:0 1px 3px rgba(34,34,34,.06);}
+.fc-card-head{display:flex;align-items:center;justify-content:space-between;}
+.fc-card-head span{font-size:12px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:.04em;}
+.fc-ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;font-style:normal;}
+.fc-value{font-size:22px;font-weight:700;color:#222;margin:12px 0 6px;}
+.fc-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.fc-metrics div{background:#F5F6F8;border-radius:9px;padding:9px;text-align:center;}
+.fc-metrics span{display:block;font-size:10px;color:#6B7280;font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
+.fc-metrics b{display:block;font-size:14px;font-weight:700;color:#222;margin-top:3px;}
+.fc-yoy{color:#16A34A;}
+@media (max-width:900px){.fc-sources{grid-template-columns:1fr;}}
+</style>
     {# Title + chart filter chips #}
     <div class="flex items-center justify-between gap-4 mb-6">
         <h1 class="font-display font-bold text-[20px] leading-[27px] text-[#0F172A]" style="font-family:'Open Sans';">
@@ -33,7 +63,7 @@
     </div>
 
     {# KPI row #}
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {% for kpi in payload.kpis %}
             <div class="relative overflow-hidden rounded-2xl bg-white border border-[#E2E8F0] p-5 cursor-pointer"
                  data-kpi="{{ forloop.counter0 }}"
@@ -69,6 +99,74 @@
         {% endfor %}
     </div>
 
+    {# Revenue Composition + source cards (same as Financial page) #}
+    {% if composition %}
+    <div class="finance-comp mt-6">
+        <div class="fc-head">
+            <h2>Revenue Composition</h2>
+            <span class="fc-period">Periode {{ composition.period }}</span>
+        </div>
+        <div class="fc-sources">
+            {% with s=composition.tf %}
+            <div class="fc-card">
+                <div class="fc-card-head"><span>Tuition Fee</span><i class="fc-ico" style="background:rgba(200,16,46,.10);color:#C8102E;">🎓</i></div>
+                <div class="fc-value">{{ s.value_str }}</div>
+                <div class="fc-metrics">
+                    <div><span>Composition</span><b>{{ s.pct_str }}</b></div>
+                    <div><span>Achievement</span><b>{{ s.achievement }}</b></div>
+                    <div><span>YoY</span><b class="fc-yoy">{{ s.yoy }}</b></div>
+                </div>
+            </div>
+            {% endwith %}
+            {% with s=composition.ntf_project %}
+            <div class="fc-card">
+                <div class="fc-card-head"><span>NTF Project</span><i class="fc-ico" style="background:rgba(107,114,128,.12);color:#6B7280;">📦</i></div>
+                <div class="fc-value">{{ s.value_str }}</div>
+                <div class="fc-metrics">
+                    <div><span>Composition</span><b>{{ s.pct_str }}</b></div>
+                    <div><span>Achievement</span><b>{{ s.achievement }}</b></div>
+                    <div><span>YoY</span><b class="fc-yoy">{{ s.yoy }}</b></div>
+                </div>
+            </div>
+            {% endwith %}
+            {% with s=composition.ntf_research %}
+            <div class="fc-card">
+                <div class="fc-card-head"><span>NTF Research Income</span><i class="fc-ico" style="background:rgba(139,13,36,.10);color:#8B0D24;">🔍</i></div>
+                <div class="fc-value">{{ s.value_str }}</div>
+                <div class="fc-metrics">
+                    <div><span>Composition</span><b>{{ s.pct_str }}</b></div>
+                    <div><span>Achievement</span><b>{{ s.achievement }}</b></div>
+                    <div><span>YoY</span><b class="fc-yoy">{{ s.yoy }}</b></div>
+                </div>
+            </div>
+            {% endwith %}
+        </div>
+        <div class="fc-bar-row">
+            <span class="fc-bar-label">{{ composition.period }}</span>
+            <div class="fc-bar">
+                <div style="width: {{ composition.tf_pct }}%;background:#C8102E;" data-tooltip="TF: {{ composition.tf.value_str }} ({{ composition.tf_pct }}%)"></div>
+                <div style="width: {{ composition.ntf_project_pct }}%;background:#6B7280;" data-tooltip="NTF Project: {{ composition.ntf_project.value_str }} ({{ composition.ntf_project_pct }}%)"></div>
+                <div style="width: {{ composition.ntf_research_pct }}%;background:#8B0D24;" data-tooltip="NTF Research: {{ composition.ntf_research.value_str }} ({{ composition.ntf_research_pct }}%)"></div>
+            </div>
+        </div>
+        {% if composition.prev_comp %}
+        <div class="fc-bar-row fc-bar-row-prev">
+            <span class="fc-bar-label">{{ composition.prev_comp.period }}</span>
+            <div class="fc-bar fc-bar-dim">
+                <div style="width: {{ composition.prev_comp.tf_pct }}%;background:#C8102E;" data-tooltip="TF: {{ composition.prev_comp.tf_value_str }} ({{ composition.prev_comp.tf_pct }}%)"></div>
+                <div style="width: {{ composition.prev_comp.ntf_project_pct }}%;background:#6B7280;" data-tooltip="NTF Project: {{ composition.prev_comp.ntf_project_value_str }} ({{ composition.prev_comp.ntf_project_pct }}%)"></div>
+                <div style="width: {{ composition.prev_comp.ntf_research_pct }}%;background:#8B0D24;" data-tooltip="NTF Research: {{ composition.prev_comp.ntf_research_value_str }} ({{ composition.prev_comp.ntf_research_pct }}%)"></div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="fc-legend">
+            <span><i style="background:#C8102E;"></i>TF <b>{{ composition.tf_pct }}%</b></span>
+            <span><i style="background:#6B7280;"></i>NTF Project <b>{{ composition.ntf_project_pct }}%</b></span>
+            <span><i style="background:#8B0D24;"></i>NTF Research <b>{{ composition.ntf_research_pct }}%</b></span>
+        </div>
+    </div>
+    {% endif %}
+
     {# Row 2: Chart A + Chart B #}
     <div class="flex gap-6 mt-6">
         <div class="flex-1 rounded-2xl bg-white border border-[#E2E8F0] p-6"
@@ -88,12 +186,6 @@
             </div>
         </div>
 
-        <div class="w-[480px] shrink-0 rounded-2xl bg-white border border-[#E2E8F0] p-6"
-             style="box-shadow:0px 4px 12px rgba(0,0,0,0.0313726); flex-direction:column; display:flex; gap:20px;">
-            <h2 class="text-[#0F172A] text-[16px] font-bold leading-[19px]">Capaian Realisasi per Triwulan</h2>
-            <div id="chartB" class="flex items-end gap-4 flex-1 min-h-[310px]"></div>
-            <p id="chartBNote" class="text-[#64748B] text-[12px] font-normal leading-[15px]">{{ payload.chartB.note }}</p>
-        </div>
     </div>
 
 
@@ -134,11 +226,59 @@
             <span class="text-[#64748B] text-[12px] font-semibold">Bulan</span>
         </div>
     </div>
-</main>
+</div>
 
 <script>
     window.__DASHBOARD__ = {{ payload_json|safe }};
     window.__DASHBOARD_URL__ = "{% url 'dashboard-data' %}";
     window.__DETAIL_URL__ = "{% url 'realisasi' %}";
+</script>
+<script>
+(function () {
+    // Floating tooltip for composition bar segments (overflow hidden on the
+    // bar clips CSS pseudo-element tooltips, so use a body-level element).
+    var tip = document.createElement('div');
+    tip.id = 'fc-tooltip';
+    tip.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;display:none;' +
+        'background:#222;color:#fff;font-size:11px;font-weight:600;' +
+        'padding:6px 10px;border-radius:6px;white-space:nowrap;' +
+        'box-shadow:0 4px 10px rgba(0,0,0,.25);font-family:Inter,Open Sans,sans-serif;' +
+        'opacity:0;transform:translateY(4px);' +
+        'transition:opacity .18s ease, transform .18s ease;';
+    document.body.appendChild(tip);
+    var hideTimer = null;
+    var segs = document.querySelectorAll('.fc-bar > div[data-tooltip]');
+    segs.forEach(function (seg) {
+        seg.style.cursor = 'pointer';
+        seg.addEventListener('mouseenter', function () {
+            clearTimeout(hideTimer);
+            tip.textContent = seg.dataset.tooltip;
+            tip.style.display = 'block';
+            place(seg);
+            // Fade + slide in on the next frame so the transition runs.
+            requestAnimationFrame(function () {
+                tip.style.opacity = '1';
+                tip.style.transform = 'translateY(0)';
+            });
+        });
+        seg.addEventListener('mouseleave', function () {
+            tip.style.opacity = '0';
+            tip.style.transform = 'translateY(4px)';
+            hideTimer = setTimeout(function () { tip.style.display = 'none'; }, 180);
+        });
+    });
+    function place(seg) {
+        var segRect = seg.getBoundingClientRect();
+        var tipRect = tip.getBoundingClientRect();
+        // Anchor to the segment's top-center, sitting just above it.
+        var left = segRect.left + segRect.width / 2 - tipRect.width / 2;
+        var top = segRect.top - tipRect.height - 18;
+        if (left < 8) left = 8;
+        if (left + tipRect.width > window.innerWidth - 8) left = window.innerWidth - tipRect.width - 8;
+        if (top < 8) top = segRect.bottom + 14;
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+    }
+})();
 </script>
 {% endblock %}

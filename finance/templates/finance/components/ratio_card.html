@@ -1,0 +1,35 @@
+{% comment %}Operating Ratio / SHU Margin card (#12, #13, #57, #58).{% endcomment %}
+<div class="card ratio-card" {% if ratio == 'or' %}onclick="location.href='/profitability/operating-ratio/'"{% else %}onclick="location.href='/profitability/shu-margin/'"{% endif %} role="button" tabindex="0" aria-label="{{ title }}">
+    <div class="kpi-top">
+        <span class="kpi-title">
+            {% if ratio == 'or' %}Operating Ratio{% else %}SHU Margin{% endif %}
+        </span>
+        <span class="kpi-icon {% if ratio == 'or' %}icon-gray{% else %}icon-maroon{% endif %}">
+            {% if ratio == 'or' %}<i class="bi bi-percent"></i>{% else %}<i class="bi bi-arrow-up-right-circle"></i>{% endif %}
+        </span>
+    </div>
+
+    <div class="ratio-value">
+        {% if ratio == 'or' %}{{ card.disp.or_actual }}{% else %}{{ card.disp.margin_actual }}{% endif %}
+        <span class="ratio-label">Realization</span>
+    </div>
+
+    <div class="ratio-grid">
+        <div class="ratio-cell">
+            <span class="ratio-cell-label">Target</span>
+            <span class="ratio-cell-value">{% if ratio == 'or' %}{{ card.disp.or_target }}{% else %}{{ card.disp.margin_target }}{% endif %}</span>
+        </div>
+        <div class="ratio-cell">
+            <span class="ratio-cell-label">Actual</span>
+            <span class="ratio-cell-value">{% if ratio == 'or' %}{{ card.disp.or_actual }}{% else %}{{ card.disp.margin_actual }}{% endif %}</span>
+        </div>
+        <div class="ratio-cell">
+            <span class="ratio-cell-label">Achievement</span>
+            <span class="ratio-cell-value">{% if ratio == 'or' %}{{ card.disp.or_achievement }}{% else %}{{ card.disp.margin_achievement }}{% endif %}</span>
+        </div>
+    </div>
+
+    <div class="ratio-formula" data-tip="{% if ratio == 'or' %}Operating Ratio = Total Expense / Total Revenue x 100{% else %}SHU Margin = Total SHU / Total Revenue x 100{% endif %}">
+        <i class="bi bi-info-circle"></i> {% if ratio == 'or' %}Expense ÷ Revenue{% else %}SHU ÷ Revenue{% endif %}
+    </div>
+</div>

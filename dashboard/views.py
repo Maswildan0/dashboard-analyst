@@ -40,8 +40,8 @@ _FONT_FACE_TEMPLATE = """@font-face {{
 # Stable hashed filenames from the committed Vite build (public/build). Kept
 # hardcoded so the asset tags render even when the manifest file is not on
 # the Lambda filesystem (Vercel serves public/** as CDN static files).
-_CSS_FILE = 'assets/styles-CTWp-iui.css'
-_JS_FILE = 'assets/app-BydxLu9t.js'
+_CSS_FILE = 'assets/styles-Dn0XQH6L.css'
+_JS_FILE = 'assets/app-BsKT5PXG.js'
 
 
 def _asset_url(name):
@@ -191,13 +191,16 @@ def _build_payload(tipe: str, direktorat: str, kode_pp: str, tahun):
         rka_series = acc['chartA']['rka']
         rel_series = acc['chartA']['realisasi']
         acc['kpis'][0]['capaian'][0] = f"{int(round(sum(rel_series) / sum(rka_series) * 100))}% Capaian"
-        acc['kpis'][2]['capaian'][0] = f"{int(round(rel_series[7] / max(1, rka_series[7]) * 100))}% Capaian"
+        acc['kpis'][0]['capaian'][1] = _capaian_color(int(round(sum(rel_series) / sum(rka_series) * 100)))
+        # KPI[1] is the RKA card with no capaian badge.
         for item in acc['chartB']['items']:
             item['pct'] = min(120, int(round(item['realisasi'] / max(1, item['rka']) * 100)))
         for i in range(len(acc['chartD']['capaian'])):
             acc['chartD']['capaian'][i] = int(round(rel_series[i] / max(1, rka_series[i]) * 100))
-        acc['kpis'][0]['title'] = 'Total Realisasi Semua Tahun'
-        acc['kpis'][1]['title'] = 'Target RKA Semua Tahun'
+        acc['kpis'][0]['title'] = 'Realisasi Bulan Berjalan'
+        acc['kpis'][1]['title'] = 'RKA Bulan Berjalan'
+        # (Annual cards were already dropped in the per-year payload; here the
+        # two month cards are summed across years and re-capaian'd above.)
         return acc
 
     # Stable seed from the filter combination. PHP's crc32() is a signed
@@ -242,10 +245,8 @@ def _build_payload(tipe: str, direktorat: str, kode_pp: str, tahun):
 
     return {
         'kpis': [
-            {'title': f'Total Realisasi Tahun {tahun}', 'value': total_realisasi, 'icon': 'wallet', 'accent': '#EB3237', 'iconBg': '#ECFDF5', 'iconColor': '#EB3237', 'capaian': [f'{capaian_total}% Capaian', _capaian_color(capaian_total)], 'period': 'tahun'},
-            {'title': f'Target RKA Tahun {tahun}', 'value': target_rka, 'icon': 'folder', 'accent': '#5F5F60', 'iconBg': '#EFF6FF', 'iconColor': '#5F5F60', 'capaian': None, 'period': 'tahun'},
-            {'title': 'Realisasi Bulan Agustus', 'value': realisasi_bulan, 'icon': 'wallet', 'accent': '#EB3237', 'iconBg': '#ECFDF5', 'iconColor': '#EB3237', 'capaian': [f'{capaian_bulan}% Capaian', _capaian_color(capaian_bulan)], 'period': 'agustus'},
-            {'title': 'Target RKA Bulan Agustus', 'value': target_rka_bulan, 'icon': 'folder', 'accent': '#5F5F60', 'iconBg': '#EFF6FF', 'iconColor': '#5F5F60', 'capaian': None, 'period': 'tahun'},
+            {'title': 'Realisasi Bulan Berjalan', 'value': realisasi_bulan, 'icon': 'wallet', 'accent': '#EB3237', 'iconBg': '#ECFDF5', 'iconColor': '#EB3237', 'capaian': [f'{capaian_bulan}% Capaian', _capaian_color(capaian_bulan)], 'period': 'agustus'},
+            {'title': 'RKA Bulan Berjalan', 'value': target_rka_bulan, 'icon': 'folder', 'accent': '#5F5F60', 'iconBg': '#EFF6FF', 'iconColor': '#5F5F60', 'capaian': None, 'period': 'tahun'},
         ],
         'chartA': {'bulan': bulan, 'rka': rka, 'realisasi': realisasi},
         'chartB': {
@@ -276,7 +277,126 @@ def index(request):
         'fonts_head': _fonts_head(),
         'assets_head': _assets_head(),
         'active': 'dashboard',
+        'active_tab': 'revenue_overview',
+        'composition': _revenue_composition(),
     })
+
+
+def _revenue_composition():
+    """Revenue composition from the finance app (TF / NTF Project / NTF Research)
+    for the latest period and first campus. Returns None when no finance data."""
+    try:
+        from finance.selectors import financial_selectors as sel
+        from finance.services import (
+            calculate_revenue_achievement,
+            calculate_revenue_composition,
+            calculate_yoy_growth,
+            validate_revenue_composition,
+        )
+        period = sel.get_latest_period()
+        campuses = sel.list_campuses()
+        if period is None or not campuses:
+            return None
+        campus = campuses[0]
+        rows = sel.get_revenue_by_category(period, campus)
+        tf = rows.get('TF', {}).get('actual')
+        ntf_p = rows.get('NTF_PROJECT', {}).get('actual')
+        ntf_r = rows.get('NTF_RESEARCH', {}).get('actual')
+        if tf is None or ntf_p is None or ntf_r is None:
+            return None
+        comp = calculate_revenue_composition(tf, ntf_p, ntf_r)
+        prev = sel.get_previous_revenue_by_category(sel.get_previous_year_period(period), campus)
+        def src(actual, target, key, prev_rows):
+            prev_actual = prev_rows.get(key, {}).get('actual')
+            return {
+                'value': int(actual),
+                'value_str': _fmt_rupiah(actual),
+                'pct': float(comp[key] or 0),
+                'pct_str': _fmt_pct(comp[key]),
+                'achievement': _fmt_pct(calculate_revenue_achievement(actual, target)) if target else 'N/A',
+                'yoy': _fmt_signed(calculate_yoy_growth(actual, prev_actual)),
+            }
+        prev_period = sel.get_previous_year_period(period)
+        prev_rows = sel.get_previous_revenue_by_category(prev_period, campus)
+        prev_tf = prev_rows.get('TF', {}).get('actual')
+        prev_ntf_p = prev_rows.get('NTF_PROJECT', {}).get('actual')
+        prev_ntf_r = prev_rows.get('NTF_RESEARCH', {}).get('actual')
+        prev_comp = None
+        if prev_tf is not None and prev_ntf_p is not None and prev_ntf_r is not None:
+            pc = calculate_revenue_composition(prev_tf, prev_ntf_p, prev_ntf_r)
+            prev_comp = {
+                'tf_pct': float(pc['TF'] or 0),
+                'ntf_project_pct': float(pc['NTF_PROJECT'] or 0),
+                'ntf_research_pct': float(pc['NTF_RESEARCH'] or 0),
+                'tf_value_str': _fmt_rupiah(prev_tf),
+                'ntf_project_value_str': _fmt_rupiah(prev_ntf_p),
+                'ntf_research_value_str': _fmt_rupiah(prev_ntf_r),
+                'period': f"{prev_period.month:02d}/{prev_period.year}" if prev_period else None,
+            }
+
+        tf_s = src(tf, rows.get('TF', {}).get('target'), 'TF', prev)
+        np_s = src(ntf_p, rows.get('NTF_PROJECT', {}).get('target'), 'NTF_PROJECT', prev)
+        nr_s = src(ntf_r, rows.get('NTF_RESEARCH', {}).get('target'), 'NTF_RESEARCH', prev)
+        return {
+            'tf': tf_s,
+            'ntf_project': np_s,
+            'ntf_research': nr_s,
+            'tf_pct': float(comp['TF'] or 0),
+            'ntf_project_pct': float(comp['NTF_PROJECT'] or 0),
+            'ntf_research_pct': float(comp['NTF_RESEARCH'] or 0),
+            'total': float(comp['total']),
+            'valid': validate_revenue_composition(tf, ntf_p, ntf_r, tf + ntf_p + ntf_r),
+            'period': f"{period.month:02d}/{period.year}",
+            # Finance-page-compatible presentation structures.
+            'prev_comp': prev_comp,
+            'card': {
+                'composition': {
+                    'TF': comp['TF'],
+                    'NTF_PROJECT': comp['NTF_PROJECT'],
+                    'NTF_RESEARCH': comp['NTF_RESEARCH'],
+                },
+                'disp': {
+                    'comp_tf': tf_s['pct_str'],
+                    'comp_ntfp': np_s['pct_str'],
+                    'comp_ntfr': nr_s['pct_str'],
+                    'comp_tf_raw': tf_s['pct'],
+                    'comp_ntfp_raw': np_s['pct'],
+                    'comp_ntfr_raw': nr_s['pct'],
+                    'tf': tf_s['value_str'],
+                    'ntf_project': np_s['value_str'],
+                    'ntf_research': nr_s['value_str'],
+                    'tf_achievement': tf_s['achievement'],
+                    'ntf_project_achievement': np_s['achievement'],
+                    'ntf_research_achievement': nr_s['achievement'],
+                    'tf_yoy': tf_s['yoy'],
+                    'ntf_project_yoy': np_s['yoy'],
+                    'ntf_research_yoy': nr_s['yoy'],
+                },
+            },
+        }
+    except Exception:
+        return None
+
+
+def _fmt_rupiah(v):
+    if v is None:
+        return 'N/A'
+    try:
+        return 'Rp ' + f'{float(v):,.0f}'.replace(',', '.')
+    except (TypeError, ValueError):
+        return 'N/A'
+
+
+def _fmt_pct(v):
+    if v is None:
+        return 'N/A'
+    return f'{v:.1f}%'
+
+
+def _fmt_signed(v):
+    if v is None:
+        return 'N/A'
+    return f'{v:+.1f}%'
 
 
 def data(request):
@@ -481,12 +601,12 @@ def realisasi(request):
         q['dir'] = dir_
         q['per_page'] = per_page
         q.pop('page', None)
-        return '/data?' + _query_link(q)
+        return '/dashboard/data/table?' + _query_link(q)
 
     def page_url(p):
         q = dict(query)
         q['page'] = p
-        return '/data?' + _query_link(q)
+        return '/dashboard/data/table?' + _query_link(q)
 
     pages = max(1, -(-total // per_page))
 
@@ -527,6 +647,7 @@ def realisasi(request):
         'fonts_head': _fonts_head(),
         'assets_head': _assets_head(),
         'active': 'realisasi',
+        'active_tab': 'realisation',
     })
 
 

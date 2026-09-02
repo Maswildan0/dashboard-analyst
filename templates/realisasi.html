@@ -1,12 +1,14 @@
-{% extends 'layouts/app.html' %}
+{% extends 'finance/base.html' %}
 {% load dashboard_filters %}
+{% block title %}Revenue Data{% endblock %}
+{% block topbar_title %}Revenue Data{% endblock %}
 {% block content %}
-<main class="px-8 py-6">
+<div class="px-8 py-6">
     {# Title + filter bar on one row #}
     <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
             <h1 class="font-display font-bold text-[20px] leading-[27px] text-[#0F172A]" style="font-family:'Open Sans';">
-                Data Realisasi
+                Data Revenue
             </h1>
             <p class="text-[#64748B] text-[13px] leading-[18px] mt-1">Menampilkan {{ total }} data</p>
         </div>
@@ -87,7 +89,7 @@
             <div class="overflow-x-auto">
             {# Table Header (sortable columns) #}
             {% with arrow=arrow_map %}
-            <div class="bg-[#F8FAFC] border-b border-[#E2E8F0] grid grid-cols-[44px_64px_84px_112px_92px_112px_64px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 h-[39px] items-center text-[11px] font-bold uppercase text-[#334155]">
+            <div class="bg-[#F8FAFC] border-b border-[#E2E8F0] grid grid-cols-table gap-0 px-3 h-[39px] items-center text-[11px] font-bold uppercase text-[#334155]">
                 <span class="flex items-center justify-center gap-1">No</span>
                 <a href="{% sort_link 'tahun' %}" class="flex items-center justify-center gap-1 min-w-0 hover:text-[#EB3237]">Tahun <span class="text-[9px]">{{ arrow.tahun }}</span></a>
                 <a href="{% sort_link 'bulan' %}" class="flex items-center gap-1 min-w-0 hover:text-[#EB3237]">Bulan <span class="text-[9px]">{{ arrow.bulan }}</span></a>
@@ -105,7 +107,7 @@
             {# Table Body #}
             <div>
                 {% for row in rows %}
-                    <div class="grid grid-cols-[44px_64px_84px_112px_92px_112px_64px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 items-center h-[55px] border-b border-[#E2E8F0] {% if forloop.counter0|divisibleby:2 %}bg-white{% else %}bg-[#F8FAFC]{% endif %} text-[13px]">
+                    <div class="grid grid-cols-table gap-0 px-3 items-center h-[55px] border-b border-[#E2E8F0] {% if forloop.counter0|divisibleby:2 %}bg-white{% else %}bg-[#F8FAFC]{% endif %} text-[13px]">
                         <span class="text-[#64748B] text-center">{{ forloop.counter0|add:start_row }}</span>
                         <span class="text-center">{{ row.tahun }}</span>
                         <span>{{ row.month }}</span>
@@ -129,7 +131,7 @@
                 {% endfor %}
             </div>
 
-            <div class="bg-[#F1F5F9] border-b border-[#E2E8F0] grid grid-cols-[44px_64px_84px_112px_92px_112px_64px_92px_minmax(140px,1fr)_150px_170px_180px] gap-0 px-3 items-center h-[49px] text-[13px] font-bold text-[#0F172A]">
+            <div class="bg-[#F1F5F9] border-b border-[#E2E8F0] grid grid-cols-table gap-0 px-3 items-center h-[49px] text-[13px] font-bold text-[#0F172A]">
                 <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
                 <span class="pl-4">Grand Total</span>
                 <span class="text-right min-w-0 px-2 overflow-hidden">Rp{{ grandTotal.nilai|floatformat:"0"|intcomma }}</span>
@@ -199,7 +201,7 @@
     </form>
     {% endif %}
     </div>{# /table card #}
-</main>
+</div>
 {% block scripts %}
 <script>
     const filterForm = document.getElementById('filter-form');

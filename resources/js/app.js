@@ -218,18 +218,18 @@ function renderKpis(kpis) {
         card.querySelector('[data-kpi-title]').textContent = data.title;
         const valueEl = card.querySelector('[data-kpi-value]');
         const target = Number(data.value) || 0;
-        // Count-up animation for the displayed value.
         const prev = Number(card.dataset.prevValue || 0);
-        const duration = 600;
+        card.dataset.prevValue = String(target);
+        // Subtle count-up; all cards share the same clock so they stay in sync.
+        const duration = 500;
         const start = performance.now();
         const step = (now) => {
             const t = Math.min(1, (now - start) / duration);
-            const eased = 1 - Math.pow(1 - t, 3);
+            const eased = 1 - Math.pow(1 - t, 2); // gentle ease-out
             const cur = Math.round(prev + (target - prev) * eased);
             valueEl.textContent = 'Rp' + cur.toLocaleString('id-ID');
             if (t < 1) requestAnimationFrame(step);
         };
-        card.dataset.prevValue = String(target);
         requestAnimationFrame(step);
         const cap = card.querySelector('[data-kpi-capaian]');
         if (cap) {
@@ -249,16 +249,21 @@ function applyPayload(payload) {
     charts.A.options.scales.y.ticks.stepSize = charts.A.options.scales.y.max / 5;
     charts.A.update();
 
-    if (payload.chartB.type === 'pie') {
-        renderChartBPie(payload.chartB.pie);
-    } else {
-        if (charts.B) charts.B.destroy();
-        charts.B = null;
-        renderChartB(payload.chartB.items);
-        const h2 = document.getElementById('chartB').closest('.rounded-2xl')?.querySelector('h2');
-        if (h2) h2.textContent = 'Capaian Realisasi per Triwulan';
+    // Chart B (Komposisi pie / triwulan) was removed from the page; guard
+    // against the missing element so the other charts keep updating.
+    if (document.getElementById('chartB')) {
+        if (payload.chartB.type === 'pie') {
+            renderChartBPie(payload.chartB.pie);
+        } else {
+            if (charts.B) charts.B.destroy();
+            charts.B = null;
+            renderChartB(payload.chartB.items);
+            const h2 = document.getElementById('chartB').closest('.rounded-2xl')?.querySelector('h2');
+            if (h2) h2.textContent = 'Capaian Realisasi per Triwulan';
+        }
+        const note = document.getElementById('chartBNote');
+        if (note) note.textContent = payload.chartB.note;
     }
-    document.getElementById('chartBNote').textContent = payload.chartB.note;
 
     charts.D.data.labels = payload.chartD.bulan;
     charts.D.data.datasets[0].data = payload.chartD.tahunLalu;
@@ -414,10 +419,10 @@ function initDashboardDrill() {
         if (!period) return;
         card.style.cursor = 'pointer';
         card.addEventListener('click', () => {
-            if (period === 'tahun') {
-                drillThrough({});
-            } else if (period === 'agustus') {
+            if (period === 'agustus') {
                 drillThrough({ bulan: 'Agustus' });
+            } else {
+                drillThrough({});
             }
         });
     });
@@ -429,6 +434,7 @@ function initDashboardDrill() {
             if (wrap) drillThrough({ triwulan: wrap.dataset.triwulan });
         });
     }
+    // (Chart B pie slice drill is skipped when the element is absent.)
 }
 
 // ---------------------------------------------------------------------------
@@ -677,10 +683,12 @@ document.addEventListener('DOMContentLoaded', () => {
             options: baseOptions(autoMax([...d.chartA.rka, ...d.chartA.realisasi]), 'Jt'),
         });
 
-        if (d.chartB.type === 'pie') {
-            renderChartBPie(d.chartB.pie);
-        } else {
-            renderChartB(d.chartB.items);
+        if (document.getElementById('chartB')) {
+            if (d.chartB.type === 'pie') {
+                renderChartBPie(d.chartB.pie);
+            } else {
+                renderChartB(d.chartB.items);
+            }
         }
 
         const dMax = autoMax([...d.chartD.tahunLalu, ...d.chartD.tahunSekarang]);

@@ -1,0 +1,98 @@
+{% extends 'finance/base.html' %}
+{% block content %}
+
+{# Global filter bar (#5) #}
+<section class="filter-bar card" aria-label="Global filters">
+    <form method="get" action="{% url 'finance:dashboard' %}" class="filter-form">
+        <div class="filter-group">
+            <label for="f-year">Period</label>
+            <div class="filter-row">
+                <select id="f-year" name="year" class="filter-select">
+                    {% for y in years %}<option value="{{ y }}" {% if y == filters.year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+                </select>
+                <select id="f-month" name="month" class="filter-select">
+                    {% for mo in months %}<option value="{{ forloop.counter }}" {% if forloop.counter == filters.month %}selected{% endif %}>{{ mo }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label for="f-campus">Campus</label>
+            <select id="f-campus" name="campus" class="filter-select">
+                <option value="all" {% if filters.campus_code == 'all' %}selected{% endif %}>All Campus</option>
+                {% for c in campuses %}<option value="{{ c.code }}" {% if filters.campus_code == c.code %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="f-unit">Organization Unit</label>
+            <select id="f-unit" name="unit" class="filter-select">
+                <option value="all" {% if filters.unit == 'all' %}selected{% endif %}>All Unit</option>
+                {% for u in units %}<option value="{{ u.id }}" {% if filters.unit == u.id|stringformat:'s' %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="f-view">Data View</label>
+            <select id="f-view" name="view" class="filter-select">
+                <option value="actual" selected>Actual</option>
+                <option value="budget">Budget</option>
+                <option value="target">Target</option>
+            </select>
+        </div>
+        <button type="submit" class="btn-primary"><i class="bi bi-funnel"></i> Apply</button>
+    </form>
+</section>
+
+{% if empty %}
+<section class="empty-state card">
+    <i class="bi bi-inbox" style="font-size:2.5rem;color:#C8102E;"></i>
+    <h2>No financial data available for the selected period.</h2>
+    <p>Try a different month, year, or campus.</p>
+</section>
+{% else %}
+
+{# SECTION 1: Financial Summary (#6) #}
+<section class="section" aria-label="Financial Summary">
+    <h2 class="section-title">Financial Summary</h2>
+    <div class="kpi-row">
+        {% include 'finance/components/kpi_card.html' with card=m kpi='revenue' %}
+        {% include 'finance/components/kpi_card.html' with card=m kpi='expense' %}
+        {% include 'finance/components/kpi_card.html' with card=m kpi='shu' %}
+    </div>
+</section>
+
+{# SECTION 2: Profitability & Efficiency (#11) #}
+<section class="section" aria-label="Profitability & Efficiency">
+    <h2 class="section-title">Profitability &amp; Efficiency</h2>
+    <div class="ratio-row">
+        {% include 'finance/components/ratio_card.html' with card=m ratio='or' %}
+        {% include 'finance/components/ratio_card.html' with card=m ratio='margin' %}
+    </div>
+</section>
+
+{# SECTION 3: Revenue Composition (#14) #}
+<section class="section" aria-label="Revenue Composition">
+    <h2 class="section-title">Revenue Composition</h2>
+    {% include 'finance/components/composition_bar.html' with card=m %}
+    <div class="source-row">
+        {% include 'finance/components/revenue_source_card.html' with card=m source='tf' %}
+        {% include 'finance/components/revenue_source_card.html' with card=m source='ntf_project' %}
+        {% include 'finance/components/revenue_source_card.html' with card=m source='ntf_research' %}
+    </div>
+    {% if not m.composition_ok %}
+    <div class="data-warning" role="alert"><i class="bi bi-exclamation-triangle"></i> Revenue composition does not match total revenue (data quality check).</div>
+    {% endif %}
+</section>
+
+{# SECTION 4: Financial Trend (#20) #}
+<section class="section" aria-label="Financial Trend">
+    <h2 class="section-title">Revenue – Expense – SHU Trend</h2>
+    {% include 'finance/components/trend_chart.html' %}
+</section>
+
+<!-- {# SECTION 5: Analyst Insight (#21) #}
+<section class="section" aria-label="Analyst Insight">
+    <h2 class="section-title">Financial Analyst Insight</h2>
+    {% include 'finance/components/insight_card.html' %}
+</section> -->
+
+{% endif %}
+{% endblock %}

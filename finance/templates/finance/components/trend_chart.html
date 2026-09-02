@@ -1,0 +1,12 @@
+{% comment %}Monthly Revenue/Expense/SHU trend chart (#20). Data injected via JSON.{% endcomment %}
+<div class="card trend-card">
+    <div class="trend-toolbar">
+        <div class="trend-toggles" role="group" aria-label="Toggle series">
+            <button class="trend-toggle active" data-series="revenue" style="--dot:#C8102E;"><span class="tdot"></span>Revenue</button>
+            <button class="trend-toggle active" data-series="expense" style="--dot:#6B7280;"><span class="tdot"></span>Expense</button>
+            <button class="trend-toggle active" data-series="shu" style="--dot:#8B0D24;"><span class="tdot"></span>SHU</button>
+        </div>
+    </div>
+    <div id="trend-chart" class="trend-chart" role="img" aria-label="Revenue, Expense and SHU monthly trend"></div>
+</div>
+<script id="trend-data" type="application/json">{{ trend_json|safe }}</script>
