@@ -1,45 +1,9 @@
 {% extends 'finance/base.html' %}
+{% load static %}
 {% block content %}
 
-{# Global filter bar (#5) #}
-<section class="filter-bar card" aria-label="Global filters">
-    <form method="get" action="{% url 'finance:dashboard' %}" class="filter-form">
-        <div class="filter-group">
-            <label for="f-year">Period</label>
-            <div class="filter-row">
-                <select id="f-year" name="year" class="filter-select">
-                    {% for y in years %}<option value="{{ y }}" {% if y == filters.year %}selected{% endif %}>{{ y }}</option>{% endfor %}
-                </select>
-                <select id="f-month" name="month" class="filter-select">
-                    {% for mo in months %}<option value="{{ forloop.counter }}" {% if forloop.counter == filters.month %}selected{% endif %}>{{ mo }}</option>{% endfor %}
-                </select>
-            </div>
-        </div>
-        <div class="filter-group">
-            <label for="f-campus">Campus</label>
-            <select id="f-campus" name="campus" class="filter-select">
-                <option value="all" {% if filters.campus_code == 'all' %}selected{% endif %}>All Campus</option>
-                {% for c in campuses %}<option value="{{ c.code }}" {% if filters.campus_code == c.code %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="f-unit">Organization Unit</label>
-            <select id="f-unit" name="unit" class="filter-select">
-                <option value="all" {% if filters.unit == 'all' %}selected{% endif %}>All Unit</option>
-                {% for u in units %}<option value="{{ u.id }}" {% if filters.unit == u.id|stringformat:'s' %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="f-view">Data View</label>
-            <select id="f-view" name="view" class="filter-select">
-                <option value="actual" selected>Actual</option>
-                <option value="budget">Budget</option>
-                <option value="target">Target</option>
-            </select>
-        </div>
-        <button type="submit" class="btn-primary"><i class="bi bi-funnel"></i> Apply</button>
-    </form>
-</section>
+{# Filter card — same design system as Data Tuition Fee / Revenue Overview #}
+{% include 'finance/components/finance_filter_card.html' %}
 
 {% if empty %}
 <section class="empty-state card">
@@ -81,4 +45,8 @@
 </section> -->
 
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'finance/js/finance-filter.js' %}" defer></script>
 {% endblock %}

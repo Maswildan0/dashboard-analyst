@@ -1,0 +1,64 @@
+{# Finance dashboard filter card (see finance-filter.js). #}
+
+<div class="df-card" id="finance-filter-card">
+    <div class="df-card-head">
+        <div class="df-head-left">
+            <span class="df-head-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 3.5h13M4 8h8M6.5 12.5h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </span>
+            <div>
+                <div class="df-head-title">Filter Data</div>
+                <div class="df-head-desc">Sesuaikan data yang ditampilkan pada dashboard</div>
+            </div>
+        </div>
+        <button type="button" class="df-btn df-btn-ghost" id="finance-reset-btn" disabled aria-label="Reset filter">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 8a7 7 0 111.2 3.9M1 1v3h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Reset
+        </button>
+    </div>
+
+    <form id="finance-filter-form" class="df-form df-form-finance" method="get" action="{% url 'finance:dashboard' %}" data-default-year="{{ filters.year }}" data-default-month="{{ filters.month }}">
+        <div class="df-field">
+            <label class="df-label" for="f-year">Tahun</label>
+            <select id="f-year" name="year" class="df-select df-native-select">
+                {% for y in years %}<option value="{{ y }}" {% if y == filters.year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+            </select>
+        </div>
+
+        <div class="df-field">
+            <label class="df-label" for="f-month">Bulan</label>
+            <select id="f-month" name="month" class="df-select df-native-select">
+                {% for mo in months %}<option value="{{ forloop.counter }}" {% if forloop.counter == filters.month %}selected{% endif %}>{{ mo }}</option>{% endfor %}
+            </select>
+        </div>
+
+        <div class="df-field">
+            <label class="df-label" for="f-campus">Campus</label>
+            <select id="f-campus" name="campus" class="df-select df-native-select">
+                <option value="all" {% if filters.campus_code == 'all' %}selected{% endif %}>All Campus</option>
+                {% for c in campuses %}<option value="{{ c.code }}" {% if filters.campus_code == c.code %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+            </select>
+        </div>
+
+        <div class="df-field">
+            <label class="df-label" for="f-unit">Organisasi</label>
+            <select id="f-unit" name="unit" class="df-select df-native-select">
+                <option value="all" {% if filters.unit == 'all' %}selected{% endif %}>All Unit</option>
+                {% for u in units %}<option value="{{ u.id }}" {% if filters.unit == u.id|stringformat:'s' %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+            </select>
+        </div>
+
+        <div class="df-field df-apply">
+            <span class="df-label df-label-empty" aria-hidden="true"></span>
+            <button type="submit" class="df-btn df-btn-primary" id="finance-apply-btn">
+                <svg class="df-btn-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="df-btn-text">Terapkan</span>
+            </button>
+        </div>
+    </form>
+
+    <div class="df-chips" id="finance-chips" hidden>
+        <span class="df-chips-label">Filter aktif:</span>
+        <div class="df-chips-list" id="finance-chips-list"></div>
+    </div>
+</div>
