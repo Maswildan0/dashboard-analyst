@@ -77,10 +77,13 @@ if os.environ.get('DB_ENGINE') == 'postgres':
         }
     }
 else:
+    # Vercel Lambda filesystem is read-only except /tmp; keep the sqlite file
+    # there so migrate/seed can run at cold start. Local dev keeps it in repo.
+    db_path = Path('/tmp/db.sqlite3') if os.environ.get('VERCEL') else BASE_DIR / 'db.sqlite3'
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': db_path,
         }
     }
 
