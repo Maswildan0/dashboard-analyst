@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'finance/css/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'finance/css/dashboard-filter.css' %}">
     {{ assets_head|safe }}
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>
@@ -30,6 +31,7 @@
     </div>
 </div>
 <script src="{% static 'finance/js/dashboard.js' %}"></script>
+<script src="{% static 'finance/js/dashboard-filter.js' %}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

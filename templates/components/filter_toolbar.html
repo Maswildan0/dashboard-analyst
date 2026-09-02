@@ -1,0 +1,214 @@
+{# Reusable financial filter toolbar.
+   Backend field names are preserved (q, tahun[], bulan[], direktorat[],
+   kode_pp[], tipe[], per_page, triwulan) so export and filtering keep the
+   exact same contract. Styling lives in finance/static/finance/css/
+   dashboard-filter.css, behaviour in dashboard-filter.js. #}
+
+<div class="df-card" id="filter-toolbar">
+    {# Header row: title + actions #}
+    <div class="df-card-head">
+        <div class="df-head-left">
+            <span class="df-head-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 3.5h13M4 8h8M6.5 12.5h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </span>
+            <div>
+                <div class="df-head-title">Filter Data</div>
+                <div class="df-head-desc">Sesuaikan data yang ditampilkan pada dashboard</div>
+            </div>
+        </div>
+        <div class="df-head-actions">
+            <button type="button" class="df-btn df-btn-ghost" id="df-reset-btn" disabled aria-label="Reset filter">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 8a7 7 0 111.2 3.9M1 1v3h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Reset
+            </button>
+            <div class="df-export-wrap">
+                <button type="button" class="df-btn df-btn-outline" id="df-export-btn" aria-haspopup="true" aria-label="Export data">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0l3-3m-3 3L5 7M3 12v1a1 1 0 001 1h8a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Export
+                </button>
+                <div class="df-export-menu" id="df-export-menu" hidden role="menu">
+                    <button type="button" class="df-export-item" data-export="csv" role="menuitem">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2h6l3 3v9H4V2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 2v3h3" stroke="currentColor" stroke-width="1.5"/></svg>
+                        Export CSV
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Main filter controls #}
+    <form id="df-form" method="GET" action="{% url 'realisasi' %}" class="df-form">
+        {# Search #}
+        <div class="df-field df-search">
+            <label for="df-q" class="df-label">Pencarian</label>
+            <div class="df-input-wrap">
+                <svg class="df-input-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8"/></svg>
+                <input id="df-q" type="text" name="q" value="{{ q }}" placeholder="Cari proyek, unit, atau kode PP..." autocomplete="off" class="df-input">
+            </div>
+        </div>
+
+        {# Tahun — multi-select #}
+        <div class="df-field" data-multiselect data-ms-name="tahun" data-ms-label="Tahun">
+            <span class="df-label" id="df-lbl-tahun">Tahun</span>
+            <button type="button" class="df-select" data-ms-trigger aria-haspopup="listbox" aria-labelledby="df-lbl-tahun">
+                <span class="df-select-value" data-ms-label>
+                    {% if tahun|length == 0 or 'Semua' in tahun %}Semua tahun{% else %}{{ tahun|length }} tahun dipilih{% endif %}
+                </span>
+                <svg class="df-select-caret" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+            <div class="df-panel" data-ms-panel hidden role="listbox" aria-labelledby="df-lbl-tahun">
+                <div class="df-panel-actions">
+                    <button type="button" class="df-panel-link" data-ms-select-all>Pilih semua</button>
+                    <button type="button" class="df-panel-link" data-ms-clear>Hapus pilihan</button>
+                </div>
+                <div class="df-panel-list">
+                    <label class="df-option" data-ms-option data-ms-all>
+                        <input type="checkbox" name="tahun[]" value="Semua" {% if tahun|length == 0 or 'Semua' in tahun %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">Semua tahun</span>
+                    </label>
+                    {% for v in tahunOptions %}
+                    <label class="df-option" data-ms-option>
+                        <input type="checkbox" name="tahun[]" value="{{ v }}" {% if v|stringformat:'s' in tahun|stringformat:'s' %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">{{ v }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Bulan #}
+        <div class="df-field" data-multiselect data-ms-name="bulan" data-ms-label="Bulan">
+            <span class="df-label" id="df-lbl-bulan">Bulan</span>
+            <button type="button" class="df-select" data-ms-trigger aria-haspopup="listbox" aria-labelledby="df-lbl-bulan">
+                <span class="df-select-value" data-ms-label>
+                    {% if bulan|length == 0 or 'Semua' in bulan %}Semua bulan{% elif bulan|length == 1 %}{{ bulan.0 }}{% else %}{{ bulan|length }} bulan dipilih{% endif %}
+                </span>
+                <svg class="df-select-caret" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+            <div class="df-panel" data-ms-panel hidden role="listbox" aria-labelledby="df-lbl-bulan">
+                <div class="df-panel-list">
+                    <label class="df-option" data-ms-option data-ms-all>
+                        <input type="checkbox" name="bulan[]" value="Semua" {% if bulan|length == 0 or 'Semua' in bulan %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">Semua bulan</span>
+                    </label>
+                    {% for v in bulanOptions %}
+                    <label class="df-option" data-ms-option>
+                        <input type="checkbox" name="bulan[]" value="{{ v }}" {% if v in bulan %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">{{ v }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Direktorat — data from backend #}
+        <div class="df-field" data-multiselect data-ms-name="direktorat" data-ms-label="Direktorat">
+            <span class="df-label" id="df-lbl-dir">Direktorat</span>
+            <button type="button" class="df-select" data-ms-trigger aria-haspopup="listbox" aria-labelledby="df-lbl-dir">
+                <span class="df-select-value" data-ms-label>
+                    {% if direktorat|length == 0 or 'Semua' in direktorat %}Semua direktorat{% elif direktorat|length == 1 %}{{ direktorat.0 }}{% else %}{{ direktorat|length }} direktorat{% endif %}
+                </span>
+                <svg class="df-select-caret" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+            <div class="df-panel" data-ms-panel hidden role="listbox" aria-labelledby="df-lbl-dir">
+                <div class="df-panel-list">
+                    <label class="df-option" data-ms-option data-ms-all>
+                        <input type="checkbox" name="direktorat[]" value="Semua" {% if direktorat|length == 0 or 'Semua' in direktorat %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">Semua direktorat</span>
+                    </label>
+                    {% for v in direktoratOptions %}
+                    <label class="df-option" data-ms-option>
+                        <input type="checkbox" name="direktorat[]" value="{{ v }}" {% if v in direktorat %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">{{ v }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Kode PP — searchable #}
+        <div class="df-field" data-multiselect data-ms-name="kode_pp" data-ms-label="Kode PP" data-ms-searchable="1">
+            <span class="df-label" id="df-lbl-kpp">Kode PP</span>
+            <button type="button" class="df-select" data-ms-trigger aria-haspopup="listbox" aria-labelledby="df-lbl-kpp">
+                <span class="df-select-value" data-ms-label>
+                    {% if kodePP|length == 0 or 'Semua' in kodePP %}Semua kode PP{% elif kodePP|length == 1 %}{{ kodePP.0 }}{% else %}{{ kodePP|length }} kode PP{% endif %}
+                </span>
+                <svg class="df-select-caret" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+            <div class="df-panel df-panel-searchable" data-ms-panel hidden role="listbox" aria-labelledby="df-lbl-kpp">
+                <div class="df-panel-search">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8"/></svg>
+                    <input type="text" data-ms-search placeholder="Cari kode PP..." class="df-search-input" aria-label="Cari kode PP">
+                </div>
+                <div class="df-panel-list" data-ms-list>
+                    <label class="df-option" data-ms-option data-ms-all>
+                        <input type="checkbox" name="kode_pp[]" value="Semua" {% if kodePP|length == 0 or 'Semua' in kodePP %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">Semua kode PP</span>
+                    </label>
+                    {% for v in kodePPOptions %}
+                    <label class="df-option" data-ms-option>
+                        <input type="checkbox" name="kode_pp[]" value="{{ v }}" {% if v in kodePP %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">{{ v }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Tipe — data from backend #}
+        <div class="df-field" data-multiselect data-ms-name="tipe" data-ms-label="Tipe">
+            <span class="df-label" id="df-lbl-tipe">Tipe</span>
+            <button type="button" class="df-select" data-ms-trigger aria-haspopup="listbox" aria-labelledby="df-lbl-tipe">
+                <span class="df-select-value" data-ms-label>
+                    {% if tipeFilter|length == 0 or 'Semua' in tipeFilter %}Semua tipe{% elif tipeFilter|length == 1 %}{{ tipeFilter.0 }}{% else %}{{ tipeFilter|length }} tipe{% endif %}
+                </span>
+                <svg class="df-select-caret" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+            <div class="df-panel" data-ms-panel hidden role="listbox" aria-labelledby="df-lbl-tipe">
+                <div class="df-panel-list">
+                    <label class="df-option" data-ms-option data-ms-all>
+                        <input type="checkbox" name="tipe[]" value="Semua" {% if tipeFilter|length == 0 or 'Semua' in tipeFilter %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">Semua tipe</span>
+                    </label>
+                    {% for v in tipeOptions %}
+                    <label class="df-option" data-ms-option>
+                        <input type="checkbox" name="tipe[]" value="{{ v }}" {% if v in tipeFilter %}checked{% endif %}>
+                        <span class="df-check" aria-hidden="true"></span>
+                        <span class="df-option-text">{{ v }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <input type="hidden" name="per_page" value="{{ perPage }}">
+        {% if triwulan != None %}
+            <input type="hidden" name="triwulan" value="{{ triwulan }}">
+        {% endif %}
+
+        {# Apply #}
+        <div class="df-field df-apply">
+            <span class="df-label df-label-empty" aria-hidden="true"></span>
+            <button type="submit" class="df-btn df-btn-primary" id="df-apply-btn">
+                <svg class="df-btn-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="df-btn-text">Terapkan</span>
+            </button>
+        </div>
+    </form>
+
+    {# Active filter chips #}
+    <div class="df-chips" id="df-chips" hidden>
+        <span class="df-chips-label">Filter aktif:</span>
+        <div class="df-chips-list" id="df-chips-list"></div>
+        <button type="button" class="df-clear-all" id="df-clear-all" hidden>Hapus semua filter</button>
+    </div>
+</div>
