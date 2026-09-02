@@ -274,8 +274,15 @@ main.content .justify-between { justify-content: space-between; }
 main.content .grid { display: grid; }
 main.content .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
 main.content .grid-cols-table {
-    grid-template-columns: 36px 54px 64px 86px 74px 86px 50px 74px minmax(140px,1fr) 108px 118px 128px;
+    grid-template-columns: 34px 50px 56px 96px 66px 80px 46px 70px minmax(160px,1fr) 106px 128px 138px;
     width: 100%;
+}
+/* Numeric cells: right-aligned with comfortable padding, not glued to edge. */
+main.content .grid-cols-table > *:nth-child(n+10) {
+    padding-right: 14px !important;
+}
+main.content .grid-cols-table > *:nth-child(9) {
+    padding-right: 10px;
 }
 
 main.content .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
