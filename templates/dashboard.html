@@ -1,5 +1,6 @@
 {% extends 'finance/base.html' %}
 {% load dashboard_filters %}
+{% load static %}
 {% block title %}Revenue Overview{% endblock %}
 {% block topbar_title %}Revenue Overview{% endblock %}
 {% block content %}
@@ -32,32 +33,9 @@
 .fc-yoy{color:#16A34A;}
 @media (max-width:900px){.fc-sources{grid-template-columns:1fr;}}
 </style>
-    {# Title + chart filter chips #}
-    <div class="flex items-center justify-between gap-4 mb-6">
-        <div class="flex items-center gap-3">
-            <select data-filter="tipe" class="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 h-[32px] text-[12px] font-sans focus:outline-none focus:ring-2 focus:ring-[#EB3237]/20">
-                {% for v in options.tipe %}
-                    <option value="{{ v }}"{% if filters.tipe == v %} selected{% endif %}>Tipe: {{ v }}</option>
-                {% endfor %}
-            </select>
-            <select data-filter="direktorat" class="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 h-[32px] text-[12px] font-sans focus:outline-none focus:ring-2 focus:ring-[#EB3237]/20">
-                {% for v in options.direktorat %}
-                    <option value="{{ v }}"{% if filters.direktorat == v %} selected{% endif %}>Direktorat: {{ v }}</option>
-                {% endfor %}
-            </select>
-            <select data-filter="kode_pp" class="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 h-[32px] text-[12px] font-sans focus:outline-none focus:ring-2 focus:ring-[#EB3237]/20">
-                {% for v in options.kodePP %}
-                    <option value="{{ v }}"{% if filters.kodePP == v %} selected{% endif %}>Kode PP: {{ v }}</option>
-                {% endfor %}
-            </select>
-            <select data-filter="tahun" class="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 h-[32px] text-[12px] font-sans focus:outline-none focus:ring-2 focus:ring-[#EB3237]/20">
-                <option value="Semua"{% if filters.tahun == 'Semua' %} selected{% endif %}>Tahun: Semua</option>
-                {% for v in options.tahun %}
-                    <option value="{{ v }}"{% if filters.tahun == v %} selected{% endif %}>Tahun: {{ v }}</option>
-                {% endfor %}
-            </select>
-        </div>
-    </div>
+    {# Filter card — consistent with Data Tuition Fee page #}
+    {% include 'components/revenue_filter_card.html' %}
+
 
     {# KPI row #}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -278,4 +256,5 @@
     }
 })();
 </script>
+<script src="{% static 'finance/js/revenue-filter.js' %}" defer></script>
 {% endblock %}

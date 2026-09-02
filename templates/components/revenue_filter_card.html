@@ -1,0 +1,74 @@
+{# Revenue Overview filter card; single-select (Tipe/Direktorat/Kode PP/Tahun). #}
+
+<div class="df-card" id="revenue-filter-card">
+    {# Header #}
+    <div class="df-card-head">
+        <div class="df-head-left">
+            <span class="df-head-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 3.5h13M4 8h8M6.5 12.5h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </span>
+            <div>
+                <div class="df-head-title">Filter Data</div>
+                <div class="df-head-desc">Sesuaikan data yang ditampilkan pada dashboard</div>
+            </div>
+        </div>
+        <button type="button" class="df-btn df-btn-ghost" id="revenue-reset-btn" disabled aria-label="Reset filter">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 8a7 7 0 111.2 3.9M1 1v3h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Reset
+        </button>
+    </div>
+
+    {# Filter row: single-select dropdowns (data-filter preserved) #}
+    <form id="revenue-filter-form" class="df-form df-form-revenue">
+        <div class="df-field">
+            <label class="df-label" for="rv-tipe">Tipe</label>
+            <select id="rv-tipe" data-filter="tipe" class="df-select df-native-select">
+                {% for v in options.tipe %}
+                    <option value="{{ v }}"{% if filters.tipe == v %} selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="df-field">
+            <label class="df-label" for="rv-dir">Direktorat</label>
+            <select id="rv-dir" data-filter="direktorat" class="df-select df-native-select">
+                {% for v in options.direktorat %}
+                    <option value="{{ v }}"{% if filters.direktorat == v %} selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="df-field">
+            <label class="df-label" for="rv-kpp">Kode PP</label>
+            <select id="rv-kpp" data-filter="kode_pp" class="df-select df-native-select">
+                {% for v in options.kodePP %}
+                    <option value="{{ v }}"{% if filters.kodePP == v %} selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="df-field">
+            <label class="df-label" for="rv-tahun">Tahun</label>
+            <select id="rv-tahun" data-filter="tahun" class="df-select df-native-select">
+                <option value="Semua"{% if filters.tahun == 'Semua' %} selected{% endif %}>Semua tahun</option>
+                {% for v in options.tahun %}
+                    <option value="{{ v }}"{% if filters.tahun == v %} selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="df-field df-apply">
+            <span class="df-label df-label-empty" aria-hidden="true"></span>
+            <button type="button" class="df-btn df-btn-primary" id="revenue-apply-btn">
+                <svg class="df-btn-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="df-btn-text">Terapkan</span>
+            </button>
+        </div>
+    </form>
+
+    {# Active filter chips #}
+    <div class="df-chips" id="revenue-chips" hidden>
+        <span class="df-chips-label">Filter aktif:</span>
+        <div class="df-chips-list" id="revenue-chips-list"></div>
+    </div>
+</div>

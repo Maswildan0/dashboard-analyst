@@ -305,6 +305,8 @@ async function refresh() {
     applyPayload(payload);
 }
 
+window.__refreshDashboard = refresh;
+
 function currentGlobalFilters() {
     const f = {};
     document.querySelectorAll('select[data-filter]').forEach((sel) => {
@@ -764,9 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
             },
         });
 
-        document.querySelectorAll('select[data-filter]').forEach((sel) => {
-            sel.addEventListener('change', refresh);
-        });
+
 
         initDashboardDrill();
         addChartToolbar();
