@@ -7,6 +7,7 @@ venv/
 
 # Django
 db.sqlite3
+revenue_dummy_v2.sqlite3
 /staticfiles/
 
 # Node (build inputs retained for rebuilding assets)

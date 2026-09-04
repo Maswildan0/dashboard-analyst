@@ -63,9 +63,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dashboard.wsgi.application'
 
-# SQLite for development; switch to PostgreSQL in production via env vars.
-# (The original dashboard app does not use the database.)
-if os.environ.get('DB_ENGINE') == 'postgres':
+# Database selection via DB_ENGINE env (dev default = SQLite):
+#   DB_ENGINE=mysql     -> MariaDB/MySQL (XAMPP phpMyAdmin, root/'' @127.0.0.1:3306)
+#   DB_ENGINE=postgres  -> PostgreSQL
+#   (unset)             -> SQLite file (local dev / Vercel cold start)
+if os.environ.get('DB_ENGINE') == 'mysql':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'dashboard.db_backends.mariadb',
+            'NAME': os.environ.get('DB_NAME', 'financial_dashboard'),
+            'USER': os.environ.get('DB_USER', 'root'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+            'PORT': os.environ.get('DB_PORT', '3306'),
+            'OPTIONS': {'charset': 'utf8mb4'},
+        }
+    }
+elif os.environ.get('DB_ENGINE') == 'postgres':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
