@@ -1,0 +1,70 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+{% block title %}Riwayat Pengakuan{% endblock %}
+{% block topbar_title %}Revenue Recognition History{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+    <a href="{% url 'revenue:ntf-project' %}" class="df-btn df-btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+        <i class="bi bi-arrow-left"></i> Kembali ke NTF Project
+    </a>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+    <h2 class="section-title">{{ project.project_name }}</h2>
+    <div class="rev-detail-grid">
+        <div class="rev-detail-cell"><span class="lbl">No Proyek</span><span class="val">{{ project.project_number }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Kode PP</span><span class="val">{{ project.pp.pp_code|default:'-' }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Kode Kontrak</span><span class="val">{{ project.contract_code|default:'-' }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Organization</span><span class="val">{{ project.organization_unit.name|default:project.pp.organization_unit.name|default:'-' }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Nilai Proyek</span><span class="val">{{ project.project_value|floatformat:0 }}</span></div>
+    </div>
+    {% if summary_disp.detail_mode == 'PERIOD_ONLY' %}
+    <div class="rev-detail-grid">
+        <div class="rev-detail-cell"><span class="lbl">Realisasi {{ month_short }}</span><span class="val">{{ summary_disp.month }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Revenue YTD (Jan{{ dash }}{{ month_short }})</span><span class="val">{{ summary_disp.ytd }}</span></div>
+    </div>
+    {% else %}
+    <div class="rev-detail-grid">
+        <div class="rev-detail-cell"><span class="lbl">Realisasi Bulan</span><span class="val">{{ summary_disp.month }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Revenue YTD</span><span class="val">{{ summary_disp.ytd }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Lifetime Revenue</span><span class="val">{{ summary_disp.lifetime }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Remaining Revenue</span><span class="val">{{ summary_disp.remaining }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Recognition</span><span class="val">{{ summary_disp.pct }}</span></div>
+        <div class="rev-detail-cell"><span class="lbl">Status</span><span class="val">{{ summary.status }}</span></div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2 class="section-title">Revenue Recognition History</h2>
+    <div class="rev-table-wrap">
+        <table class="rev-history">
+            <thead>
+                <tr>
+                    <th>Tanggal</th>
+                    <th>No Bukti</th>
+                    <th>No Dokumen</th>
+                    <th>Keterangan GL</th>
+                    <th>Akun Pendapatan</th>
+                    <th class="num">Nominal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in history_disp %}
+                <tr>
+                    <td>{{ h.date|date:"d M Y" }}</td>
+                    <td>{{ h.voucher|default:'-' }}</td>
+                    <td>{{ h.document|default:'-' }}</td>
+                    <td>{{ h.description|default:'-' }}</td>
+                    <td><span class="mono">{{ h.account_code|default:'-' }}</span>{% if h.account_name and h.account_name != "" %} {{ h.account_name }}{% endif %}</td>
+                    <td class="num">{{ h.amount }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" style="text-align:center;color:var(--gray);padding:24px;">Belum ada transaksi GL yang ter-map ke project ini.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

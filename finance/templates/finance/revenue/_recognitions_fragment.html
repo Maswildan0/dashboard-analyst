@@ -1,0 +1,54 @@
+{% comment %}AJAX fragment for expandable rows (per project/object x PP x account).
+- PERIOD_ONLY (Pend. Pendaftaran): selected month only.
+- HISTORICAL (education/research/project): history up to the selected
+  period end for the same PP + object + account.
+Summary figures:
+  Pendapatan Diakui {bulan} = recognised in the selected month
+  Total Pendapatan          = lifetime recognised up to the period end
+  Nilai Proyek              = project value (Project Master)
+  Recognition               = Total / Nilai{% endcomment %}
+<div class="rev-rec-head">
+    <div class="rev-rec-title">
+        <span class="rev-rec-badge">RIWAYAT PENGAKUAN PENDAPATAN</span>
+        <span class="rev-rec-sub">{{ project.project_number }} · {{ project.project_name }}{% if summary_disp.acc_name %} — {{ summary_disp.acc_code }} {{ summary_disp.acc_name }}{% endif %}</span>
+    </div>
+    <div class="rev-rec-figures">
+        {% if summary_disp.detail_mode == 'PERIOD_ONLY' %}
+        <span class="rev-rec-fig"><i>Pendapatan Diakui {{ month_full }}</i><b>{{ summary_disp.month }}</b></span>
+        <span class="rev-rec-fig"><i>Total Pendapatan (s.d. {{ month_short }})</i><b>{{ summary_disp.lifetime }}</b></span>
+        {% else %}
+        <span class="rev-rec-fig"><i>Pendapatan Diakui {{ month_full }}</i><b>{{ summary_disp.month }}</b></span>
+        <span class="rev-rec-fig"><i>Total Pendapatan (s.d. {{ month_short }})</i><b>{{ summary_disp.lifetime }}</b></span>
+        <span class="rev-rec-fig"><i>Nilai Proyek</i><b>{% if summary_disp.nilai_ok %}{{ summary_disp.nilai }}{% else %}—{% endif %}</b></span>
+        <span class="rev-rec-fig"><i>Recognition</i><b>{{ summary_disp.pct }}</b></span>
+        {% endif %}
+    </div>
+</div>
+<div class="rev-table-wrap">
+    <table class="rev-rec-table">
+        <thead>
+            <tr>
+                <th>Tanggal</th>
+                <th>No Bukti</th>
+                <th>No Dokumen</th>
+                <th>Keterangan GL</th>
+                <th>Akun Pendapatan</th>
+                <th class="num">Nominal Pengakuan</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in history %}
+            <tr>
+                <td class="rev-rec-date">{{ h.date|date:"d M Y" }}</td>
+                <td>{{ h.voucher|default:'-' }}</td>
+                <td>{{ h.document|default:'-' }}</td>
+                <td class="rev-rec-desc">{{ h.description|default:'-' }}</td>
+                <td class="rev-acc-cell"><span class="mono">{{ h.account_code|default:'-' }}</span>{% if h.account_name and h.account_name != "" %} {{ h.account_name }}{% endif %}</td>
+                <td class="num tabular-nums">{{ h.amount }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="rev-rec-empty">Belum ada transaksi GL pada periode ini.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

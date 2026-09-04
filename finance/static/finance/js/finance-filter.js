@@ -1,6 +1,6 @@
 /* Financial Performance Overview filter card: GET submit (Terapkan), active
    chips for non-default Campus/Unit, and Reset back to the latest period.
-   Backend parameter contract (year, month, campus, unit) is untouched —
+   Backend parameter contract (year, month, campus, unit) is untouched 
    the form is a plain GET to finance:dashboard. */
 (function () {
     'use strict';

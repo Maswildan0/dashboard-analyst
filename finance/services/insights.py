@@ -1,7 +1,7 @@
 """
 Rule-based financial analyst insights (#21, #35).
 
-Generates 3-5 deterministic insights from computed metrics. No AI API — pure
+Generates 3-5 deterministic insights from computed metrics. No AI API pure
 business rules comparing the selected month vs the same month last year.
 """
 
@@ -88,7 +88,7 @@ def generate_financial_insights(metrics):
         insights.append({
             'icon': 'activity',
             'tone': 'up' if or_status['key'] == 'ON_TARGET' else 'down',
-            'text': f"Operating Ratio is {or_status['label'].lower()}. {or_status['label']} is below the target ratio." if or_status['key'] == 'ON_TARGET' else f"Operating Ratio requires attention — actual exceeds target by more than 2 percentage points." if or_status['key'] == 'ATTENTION' else f"Operating Ratio is under watch — actual slightly exceeds target.",
+            'text': f"Operating Ratio is {or_status['label'].lower()}. {or_status['label']} is below the target ratio." if or_status['key'] == 'ON_TARGET' else f"Operating Ratio requires attention actual exceeds target by more than 2 percentage points." if or_status['key'] == 'ATTENTION' else f"Operating Ratio is under watch actual slightly exceeds target.",
         })
 
     return insights[:5]

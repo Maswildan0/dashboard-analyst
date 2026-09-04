@@ -1,4 +1,4 @@
-"""Mock realisasi project dataset.
+"""DEPRECATED mock realisasi project dataset (legacy Data Tuition Fee page).
 
 Ported 1:1 from the original Laravel DashboardController (the 32-project
 list with the same values and the same cyclic direktorat assignment). The

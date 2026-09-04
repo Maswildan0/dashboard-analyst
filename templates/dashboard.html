@@ -10,12 +10,26 @@
 .fc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .fc-head h2{font-size:16px;font-weight:700;color:#222;margin:0;}
 .fc-period{font-size:12px;color:#6B7280;}
-.fc-bar{display:flex;height:36px;border-radius:10px;overflow:hidden;background:#F5F6F8;}
+/* Composition stacked bar segments - animate on load, raise on hover. */
+.fc-bar{display:flex;height:36px;border-radius:10px;overflow:visible;background:#F5F6F8;}
 .fc-bar-row{display:flex;align-items:center;gap:12px;margin-top:16px;}
 .fc-bar-row + .fc-bar-row{margin-top:8px;}
 .fc-bar-label{width:64px;font-size:11px;font-weight:600;color:#6B7280;flex-shrink:0;font-variant-numeric:tabular-nums;}
 .fc-bar-row .fc-bar{flex:1;}
-.fc-bar-dim{opacity:.8;}
+.fc-bar .fc-seg{position:relative;height:100%;min-width:0;cursor:pointer;
+    transition:width .9s cubic-bezier(.22,1,.36,1),transform .22s ease,filter .22s ease,opacity .22s ease;
+    transform:translateY(0) scaleY(1);transform-origin:center bottom;will-change:width,transform;}
+.fc-bar .fc-seg:first-child{border-radius:10px 0 0 10px;}
+.fc-bar .fc-seg:last-child{border-radius:0 10px 10px 0;}
+.fc-bar .fc-seg:only-child{border-radius:10px;}
+/* Hover: raise + brighten the segment, dim its siblings. */
+.fc-bar .fc-seg:hover{transform:translateY(-4px) scaleY(1.07);filter:brightness(1.07) saturate(1.04);z-index:2;}
+.fc-bar:hover .fc-seg:not(:hover){opacity:.6;}
+/* Previous-year row keeps the same category colors at ~70% opacity. */
+.fc-bar-dim .fc-seg{opacity:.72;}
+.fc-bar-dim:hover .fc-seg:not(:hover){opacity:.48;}
+.fc-bar-dim .fc-seg:hover{opacity:1;}
+@media (prefers-reduced-motion:reduce){.fc-bar .fc-seg{transition:none!important;transform:none!important;}}
 .fc-legend{display:flex;gap:22px;margin-top:18px;flex-wrap:wrap;}
 .fc-legend span{display:flex;align-items:center;gap:7px;font-size:12px;color:#6B7280;}
 .fc-legend i{width:10px;height:10px;border-radius:50%;display:inline-block;}
@@ -33,7 +47,7 @@
 .fc-yoy{color:#16A34A;}
 @media (max-width:900px){.fc-sources{grid-template-columns:1fr;}}
 </style>
-    {# Filter card — consistent with Data Tuition Fee page #}
+    {# Filter card consistent with Data Tuition Fee page #}
     {% include 'components/revenue_filter_card.html' %}
 
 
@@ -95,7 +109,7 @@
             {% endwith %}
             {% with s=composition.ntf_project %}
             <div class="fc-card">
-                <div class="fc-card-head"><span>NTF Project</span><i class="fc-ico" style="background:rgba(107,114,128,.12);color:#6B7280;">📦</i></div>
+                <div class="fc-card-head"><span>NTF Project</span><i class="fc-ico" style="background:rgba(102,112,133,.12);color:#667085;">📦</i></div>
                 <div class="fc-value">{{ s.value_str }}</div>
                 <div class="fc-metrics">
                     <div><span>Composition</span><b>{{ s.pct_str }}</b></div>
@@ -106,7 +120,7 @@
             {% endwith %}
             {% with s=composition.ntf_research %}
             <div class="fc-card">
-                <div class="fc-card-head"><span>NTF Research Income</span><i class="fc-ico" style="background:rgba(139,13,36,.10);color:#8B0D24;">🔍</i></div>
+                <div class="fc-card-head"><span>NTF Research Income</span><i class="fc-ico" style="background:rgba(139,30,63,.10);color:#8B1E3F;">🔍</i></div>
                 <div class="fc-value">{{ s.value_str }}</div>
                 <div class="fc-metrics">
                     <div><span>Composition</span><b>{{ s.pct_str }}</b></div>
@@ -118,26 +132,26 @@
         </div>
         <div class="fc-bar-row">
             <span class="fc-bar-label">{{ composition.period }}</span>
-            <div class="fc-bar">
-                <div style="width: {{ composition.tf_pct }}%;background:#C8102E;" data-tooltip="TF: {{ composition.tf.value_str }} ({{ composition.tf_pct }}%)"></div>
-                <div style="width: {{ composition.ntf_project_pct }}%;background:#6B7280;" data-tooltip="NTF Project: {{ composition.ntf_project.value_str }} ({{ composition.ntf_project_pct }}%)"></div>
-                <div style="width: {{ composition.ntf_research_pct }}%;background:#8B0D24;" data-tooltip="NTF Research: {{ composition.ntf_research.value_str }} ({{ composition.ntf_research_pct }}%)"></div>
+            <div class="fc-bar" role="img" aria-label="Revenue composition {{ composition.period }}">
+                <div class="fc-seg" style="width:0%;background:#C8102E;" data-w="{{ composition.tf_pct }}" data-tooltip="TF" data-value="{{ composition.tf.value_str }}" data-comp="{{ composition.tf.pct_str }}" data-yoy="{{ composition.tf.yoy }}"></div>
+                <div class="fc-seg" style="width:0%;background:#667085;" data-w="{{ composition.ntf_project_pct }}" data-tooltip="NTF Project" data-value="{{ composition.ntf_project.value_str }}" data-comp="{{ composition.ntf_project.pct_str }}" data-yoy="{{ composition.ntf_project.yoy }}"></div>
+                <div class="fc-seg" style="width:0%;background:#8B1E3F;" data-w="{{ composition.ntf_research_pct }}" data-tooltip="NTF Research" data-value="{{ composition.ntf_research.value_str }}" data-comp="{{ composition.ntf_research.pct_str }}" data-yoy="{{ composition.ntf_research.yoy }}"></div>
             </div>
         </div>
         {% if composition.prev_comp %}
         <div class="fc-bar-row fc-bar-row-prev">
             <span class="fc-bar-label">{{ composition.prev_comp.period }}</span>
-            <div class="fc-bar fc-bar-dim">
-                <div style="width: {{ composition.prev_comp.tf_pct }}%;background:#C8102E;" data-tooltip="TF: {{ composition.prev_comp.tf_value_str }} ({{ composition.prev_comp.tf_pct }}%)"></div>
-                <div style="width: {{ composition.prev_comp.ntf_project_pct }}%;background:#6B7280;" data-tooltip="NTF Project: {{ composition.prev_comp.ntf_project_value_str }} ({{ composition.prev_comp.ntf_project_pct }}%)"></div>
-                <div style="width: {{ composition.prev_comp.ntf_research_pct }}%;background:#8B0D24;" data-tooltip="NTF Research: {{ composition.prev_comp.ntf_research_value_str }} ({{ composition.prev_comp.ntf_research_pct }}%)"></div>
+            <div class="fc-bar fc-bar-dim" role="img" aria-label="Revenue composition {{ composition.prev_comp.period }}">
+                <div class="fc-seg" style="width:0%;background:#C8102E;" data-w="{{ composition.prev_comp.tf_pct }}" data-tooltip="TF" data-value="{{ composition.prev_comp.tf_value_str }}" data-comp="{{ composition.prev_comp.tf_pct }}%" data-yoy="{{ composition.tf.yoy }}"></div>
+                <div class="fc-seg" style="width:0%;background:#667085;" data-w="{{ composition.prev_comp.ntf_project_pct }}" data-tooltip="NTF Project" data-value="{{ composition.prev_comp.ntf_project_value_str }}" data-comp="{{ composition.prev_comp.ntf_project_pct }}%" data-yoy="{{ composition.ntf_project.yoy }}"></div>
+                <div class="fc-seg" style="width:0%;background:#8B1E3F;" data-w="{{ composition.prev_comp.ntf_research_pct }}" data-tooltip="NTF Research" data-value="{{ composition.prev_comp.ntf_research_value_str }}" data-comp="{{ composition.prev_comp.ntf_research_pct }}%" data-yoy="{{ composition.ntf_research.yoy }}"></div>
             </div>
         </div>
         {% endif %}
         <div class="fc-legend">
             <span><i style="background:#C8102E;"></i>TF <b>{{ composition.tf_pct }}%</b></span>
-            <span><i style="background:#6B7280;"></i>NTF Project <b>{{ composition.ntf_project_pct }}%</b></span>
-            <span><i style="background:#8B0D24;"></i>NTF Research <b>{{ composition.ntf_research_pct }}%</b></span>
+            <span><i style="background:#667085;"></i>NTF Project <b>{{ composition.ntf_project_pct }}%</b></span>
+            <span><i style="background:#8B1E3F;"></i>NTF Research <b>{{ composition.ntf_research_pct }}%</b></span>
         </div>
     </div>
     {% endif %}
@@ -201,6 +215,44 @@
             <span class="text-[#64748B] text-[12px] font-semibold">Bulan</span>
         </div>
     </div>
+    {# Revenue Performance by Organization / PP (comparison, per PP) #}
+    {% if pp_perf %}
+    <div class="mt-6 rounded-2xl bg-white border border-[#E2E8F0] p-6"
+         style="box-shadow:0px 4px 12px rgba(0,0,0,0.0313726);">
+        <div class="flex items-start justify-between">
+            <div>
+                <h2 class="text-[#0F172A] text-[16px] font-bold leading-[19px]">Revenue Performance by Organization / PP</h2>
+                <p class="text-[#64748B] text-[12px] mt-1">Realisasi YTD dibandingkan RKA YTD per PP {{ ctx_tahun_label }}</p>
+            </div>
+        </div>
+        <div class="mt-4 overflow-x-auto">
+            <table class="w-full text-[13px] rev-perf-table">
+                <thead>
+                    <tr class="text-[11px] uppercase text-[#334155] border-b border-[#E2E8F0]">
+                        <th class="text-left font-bold py-2 pr-3">Organization</th>
+                        <th class="text-left font-bold py-2 pr-3">PP</th>
+                        <th class="text-right font-bold py-2 px-3">RKA YTD</th>
+                        <th class="text-right font-bold py-2 px-3">Actual YTD</th>
+                        <th class="text-right font-bold py-2 px-3">Variance</th>
+                        <th class="text-right font-bold py-2 pl-3">Achievement</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in pp_perf %}
+                    <tr class="border-b border-[#F1F5F9] {% cycle 'bg-white' 'bg-[#F8FAFC]' as rowbg %}">
+                        <td class="py-2.5 pr-3 text-[#334155]" title="{{ r.org }}">{{ r.org }}</td>
+                        <td class="py-2.5 pr-3 font-mono text-[12px] font-bold text-[#475569]">{{ r.pp }}</td>
+                        <td class="py-2.5 px-3 text-right tabular-nums whitespace-nowrap">{{ r.rka_disp }}</td>
+                        <td class="py-2.5 px-3 text-right tabular-nums whitespace-nowrap">{{ r.actual_disp }}</td>
+                        <td class="py-2.5 px-3 text-right tabular-nums whitespace-nowrap {% if r.variance < 0 %}text-[#EB3237]{% else %}text-[#10B981]{% endif %}">{{ r.variance_disp }}</td>
+                        <td class="py-2.5 pl-3 text-right tabular-nums whitespace-nowrap">{{ r.ach_disp }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <script>
@@ -210,27 +262,97 @@
 </script>
 <script>
 (function () {
-    // Floating tooltip for composition bar segments (overflow hidden on the
-    // bar clips CSS pseudo-element tooltips, so use a body-level element).
+    'use strict';
+    // ------------------------------------------------------------------
+    // Revenue Composition stacked bars: grow 0% -> actual width, sweeping
+    // left to right, once on page load. Pure presentation; widths come
+    // from the same data-* values that set the final layout.
+    // ------------------------------------------------------------------
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function animateBars() {
+        var rows = document.querySelectorAll('.fc-bar');
+        if (!rows.length) return;
+        rows.forEach(function (row, ri) {
+            var segs = row.querySelectorAll('.fc-seg');
+            segs.forEach(function (seg, si) {
+                var target = parseFloat(seg.dataset.w);
+                if (!Number.isFinite(target)) target = 0;
+                if (reduceMotion) {
+                    seg.style.width = target + '%';
+                    return;
+                }
+                // Current row starts first; the previous-year row follows.
+                // Segments sweep left-to-right with a short stagger.
+                var delay = ri * 180 + si * 90;
+                seg.style.transitionDelay = delay + 'ms';
+                (function (el, w) {
+                    // Two frames: settle the 0% start, then transition to w.
+                    requestAnimationFrame(function () {
+                        requestAnimationFrame(function () {
+                            el.style.width = w + '%';
+                        });
+                    });
+                })(seg, target);
+                // Clear the stagger delay once the sweep is done so hover
+                // transitions stay snappy afterwards.
+                setTimeout(function () { seg.style.transitionDelay = ''; }, 1150 + delay);
+            });
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // Floating tooltip for each segment: category, revenue, composition %,
+    // and YoY. A body-level element because the bar track's overflow could
+    // clip CSS-only tooltips.
+    // ------------------------------------------------------------------
     var tip = document.createElement('div');
     tip.id = 'fc-tooltip';
     tip.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;display:none;' +
-        'background:#222;color:#fff;font-size:11px;font-weight:600;' +
-        'padding:6px 10px;border-radius:6px;white-space:nowrap;' +
-        'box-shadow:0 4px 10px rgba(0,0,0,.25);font-family:Inter,Open Sans,sans-serif;' +
+        'background:#0F172A;color:#fff;font-family:Inter,Open Sans,sans-serif;' +
+        'padding:10px 12px;border-radius:8px;min-width:190px;' +
+        'border:1px solid rgba(255,255,255,.08);' +
+        'box-shadow:0 8px 24px rgba(15,23,42,.28);' +
         'opacity:0;transform:translateY(4px);' +
         'transition:opacity .18s ease, transform .18s ease;';
+    tip.innerHTML = '<div class="fc-tip-title"></div>' +
+        '<div class="fc-tip-row"><span>Pendapatan</span><b class="fc-tip-value"></b></div>' +
+        '<div class="fc-tip-row"><span>Komposisi</span><b class="fc-tip-comp"></b></div>' +
+        '<div class="fc-tip-row"><span>YoY</span><b class="fc-tip-yoy"></b></div>';
     document.body.appendChild(tip);
+    var titleEl = tip.querySelector('.fc-tip-title');
+    var valueEl = tip.querySelector('.fc-tip-value');
+    var compEl = tip.querySelector('.fc-tip-comp');
+    var yoyEl = tip.querySelector('.fc-tip-yoy');
     var hideTimer = null;
-    var segs = document.querySelectorAll('.fc-bar > div[data-tooltip]');
-    segs.forEach(function (seg) {
-        seg.style.cursor = 'pointer';
+
+    var TIP_CSS = document.createElement('style');
+    TIP_CSS.textContent = '#fc-tooltip .fc-tip-title{font-size:12px;font-weight:700;color:#fff;' +
+        'padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.1);}' +
+        '#fc-tooltip .fc-tip-row{display:flex;align-items:center;justify-content:space-between;' +
+        'gap:18px;font-size:11px;line-height:1.6;}' +
+        '#fc-tooltip .fc-tip-row span{color:#94A3B8;font-weight:500;}' +
+        '#fc-tooltip .fc-tip-row b{font-weight:700;color:#F1F5F9;font-variant-numeric:tabular-nums;}' +
+        '#fc-tooltip .fc-tip-yoy.fc-tip-pos{color:#34D399;}' +
+        '#fc-tooltip .fc-tip-yoy.fc-tip-neg{color:#F87171;}';
+    document.head.appendChild(TIP_CSS);
+
+    function yoyClass(v) {
+        if (v.charAt(0) === '+') return 'fc-tip-pos';
+        if (v.charAt(0) === '-') return 'fc-tip-neg';
+        return '';
+    }
+
+    document.querySelectorAll('.fc-bar .fc-seg').forEach(function (seg) {
         seg.addEventListener('mouseenter', function () {
             clearTimeout(hideTimer);
-            tip.textContent = seg.dataset.tooltip;
+            titleEl.textContent = seg.dataset.tooltip || '';
+            valueEl.textContent = seg.dataset.value || '';
+            compEl.textContent = seg.dataset.comp || '';
+            yoyEl.textContent = seg.dataset.yoy || '-';
+            yoyEl.className = 'fc-tip-yoy ' + yoyClass(seg.dataset.yoy || '');
             tip.style.display = 'block';
             place(seg);
-            // Fade + slide in on the next frame so the transition runs.
             requestAnimationFrame(function () {
                 tip.style.opacity = '1';
                 tip.style.transform = 'translateY(0)';
@@ -242,6 +364,7 @@
             hideTimer = setTimeout(function () { tip.style.display = 'none'; }, 180);
         });
     });
+
     function place(seg) {
         var segRect = seg.getBoundingClientRect();
         var tipRect = tip.getBoundingClientRect();
@@ -253,6 +376,13 @@
         if (top < 8) top = segRect.bottom + 14;
         tip.style.left = left + 'px';
         tip.style.top = top + 'px';
+    }
+
+    // Kick off once layout is stable; widths animate only on load/reload.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', animateBars);
+    } else {
+        animateBars();
     }
 })();
 </script>

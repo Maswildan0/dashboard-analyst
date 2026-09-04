@@ -60,7 +60,7 @@ class ViewTests(TestCase):
         resp = self.client.get(reverse('finance:dashboard'), {'year': 2026, 'month': 8, 'campus': 'BDG'})
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode()
-        for label in ['Total Revenue', 'Total Expense', 'Total SHU', 'Operating Ratio', 'SHU Margin', 'Tuition Fee']:
+        for label in ['Total Revenue', 'Total Expense', 'Total SHU', 'Operating Ratio', 'SHU Margin', 'Revenue – Expense – SHU Trend']:
             self.assertIn(label, html)
 
     def test_dashboard_empty_state(self):

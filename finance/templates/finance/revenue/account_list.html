@@ -1,0 +1,133 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+{% load dashboard_filters %}
+{% block title %}Data {{ page_name }} {{ ctx.year }} · {{ month_label }}{% endblock %}
+{% block topbar_title %}Data {{ page_name }} {{ ctx.year }} · {{ month_label }}{% endblock %}
+
+{% block content %}
+<div class="px-8 py-6">
+    {# Filter toolbar Tipe dihilangkan (page fixed) #}
+    {% include 'finance/revenue/_filters.html' %}
+
+    {# Search bar #}
+    <form method="GET" action="{{ request.path }}" class="rev-search-form">
+        <div class="relative rev-search-input-wrap">
+            <svg class="rev-search-icon" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8"/></svg>
+            <input type="text" name="q" value="{{ q }}" placeholder="Cari organization, kode PP, atau akun..." class="rev-search-input" autocomplete="off">
+        </div>
+        <input type="hidden" name="year" value="{{ ctx.year }}">
+        <input type="hidden" name="month" value="{{ ctx.month }}">
+        {% if ctx.organization %}<input type="hidden" name="org" value="{{ ctx.organization.pk }}">{% endif %}
+        {% if ctx.pp %}<input type="hidden" name="pp" value="{{ ctx.pp.pp_code }}">{% endif %}
+        {% if ctx.revenue_account %}<input type="hidden" name="account" value="{{ ctx.revenue_account.account_code }}">{% endif %}
+        <button type="submit" class="rev-search-btn">Cari</button>
+    </form>
+
+    {# Table Card #}
+    <div class="bg-white border border-[#E2E8F0] rounded-xl rev-table-card-outer">
+        {% if rows|length == 0 %}
+            <div class="flex flex-col items-center justify-center gap-6 py-20">
+                <div class="w-[80px] h-[80px] rounded-full bg-[#F1F5F9] flex items-center justify-center">
+                    <svg class="w-[36px] h-[36px] text-[#94A3B8]" viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="text-center">
+                    <h3 class="text-[#0F172A] text-[16px] font-bold">Data tidak ditemukan.</h3>
+                    <p class="text-[#64748B] text-[14px] mt-2 max-w-[560px]">Tidak ada data yang cocok dengan filter yang dipilih. Coba ubah kriteria pencarian Anda.</p>
+                </div>
+                <a href="{{ request.path }}" class="flex items-center gap-2 bg-[#3B82F6] text-white rounded-lg px-5 py-2.5 text-[14px] font-semibold">
+                    <svg class="w-[14px] h-[14px]" viewBox="0 0 16 16" fill="none"><path d="M1 8a7 7 0 111.2 3.9M1 1v3h3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Reset Filter
+                </a>
+            </div>
+        {% else %}
+        <div class="overflow-x-auto">
+            <div class="project-table-scroll-tf">
+                <div class="project-table-grid project-table-grid-tf project-table-header bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold uppercase text-[#334155]">
+                    <span class="min-w-0 flex items-center justify-center" title="Expand">⏵</span>
+                    <a href="{% sort_link 'tahun' %}" class="min-w-0 flex items-center justify-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Tahun">Tahun <span class="shrink-0 text-[9px]">{{ arrow_map.tahun }}</span></a>
+                    <a href="{% sort_link 'bulan' %}" class="min-w-0 flex items-center justify-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Bulan">Bulan <span class="shrink-0 text-[9px]">{{ arrow_map.bulan }}</span></a>
+                    <a href="{% sort_link 'organization' %}" class="min-w-0 flex items-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Organization">Organization <span class="shrink-0 text-[9px]">{{ arrow_map.organization }}</span></a>
+                    <a href="{% sort_link 'kode_pp' %}" class="min-w-0 flex items-center justify-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Kode PP">Kode PP <span class="shrink-0 text-[9px]">{{ arrow_map.kode_pp }}</span></a>
+                    <a href="{% sort_link 'nama_proyek' %}" class="min-w-0 flex items-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Nama Proyek">Nama Proyek <span class="shrink-0 text-[9px]">{{ arrow_map.nama_proyek }}</span></a>
+                    <a href="{% sort_link 'akun' %}" class="min-w-0 flex items-center justify-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Kode Akun">Kode Akun <span class="shrink-0 text-[9px]">{{ arrow_map.akun }}</span></a>
+                    <a href="{% sort_link 'nama' %}" class="min-w-0 flex items-center gap-1 truncate hover:text-[#EB3237]" title="Urutkan Nama Akun">Nama Akun <span class="shrink-0 text-[9px]">{{ arrow_map.nama }}</span></a>
+                    <a href="{% sort_link 'nilai' %}" class="min-w-0 flex items-center justify-end gap-1 truncate px-2 hover:text-[#EB3237]" title="Urutkan Nilai Proyek">Nilai Proyek <span class="shrink-0 text-[9px]">{{ arrow_map.nilai }}</span></a>
+                    <a href="{% sort_link 'pendapatan_berjalan' %}" class="min-w-0 flex items-center justify-end gap-1 truncate px-2 hover:text-[#EB3237]" title="Urutkan Pendapatan Diakui">Pendapatan Diakui <span class="shrink-0 text-[9px]">{{ arrow_map.pendapatan_berjalan }}</span></a>
+                    <a href="{% sort_link 'total_pendapatan' %}" class="min-w-0 flex items-center justify-end gap-1 truncate px-2 hover:text-[#EB3237]" title="Urutkan Total Pendapatan">Total Pendapatan <span class="shrink-0 text-[9px]">{{ arrow_map.total_pendapatan }}</span></a>
+                </div>
+
+                {% for row in rows %}
+                <div class="project-table-grid project-table-grid-tf project-table-row border-b border-[#E2E8F0] text-[13px] {% if forloop.counter0|divisibleby:2 %}bg-white{% else %}bg-[#F8FAFC]{% endif %} rev-row-expand{% if row.mode == 'tf_program' %} rev-project-row{% endif %}"
+                     {% if row.mode == 'tf_program' %}data-project="{{ row.project.pk }}"{% endif %}
+                     data-url="{% if row.mode == 'tf_program' %}{% url 'revenue:project-recognitions' row.project.pk %}{% if row.akun and row.akun != '-' %}?account={{ row.akun|urlencode }}{% endif %}{% elif row.pp_code and row.pp_code != '-' %}{% url 'revenue:account-recognitions' %}?pp={{ row.pp_code|urlencode }}&account={{ row.akun|urlencode }}&month={{ row.month }}{% elif row.month %}{% url 'revenue:account-recognitions' %}?account={{ row.akun|urlencode }}&month={{ row.month }}{% else %}{% url 'revenue:account-recognitions' %}?pp={{ row.pp_code|urlencode }}&account={{ row.akun|urlencode }}{% endif %}"
+                     tabindex="0" title="Klik untuk melihat transaksi GL">
+                    <span class="min-w-0 flex items-center justify-center text-[#94A3B8] rev-chev"><svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    <span class="min-w-0 text-center">{{ row.tahun }}</span>
+                    <span class="min-w-0 text-center">{{ row.bulan }}</span>
+                    <span class="min-w-0 text-[#334155] truncate" title="{{ row.organization }}">{{ row.organization }}</span>
+                    <span class="min-w-0 text-center font-brand text-[12px] font-bold text-[#475569] truncate" style="font-family:'Cousine',monospace;" title="{{ row.pp_code }}">{{ row.pp_code }}</span>
+                    <span class="min-w-0 text-[#334155] pl-2 pr-2 rev-name-cell" title="{{ row.nama_proyek }}">{{ row.nama_proyek }}</span>
+                    <span class="min-w-0 text-center font-brand text-[12px] font-bold text-[#475569] truncate" style="font-family:'Cousine',monospace;" title="{{ row.akun }}">{{ row.akun }}</span>
+                    <span class="min-w-0 font-semibold text-[#0F172A] pl-2 pr-2 rev-name-cell" title="{{ row.nama }}">{{ row.nama }}</span>
+                    <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2" title="Nilai Proyek: {{ row.nilai_disp }}">{{ row.nilai_disp }}</span>
+                    <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2" title="Pendapatan Diakui: {{ row.berjalan_disp }}">{{ row.berjalan_disp }}</span>
+                    <span class="min-w-0 flex flex-col items-end gap-[6px] px-2">
+                        <span class="whitespace-nowrap tabular-nums" title="Total Pendapatan: {{ row.total_disp }}">{{ row.total_disp }}</span>
+                        <span class="project-table-progress"><span class="block h-[3px] rounded" style="width:{{ row.progress_width }}%; background:{{ row.progress_color }};"></span></span>
+                    </span>
+                </div>
+
+                <div class="rev-detail-panel" {% if row.mode == 'tf_program' %}data-project-panel="{{ row.project.pk }}"{% else %}data-account-panel="{{ row.pp_code }}|{{ row.akun }}"{% endif %} hidden></div>
+                {% endfor %}
+
+                <div class="project-table-grid project-table-grid-tf project-table-total bg-[#F1F5F9] text-[13px] font-bold text-[#0F172A]">
+                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                    <span class="min-w-0 pl-2">Grand Total</span>
+                    <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2">{{ grand.nilai_disp }}</span>
+                    <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2">{{ grand.berjalan_disp }}</span>
+                    <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2">{{ grand.total_disp }}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if rows|length > 0 %}
+    <div class="flex items-center justify-between mt-6">
+        <span class="text-[#64748B] text-[13px]">Menampilkan {{ first_display }}-{{ last_display }} dari {{ total }} data</span>
+        <div class="flex items-center gap-1">
+            <a href="{% page_link prev_page %}" class="w-[30px] h-[30px] flex items-center justify-center bg-white border border-[#E2E8F0] rounded-md text-[#64748B] {% if page <= 1 %}pointer-events-none opacity-40{% endif %}">
+                <svg class="w-[14px] h-[14px]" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            {% for p in page_list %}
+                {% if p == 0 %}<span class="px-1 text-[#64748B]">...</span>
+                {% else %}
+                <a href="{% page_link p %}" class="min-w-[32px] h-[30px] flex items-center justify-center rounded-md text-[13px] {% if p == page %}bg-[#3B82F6] text-white font-bold{% else %}bg-white border border-[#E2E8F0] text-[#0F172A]{% endif %}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+            <a href="{% page_link next_page %}" class="w-[30px] h-[30px] flex items-center justify-center bg-white border border-[#E2E8F0] rounded-md text-[#64748B] {% if page >= pages %}pointer-events-none opacity-40{% endif %}">
+                <svg class="w-[14px] h-[14px]" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+        </div>
+        <select name="per_page" onchange="this.form.submit()" form="perpage" class="bg-white border border-[#E2E8F0] rounded-md px-3 h-[30px] text-[13px]">
+            {% for v in per_page_options %}<option value="{{ v }}"{% if per_page == v %} selected{% endif %}>Baris per halaman: {{ v }}</option>{% endfor %}
+        </select>
+    </div>
+    <form id="perpage" method="GET" action="{{ request.path }}">
+        <input type="hidden" name="year" value="{{ ctx.year }}">
+        <input type="hidden" name="month" value="{{ ctx.month }}">
+        {% if ctx.organization %}<input type="hidden" name="org" value="{{ ctx.organization.pk }}">{% endif %}
+        {% if ctx.pp %}<input type="hidden" name="pp" value="{{ ctx.pp.pp_code }}">{% endif %}
+        {% if ctx.revenue_account %}<input type="hidden" name="account" value="{{ ctx.revenue_account.account_code }}">{% endif %}
+        {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+        {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+        {% if dir and sort %}<input type="hidden" name="dir" value="{{ dir }}">{% endif %}
+    </form>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'finance/js/revenue-filter-cascade.js' %}" defer></script>
+<script src="{% static 'finance/js/revenue-project.js' %}" defer></script>
+{% endblock %}

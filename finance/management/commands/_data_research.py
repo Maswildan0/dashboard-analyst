@@ -1,0 +1,106 @@
+"""NTF RESEARCH + NTF PROJECT objek seed data.
+
+Sumber: daftar objek yang diberikan user (chart-of-accounts asli).
+Format per baris: (account_code, pp_code, nama_objek)
+
+NTF RESEARCH (7 akun hibah):
+  4151102 Penerimaan Hibah Pengabdian Masyarakat Dana Eksternal
+  4151107 Penerimaan Penelitian Dana Eksternal
+  4151108 Penerimaan Pengabdian Masyarakat Dana Eksternal
+  4251101 Penerimaan Hibah Penelitian Dana Eksternal (Dengan Pembatasan)
+  4251102 Penerimaan Hibah Pengabdian Masyarakat Dana Eksternal (Dengan Pembatasan)
+  4251107 Penerimaan Penelitian Dana Eksternal (Dengan Pembatasan)
+  4251108 Penerimaan Pengabdian Masyarakat Dana Eksternal (Dengan Pembatasan)
+"""
+RESEARCH_OBJECTS = [
+    # 4151102
+    ('4151102', '9115', 'Proposal Program Pemberdayaan UMKM Cileunyi Wetan'),
+    # 4151107
+    ('4151107', '9118', 'Penelitian PKDN Periode 1 tahun 2026 Ketua Heru Syah Putra'),
+    ('4151107', '9127', 'Penelitian PKDN Periode 2 tahun 2026 Ketua Choiria Anggraini'),
+    ('4151107', '9127', 'Penelitian PKDN Periode 2 tahun 2026 Ketua Lusy Mukhlisiana'),
+    # 4151108
+    ('4151108', '4102', 'The 7th Community Service & Engagement Seminar 2024 (COSECANT 2024)'),
+    ('4151108', '9115', 'Bantuan Pelaksanaan Monitoring dan Evaluasi Stunting'),
+    ('4151108', '9115', 'Bantuan Pelaksanaan Pembuatan Buku Laporan Program Green Apps'),
+    ('4151108', '9115', 'Bantuan Pelaksanaan Pembuatan Buku Laporan Program Stunting'),
+    ('4151108', '9115', 'Bantuan Pelaksanaan Pembuatan Buku Laporan Program TESA'),
+    ('4151108', '9115', 'Bantuan Pelaksanaan TESA AyoBerAKSI Voluntering Trip'),
+    ('4151108', '9115', 'Innovillage 2025 TR02 tahap 1'),
+    ('4151108', '9115', 'Pembuatan Buku Laporan Program Ayo Beraksi 2025'),
+    ('4151108', '9115', 'Program Awarding Innovillage Tahun 2025'),
+    ('4151108', '9122', 'Hibah Abdimas Dana Eksternal Periode 2025-2 dari Universitas Muhammadiyah Gresik Ketua Abdurrahman Faris Indriya Himawan'),
+    # 4251101
+    ('4251101', '9106', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua LEVY OLIVIA NUR'),
+    ('4251101', '9106', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua TEDDY SJAFRIZAL'),
+    ('4251101', '9109', 'Dana Penelitian Eksternal RIIM Gelombang 10 Tahun 2026 Ketua Kamelia'),
+    ('4251101', '9109', 'Dana Penelitian Eksternal RIIM Gelombang 10 Tahun 2026 Ketua Khilda Afifah'),
+    ('4251101', '9109', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua AGUNG NUGROHO JATI'),
+    ('4251101', '9109', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua FAVIAN DEWANTA'),
+    ('4251101', '9109', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua ISTIKMAL'),
+    ('4251101', '9109', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua KAMELIA'),
+    ('4251101', '9109', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua CASMIKA SAPUTRA'),
+    ('4251101', '9110', 'Dana Penelitian Eksternal RIIM Gelombang 10 Tahun 2026 Ketua Andry Alamsyah'),
+    ('4251101', '9110', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua FARIZ'),
+    ('4251101', '9110', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua FETTY POERWITA SARY'),
+    ('4251101', '9110', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua INDIRA RACHMAWATI'),
+    ('4251101', '9110', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua INDRAWATI'),
+    ('4251101', '9111', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua PUTU HARRY GUNAWAN'),
+    ('4251101', '9111', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua SATRIA MANDALA'),
+    ('4251101', '9111', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua ADIWIJAYA'),
+    ('4251101', '9111', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua ADIWIJAYA (Pembangkitan Bundle)'),
+    ('4251101', '9111', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua PUTU HARRY GUNAWAN'),
+    ('4251101', '9111', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua YESY DIAH ROSITA'),
+    ('4251101', '9111', 'Penelitian Program Konsorsium Unggulan Berdampak (RIKUB) th. 2026 Ketua Putu Harry Gunawan'),
+    ('4251101', '9114', 'Dana Penelitian Eksternal RIIM Gelombang 10 Tahun 2026 Ketua Untari Novia Wisesty'),
+    ('4251101', '9114', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua TORA FAHRUDIN'),
+    ('4251101', '9116', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua SUKSMANDHIRA HARIMURTI'),
+    ('4251101', '9116', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua THALITA DEWI RAHMANIAR'),
+    ('4251101', '9117', 'Dana Penelitian Eksternal RIIM Gelombang 7 Tahun 2024 Ketua Jangkung Raharjo'),
+    ('4251101', '9117', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua DIDIT ADYTIA'),
+    ('4251101', '9117', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua JANGKUNG RAHARJO'),
+    ('4251101', '9117', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua JANGKUNG RAHARJO (Optimalisasi Rugi-rugi Kron)'),
+    ('4251101', '9118', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua MUHAMMAD ZAKIYULLAH ROMDLONY'),
+    ('4251101', '9118', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua IRWAN PURNAMA'),
+    ('4251101', '9119', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua VANY OCTAVIANY'),
+    ('4251101', '9120', 'Dana Penelitian Eksternal RIIM Gelombang 10 Tahun 2026 Ketua Seno Adi Putra'),
+    ('4251101', '9120', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua VERA SURYANI'),
+    ('4251101', '9121', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua Z. K. ABDURAHMAN BAIZAL'),
+    ('4251101', '9122', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua SINTA ARYANI'),
+    ('4251101', '9122', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua YATI ROHAYATI'),
+    ('4251101', '9123', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua IRFAN DARMAWAN'),
+    ('4251101', '9125', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua MAULANA REZI RAMADHANA'),
+    ('4251101', '9125', 'Penelitian Program BESTARI SAINTEK th. 2026 Ketua Iis Kurnia'),
+    ('4251101', '9126', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua ROBBI HENDRIYANTO'),
+    ('4251101', '9126', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua ERNA HIKMAWATI'),
+    ('4251101', '9126', 'Penelitian Program BESTARI SAINTEK th. 2026 Ketua Heru Nugroho'),
+    ('4251101', '9129', 'Dana Penelitian Eksternal RIIM Gelombang 10 Tahun 2026 Ketua Adhi Prasetio'),
+    ('4251101', '9129', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua PUSPITA KENCANA SARI'),
+    ('4251101', '9129', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua PUSPITA KENCANA SARI (Pengembangan Model SETA)'),
+    ('4251101', '9129', 'Penelitian Program PHC NUSANTARA 2026 (Tahun Lanjutan) ketua Adhi Prasetio'),
+    ('4251101', '9130', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua ALIT YUNIARGAN ESKALUSPITA'),
+    ('4251101', '9130', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua GIVA ANDRIANA MUTIARA'),
+    ('4251101', '9133', 'Dana Penelitian Eksternal RIIM Gelombang 8 Tahun 2025 Ketua Muhammad Ary Murti'),
+    ('4251101', '9133', 'Hibah Program PISN DPPM Tahun 2026 Ketua Asep Sufyan Muhakik Atamtajani'),
+    ('4251101', '9134', 'Dana Penelitian Eksternal RIIM Gelombang 10 Tahun 2026 Ketua Dedy Rahman Wijaya'),
+    ('4251101', '9136', 'Dana Penelitian Eksternal RIIM Gelombang 10 Tahun 2026 Ketua Fajar Ciptandi'),
+    ('4251101', '9138', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua DINO CAESARON'),
+    ('4251101', '9138', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua DINO CAESARON (Transformasi Digital Edukasi)'),
+    ('4251101', '9140', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua MUSTAFA KAMAL'),
+    ('4251101', '9142', 'Dana Penelitian Eksternal RIIM Gelombang 10 Tahun 2026 Ketua Tanzilal Mustaqim'),
+    ('4251101', '9142', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua ANIFATUL FARICHA'),
+    ('4251101', '9142', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua FANNUSH SHOFI AKBAR'),
+    ('4251101', '9143', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua MAIE ISTIGHOSAH'),
+    ('4251101', '9143', 'Hibah Pengabdian kepada Masyarakat Program DPPM Skema PKM Tahun 2026 Ketua Yohani Setiya Rafika Nur'),
+    ('4251101', '9144', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua AGUNG WICAKSONO'),
+    ('4251101', '9144', 'Hibah DPPM BOPTN Program Penelitian Baru tahun 2026 ketua VIOLITA ANGGRAINI'),
+    ('4251101', '9144', 'Hibah DPPM BOPTN Program Penelitian Lanjutan tahun 2026 ketua FAUZA KHAIR'),
+    ('4251101', '9144', 'Pendanaan Program Riset Konsorsium Unggulan Berdampak (RIKUB) Anggaran 2025 Ketua Alfin Hikmaturokhman'),
+    ('4251101', '9144', 'Penelitian Program BESTARI SAINTEK th. 2026 Ketua Cahyo Prihantoro'),
+    ('4251101', '9144', 'Penelitian Program BESTARI SAINTEK th. 2026 Ketua Yulinda Uswatun Kasanah'),
+    ('4251101', '9145', 'Penelitian Program BESTARI SAINTEK th. 2026 Ketua Anggun Fitrian Isnawati'),
+    ('4251101', '9299', 'Kontrak Pelaksanaan Program Hilirisasi Riset Prioritas - Pengujian Model dan Prototipe Tahun Anggaran 2026 antara LLDIKTI Wilayah IV dengan Universitas Telkom'),
+    ('4251101', '9299', 'Kontrak Pelaksanaan Program Hilirisasi Riset Prioritas Tahun Anggaran 2026 antara Lembaga Layanan Pendidikan Tinggi Wilayah IV dengan Universitas Telkom'),
+    ('4251101', '9299', 'Pendanaan Program Hilirisasi Riset Strategis Skema Ajakan Industri dan Sinergi Tahun 2026'),
+    ('4251101', '9299', 'Pendanaan Program Hilirisasi Riset Strategis Skema Pengujian Produk Tahun 2026'),
+]

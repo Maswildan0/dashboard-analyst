@@ -1,4 +1,4 @@
-/* Financial Analyst Dashboard — UI interactions (sidebar, tooltip, chart). */
+/* Financial Analyst Dashboard UI interactions (sidebar, tooltip, chart). */
 (function () {
     'use strict';
 

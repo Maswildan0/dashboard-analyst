@@ -1,13 +1,13 @@
 """
 Financial metric service layer.
 
-All KPI calculations live here — never in templates (#69, #77). Functions are
+All KPI calculations live here never in templates (#69, #77). Functions are
 pure and take/return Decimals, with explicit handling of zero/None inputs so
 the dashboard never divides by zero or renders infinity (#46).
 
 Business rules:
 - YoY always compares the CURRENT SELECTED MONTH vs the SAME MONTH of the
-  previous year (#53) — never YTD.
+  previous year (#53) never YTD.
 - Operating Ratio achievement is LOWER_IS_BETTER (#12).
 - SHU Margin achievement is HIGHER_IS_BETTER (#13).
 """

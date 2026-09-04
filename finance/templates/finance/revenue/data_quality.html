@@ -1,0 +1,101 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+{% block title %}Data Quality Revenue{% endblock %}
+{% block topbar_title %}Revenue Data Control{% endblock %}
+
+{% block content %}
+<div class="df-card" style="margin-bottom:22px;">
+    <div class="df-card-head">
+        <div class="df-head-left">
+            <span class="df-head-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </span>
+            <div>
+                <div class="df-head-title">Data Quality</div>
+                <div class="df-head-desc">Kontrol mapping, phasing RKA, dan status sync SIMKUG</div>
+            </div>
+        </div>
+    </div>
+    <form method="GET" class="df-form df-form-revenue2">
+        <div class="df-field">
+            <label class="df-label" for="dq-period">Periode</label>
+            <select id="dq-period" name="period" class="df-select df-native-select">
+                <option value="">Semua</option>
+                {% for p in periods %}
+                <option value="{{ p.pk }}"{% if sel_period and sel_period.pk == p.pk %} selected{% endif %}>{{ p }} ({% if p.is_closed %}CLOSED{% else %}OPEN{% endif %})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="df-field df-apply">
+            <span class="df-label df-label-empty"></span>
+            <button class="df-btn df-btn-primary" type="submit">Tampilkan</button>
+        </div>
+    </form>
+</div>
+
+<div class="rev-kpis" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="card kpi-card"><div class="kpi-top"><span class="kpi-title">Total Revenue</span></div><div class="kpi-value" style="font-size:20px;">{{ stats.total_amount|floatformat:0 }}</div></div>
+    <div class="card kpi-card"><div class="kpi-top"><span class="kpi-title">Mapped to Project</span></div><div class="kpi-value" style="font-size:20px;">{{ stats.mapped_amount|floatformat:0 }}</div></div>
+    <div class="card kpi-card"><div class="kpi-top"><span class="kpi-title">Unmapped</span></div><div class="kpi-value" style="font-size:20px;color:{% if stats.unmapped_amount %}var(--danger){% else %}var(--success){% endif %};">{{ stats.unmapped_amount|floatformat:0 }}</div></div>
+    <div class="card kpi-card"><div class="kpi-top"><span class="kpi-title">Mapping Coverage</span></div><div class="kpi-value" style="font-size:20px;">{{ stats.mapped_ratio|floatformat:1|default:'-' }}%</div></div>
+</div>
+
+<div class="rev-section">
+    <h2 class="section-title">Unmapped GL Accounts</h2>
+    <div class="card rev-table-card">
+        <div class="rev-table-wrap">
+            <table class="rev-table">
+                <thead><tr><th>Kode Akun</th><th>Nama Akun</th><th class="num">Jumlah Baris</th><th class="num">Total</th></tr></thead>
+                <tbody>
+                    {% for a in unmapped_accounts %}
+                    <tr><td>{{ a.account_code_raw }}</td><td>{{ a.account_name_raw }}</td><td class="num">{{ a.n }}</td><td class="num">{{ a.total|floatformat:0 }}</td></tr>
+                    {% empty %}
+                    <tr><td colspan="4" style="text-align:center;color:var(--gray);padding:20px;">Semua akun GL sudah ter-mapping.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="rev-section">
+    <h2 class="section-title">RKA Phasing Mismatch</h2>
+    <div class="card rev-table-card">
+        <div class="rev-table-wrap">
+            <table class="rev-table">
+                <thead><tr><th>PP</th><th>Akun</th><th class="num">Annual</th><th class="num">Phasing</th><th class="num">Diff</th></tr></thead>
+                <tbody>
+                    {% for m in phasing_mismatch %}
+                    <tr><td>{{ m.pp }}</td><td>{{ m.account }}</td><td class="num">{{ m.annual|floatformat:0 }}</td><td class="num">{{ m.phased|floatformat:0 }}</td><td class="num neg">{{ m.diff|floatformat:0 }}</td></tr>
+                    {% empty %}
+                    <tr><td colspan="5" style="text-align:center;color:var(--gray);padding:20px;">Tidak ada mismatch.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="rev-section">
+    <h2 class="section-title">SIMKUG Sync Status</h2>
+    <div class="card rev-table-card">
+        <div class="rev-table-wrap">
+            <table class="rev-table">
+                <thead><tr><th>Type</th><th>Periode</th><th>Status</th><th class="num">Rows</th><th class="num">Upsert</th><th>Waktu</th></tr></thead>
+                <tbody>
+                    {% for s in syncs %}
+                    <tr>
+                        <td>{{ s.sync_type }}</td><td>{{ s.period|default:'-' }}</td>
+                        <td><span class="rev-status-badge {% if s.status == 'SUCCESS' %}sb-on-progress{% elif s.status == 'FAILED' %}sb-review{% else %}sb-no-revenue{% endif %}">{{ s.status }}</span></td>
+                        <td class="num">{{ s.rows_processed }}</td><td class="num">{{ s.rows_upserted }}</td>
+                        <td>{{ s.finished_at|date:"d M Y H:i"|default:'-' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" style="text-align:center;color:var(--gray);padding:20px;">Belum ada sync. Jalankan: python manage.py sync_simkug</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

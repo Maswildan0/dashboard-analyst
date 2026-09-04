@@ -1,0 +1,36 @@
+{% comment %}AJAX fragment for expanded TF / NTF Research row (one PP x Account):
+underlying GL transactions. Plain list no big KPI cards.{% endcomment %}
+<div class="rev-rec-head">
+    <div class="rev-rec-title">
+        <span class="rev-rec-badge">TRANSAKSI GENERAL LEDGER</span>
+        <span class="rev-rec-sub">{{ rows.0.account_code|default:'-' }} {{ rows.0.account_name|default:'-' }}</span>
+    </div>
+</div>
+<div class="rev-table-wrap">
+    <table class="rev-rec-table">
+        <thead>
+            <tr>
+                <th>Tanggal</th>
+                <th>PP</th>
+                <th>Organization</th>
+                <th>Keterangan GL</th>
+                <th>No Bukti</th>
+                <th class="num">Nominal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in rows %}
+            <tr>
+                <td class="rev-rec-date">{{ h.date|date:"d M Y" }}</td>
+                <td class="rev-rec-pp">{{ h.pp_code|default:'-' }}</td>
+                <td class="rev-rec-org">{{ h.organization|default:'-' }}</td>
+                <td class="rev-rec-desc">{{ h.description|default:'-' }}</td>
+                <td>{{ h.voucher|default:'-' }}</td>
+                <td class="num tabular-nums">{{ h.amount }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="rev-rec-empty">Belum ada transaksi GL untuk akun ini.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

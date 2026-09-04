@@ -1,5 +1,5 @@
 """
-Data selectors — optimized read paths for the dashboard.
+Data selectors optimized read paths for the dashboard.
 
 Single aggregate queries instead of per-card queries (#71). Returns plain
 dicts with Decimals so the service layer can compute KPIs.

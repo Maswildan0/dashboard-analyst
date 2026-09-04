@@ -41,7 +41,7 @@ _FONT_FACE_TEMPLATE = """@font-face {{
 # hardcoded so the asset tags render even when the manifest file is not on
 # the Lambda filesystem (Vercel serves public/** as CDN static files).
 _CSS_FILE = 'assets/styles-C5UTFmiW.css'
-_JS_FILE = 'assets/app-BA1o29SW.js'
+_JS_FILE = 'assets/app-COUFk9KT.js'
 
 
 def _asset_url(name):
@@ -172,8 +172,13 @@ def _capaian_color(pct: int) -> str:
 
 
 def _build_payload(tipe: str, direktorat: str, kode_pp: str, tahun):
-    """Build the full dashboard payload for a filter combination, matching
-    the original PHP output value-for-value (crc32-seeded LCG included)."""
+    """DEPRECATED (Revenue module): deterministic MOCK payload matching the
+    original PHP output value-for-value (crc32-seeded LCG included).
+
+    The database-driven Revenue Overview lives at /dashboard/revenue/ (see
+    finance.revenue_views). This function is retained ONLY for the legacy
+    /dashboard/ page and will be removed once that route is migrated.
+    """
     if tahun == 'Semua':
         years = OPTIONS['tahun']
         acc = _build_payload(tipe, direktorat, kode_pp, years[0])
@@ -269,6 +274,8 @@ def _build_payload(tipe: str, direktorat: str, kode_pp: str, tahun):
 
 def index(request):
     f = _dashboard_filters(request)
+    pp_perf = _revenue_pp_performance(f.get('tahun'))
+    tahun_label = pp_perf[0]['tahun_label'] if pp_perf else str(f.get('tahun'))
     return render(request, 'dashboard.html', {
         'options': OPTIONS,
         'filters': f,
@@ -279,6 +286,8 @@ def index(request):
         'active': 'dashboard',
         'active_tab': 'revenue_overview',
         'composition': _revenue_composition(),
+        'pp_perf': pp_perf,
+        'ctx_tahun_label': tahun_label,
     })
 
 
@@ -313,7 +322,7 @@ def _revenue_composition():
                 'value_str': _fmt_rupiah(actual),
                 'pct': float(comp[key] or 0),
                 'pct_str': _fmt_pct(comp[key]),
-                'achievement': _fmt_pct(calculate_revenue_achievement(actual, target)) if target else 'N/A',
+                'achievement': _fmt_pct(calculate_revenue_achievement(actual, target)) if target else '-',
                 'yoy': _fmt_signed(calculate_yoy_growth(actual, prev_actual)),
             }
         prev_period = sel.get_previous_year_period(period)
@@ -380,22 +389,22 @@ def _revenue_composition():
 
 def _fmt_rupiah(v):
     if v is None:
-        return 'N/A'
+        return 'Rp0'
     try:
         return 'Rp ' + f'{float(v):,.0f}'.replace(',', '.')
     except (TypeError, ValueError):
-        return 'N/A'
+        return 'Rp0'
 
 
 def _fmt_pct(v):
     if v is None:
-        return 'N/A'
+        return '-'
     return f'{v:.1f}%'
 
 
 def _fmt_signed(v):
     if v is None:
-        return 'N/A'
+        return '-'
     return f'{v:+.1f}%'
 
 
@@ -490,7 +499,7 @@ def _realisasi_rows(request):
             filtered.sort(key=lambda r: r['monthIdx'], reverse=(dir_ == 'desc'))
         elif sort_col == 'tahun':
             # Desc keeps months chronological inside each year: negate monthIdx
-            # so (year desc, month asc) — (2026, Jan) ... (2026, Des).
+            # so (year desc, month asc) (2026, Jan) ... (2026, Des).
             key = lambda r: (r['tahun'], -r['monthIdx'] if dir_ == 'desc' else r['monthIdx'])
             filtered.sort(key=key, reverse=(dir_ == 'desc'))
         else:
@@ -663,3 +672,101 @@ def export(request):
     for i, r in enumerate(filtered):
         writer.writerow([i + 1, r['tahun'], r['month'], r['unit'], r['kodePP'], r['noPP'], r['nama'], r['nilai'], r['totalPendapatan'], r['pendapatanBerjalan']])
     return response
+
+
+def _revenue_pp_performance(tahun):
+    """Actual & RKA YTD per PP (+ org) from the revenue database, up to the
+    latest period of the selected year. Table: Organization/PP/RKA YTD/
+    Actual YTD/Variance/Achievement shown at the bottom of /dashboard/."""
+    try:
+        from decimal import Decimal as _D
+        from finance.models import (
+            FinancialPeriod, PPMaster, RevenueBudget,
+            RevenueBudgetMonthly, RevenueLedger,
+        )
+        if isinstance(tahun, str) and tahun != 'Semua':
+            try:
+                tahun = int(tahun)
+            except ValueError:
+                tahun = 'Semua'
+        if not isinstance(tahun, int):
+            # 'Semua' (no year filter): report the most recent year on file.
+            tahun = FinancialPeriod.objects.order_by('-year').values_list('year', flat=True).first()
+        period = FinancialPeriod.objects.filter(year=tahun).order_by('-month').first()
+        if period is None:
+            # Explicit year selected but not on file: no data to report.
+            return []
+        month = period.month
+        year = period.year
+
+        # Actual YTD per PP (Jan..month, mapped accounts only)
+        actual = {}
+        rows = (RevenueLedger.objects
+                .filter(period__year=year, period__month__lte=month,
+                        pp__isnull=False, revenue_account__isnull=False)
+                .values('pp_id')
+                .annotate(credit=__import__('django.db.models', fromlist=['Sum']).Sum('credit'),
+                          debit=__import__('django.db.models', fromlist=['Sum']).Sum('debit')))
+        for r in rows:
+            actual[r['pp_id']] = (r['credit'] or 0) - (r['debit'] or 0)
+
+        # RKA YTD per PP (annual phased)
+        rka = {}
+        budgets = (RevenueBudget.objects
+                   .filter(year=year, rka_version__is_active=True)
+                   .prefetch_related('monthly_rows'))
+        for b in budgets:
+            phased = [m.budget_amount for m in b.monthly_rows.filter(month__lte=month)]
+            amt = sum(phased, _D('0')) if phased else b.annual_budget * _D(month) / _D(12)
+            rka[b.pp_id] = rka.get(b.pp_id, _D('0')) + amt
+
+        pps = (PPMaster.objects.filter(is_active=True)
+               .select_related('organization_unit').order_by('pp_code'))
+        out = []
+        for pp in pps:
+            a = actual.get(pp.pk, _D('0'))
+            r = rka.get(pp.pk, _D('0'))
+            if a == 0 and r == 0:
+                continue
+            ach = (a / r * _D('100')) if r else None
+            out.append({
+                'tahun_label': str(year),
+                'org': pp.organization_unit.name if pp.organization_unit else '-',
+                'pp': pp.pp_code,
+                'actual': a, 'rka': r,
+                'actual_disp': _rupiah_id2(a),
+                'rka_disp': _rupiah_id2(r),
+                'variance': a - r,
+                'variance_disp': ('+' if a - r >= 0 else '-') + _rupiah_id2(abs(a - r)),
+                'ach': ach,
+                'ach_disp': _pct2(ach),
+            })
+        out.sort(key=lambda x: x['actual'], reverse=True)
+        return out
+    except Exception:
+        return []
+
+
+def _rupiah_id2(v):
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return 'Rp0'
+    a = abs(x)
+    sign = '-' if x < 0 else ''
+    def t(n):
+        s = f'{n:.1f}'
+        return s[:-2] if s.endswith('.0') else s.replace('.', ',')
+    if a >= 1e12:
+        return f'{sign}Rp{t(a/1e12)} T'
+    if a >= 1e9:
+        return f'{sign}Rp{t(a/1e9)} M'
+    if a >= 1e6:
+        return f'{sign}Rp{t(a/1e6)} jt'
+    return f'{sign}Rp{a:,.0f}'.replace(',', '.')
+
+
+def _pct2(v):
+    if v is None:
+        return '-'
+    return f'{v:.1f}'.replace('.', ',') + '%'

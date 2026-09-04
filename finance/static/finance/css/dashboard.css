@@ -1,4 +1,4 @@
-/* Financial Analyst Dashboard — corporate UI (#2, #55) */
+/* Financial Analyst Dashboard corporate UI (#2, #55) */
 
 :root {
     --primary: #C8102E;
@@ -190,9 +190,14 @@ body {
 .seg-tf { background: var(--primary); }
 .seg-ntfp { background: var(--gray); }
 .seg-ntfr { background: var(--primary-dark); }
-.composition-legend { display: flex; gap: 22px; margin-top: 12px; flex-wrap: wrap; }
-.legend-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--gray); }
+.composition-legend { display: flex; gap: 26px; margin-top: 14px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--gray); white-space: nowrap; }
 .legend-item b { color: var(--dark); }
+.legend-label { font-weight: 600; color: #334155; }
+.legend-meta { color: var(--gray); }
+.legend-yoy { font-weight: 700; font-size: 11.5px; }
+.legend-yoy.pos { color: var(--success); }
+.legend-yoy.neg { color: var(--danger); }
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .dot-tf { background: var(--primary); }
 .dot-ntfp { background: var(--gray); }
@@ -283,7 +288,7 @@ main.content > div,
 .revenue-table-card { width: 100%; max-width: 100%; min-width: 0; }
 
 /* ------------------------------------------------------------------
-   Project revenue table — reusable grid class.
+   Project revenue table reusable grid class.
    Header, body rows and grand-total row share this exact template so
    every column stays aligned. Minimum content width lives on the
    scroll wrapper (.project-table-scroll), not on the grid, so the
@@ -300,6 +305,24 @@ main.content > div,
 .project-table-header { height: 39px; padding-left: 16px; padding-right: 16px; }
 .project-table-row { height: 55px; padding-left: 16px; padding-right: 16px; }
 .project-table-total { height: 49px; padding-left: 16px; padding-right: 16px; }
+/* Cell gutters: tight, uniform horizontal padding regardless of template
+   utility classes (which are not emitted for these pages). Money/numbers get
+   a touch more right padding so the right-aligned figures breathe. */
+.project-table-row > *,
+.project-table-header > *,
+.project-table-total > * {
+    padding-left: 8px;
+    padding-right: 8px;
+    min-width: 0;
+}
+.project-table-header > *,
+.project-table-row > *,
+.project-table-total > * { box-sizing: border-box; }
+/* numeric columns: right-aligned block keeps a little more right gutter */
+.project-table-row > [class*="justify-end"],
+.project-table-row > .text-right {
+    padding-right: 12px;
+}
 /* One horizontal scroll container for header + body + total.
    The scroll wrapper never exceeds its parent; the 1560px minimum lives
    on the inner scroll content so the table scrolls inside this box only. */
@@ -326,6 +349,49 @@ main.content .rounded-2xl {
 main.content .rounded-2xl h2 {
     font-family: 'Inter', system-ui, sans-serif;
 }
+main.content .mt-5 { margin-top: 20px; }
+main.content .relative { position: relative; }
+main.content .absolute { position: absolute; }
+main.content .inset-0 { inset: 0; }
+main.content .h-\[300px\] { height: 300px; }
+main.content .h-\[280px\] { height: 280px; }
+
+/* Revenue Performance by Organization / PP table (bottom of /dashboard/) 
+   arbitrary-value Tailwind utilities are not emitted by the legacy Vite
+   build, so re-declare the handful this table uses (same pattern as above). */
+main.content .text-\[13px\] { font-size: 13px; }
+main.content .py-2\.5 { padding-top: 10px; padding-bottom: 10px; }
+main.content .pl-3 { padding-left: 12px; }
+main.content .pr-3 { padding-right: 12px; }
+main.content .text-\[#334155\] { color: #334155; }
+main.content .text-\[#475569\] { color: #475569; }
+main.content .text-\[#EB3237\] { color: #EB3237; }
+main.content .text-\[#10B981\] { color: #10B981; }
+main.content .border-\[#E2E8F0\] { border-color: #E2E8F0; }
+main.content .border-\[#F1F5F9\] { border-color: #F1F5F9; }
+main.content .text-left { text-align: left; }
+main.content .text-right { text-align: right; }
+main.content .w-\[10px\] { width: 10px; }
+main.content .h-\[10px\] { height: 10px; }
+main.content .w-\[14px\] { width: 14px; }
+main.content .h-\[2px\] { height: 2px; }
+main.content .h-\[4px\] { height: 4px; }
+main.content .rounded-full { border-radius: 9999px; }
+main.content .text-\[12px\] { font-size: 12px; }
+main.content .text-\[13px\] { font-size: 13px; }
+main.content .text-\[16px\] { font-size: 16px; }
+main.content .font-medium { font-weight: 500; }
+main.content .font-semibold { font-weight: 600; }
+main.content .font-bold { font-weight: 700; }
+main.content .leading-\[19px\] { line-height: 19px; }
+main.content .mt-2 { margin-top: 8px; }
+main.content .flex-col { flex-direction: column; }
+main.content .gap-1 { gap: 4px; }
+main.content .gap-2 { gap: 8px; }
+main.content .gap-5 { gap: 20px; }
+main.content .text-\[#0F172A\] { color: #0F172A; }
+main.content .text-\[#64748B\] { color: #64748B; }
+
 
 /* ---------- Responsive (#42) ---------- */
 @media (max-width: 1024px) {
@@ -341,4 +407,190 @@ main.content .rounded-2xl h2 {
         flex-wrap: wrap; gap: 10px;
     }
     main.content select[name="per_page"] { max-width: 100%; }
+}
+
+/* ---------- Revenue module (DB-driven) ---------- */
+.revenue-period-chip { margin-bottom: 18px; display: inline-flex; align-items: center; gap: 8px; }
+.rev-status { font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 2px 8px; border-radius: 999px; }
+.rev-open { background: rgba(22,163,74,.14); color: #15803D; }
+.rev-closed { background: rgba(107,114,128,.16); color: #4B5563; }
+.rev-last-sync { color: var(--gray); font-size: 12px; font-weight: 500; }
+.rev-table-wrap { overflow-x: auto; }
+.rev-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rev-table th {
+    text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--gray); padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+}
+.rev-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); color: var(--dark); }
+.rev-table tbody tr:hover { background: var(--light-gray); }
+.rev-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.rev-table td.pos { color: var(--success); font-weight: 600; }
+.rev-table td.neg { color: var(--danger); font-weight: 600; }
+.rev-table .rev-proj-name { font-weight: 600; }
+.rev-status-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.rev-status-badge.sb-on-progress { background: rgba(22,163,74,.12); color: var(--success); }
+.rev-status-badge.sb-no-revenue { background: rgba(107,114,128,.12); color: var(--gray); }
+.rev-status-badge.sb-fully { background: rgba(37,99,235,.12); color: #2563EB; }
+.rev-status-badge.sb-review { background: rgba(220,38,38,.12); color: var(--danger); }
+.rev-row-expand { cursor: pointer; }
+.rev-row-expand .rev-chev { transition: transform .18s; color: var(--gray); font-size: 11px; }
+.rev-row-expand.open .rev-chev { transform: rotate(90deg); }
+.rev-detail-panel { display: none; background: var(--light-gray); }
+.rev-detail-panel.open { display: table-row; }
+.rev-detail-panel td { padding: 0; }
+.rev-detail-inner { padding: 16px 20px; }
+.rev-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 12px 0; }
+.rev-detail-cell { background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.rev-detail-cell .lbl { display: block; font-size: 10px; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: .04em; }
+.rev-detail-cell .val { display: block; font-size: 15px; font-weight: 700; color: var(--dark); margin-top: 4px; }
+.rev-history { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--white); border-radius: 10px; overflow: hidden; }
+.rev-history th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); padding: 7px 10px; background: var(--light-gray); }
+.rev-history td { padding: 7px 10px; border-top: 1px solid var(--border); }
+@media (max-width: 900px) {
+    .kpi-row.rev-kpi { grid-template-columns: 1fr !important; }
+}
+
+/* ---------- Revenue module layout (clean grid, no messy inline) ---------- */
+.rev-period-strip { margin-bottom: 18px; }
+.rev-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+.rev-section { margin-top: 26px; }
+@media (max-width: 900px) {
+    .rev-kpis { grid-template-columns: 1fr; }
+}
+
+/* Page heading row with back action */
+.rev-page-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+@media (max-width: 640px) { .rev-page-head { flex-direction: column; align-items: flex-start; } }
+.rev-card-note { padding: 14px 20px 4px; color: var(--gray); font-size: 12.5px; }
+.rev-section .rev-table-wrap { padding: 8px 20px 20px; }
+.rev-section > .card { padding: 16px 0 0; }
+/* Card that holds a table: no body padding, note + table flow inside */
+.rev-table-card { padding: 0; overflow: hidden; }
+.rev-table-card .rev-card-note { padding: 16px 20px 0; color: var(--gray); font-size: 12.5px; margin: 0; }
+.rev-table-card .rev-table-wrap { padding: 8px 20px 16px; }
+.rev-section { margin-bottom: 26px; }
+.rev-section > .section-title { margin-bottom: 14px; }
+
+.rev-chev { transition: transform .18s; }
+.rev-row-expand.open .rev-chev { transform: rotate(90deg); }
+.rev-row-expand { cursor: pointer; }
+
+/* Data TF list grid (one row per TF program/account per PP). Tight and
+   proportional: expand/year/month/org/codes narrow, Nama Akun & Nama Proyek
+   are the reading columns, money block (Nilai / Total / Diakui) hugs the
+   right edge. Header / rows / grand total share this single definition. */
+.project-table-grid-tf {
+    grid-template-columns:
+        30px 58px 86px 150px 80px minmax(280px, 1.6fr) 90px minmax(200px, 1fr) 140px 155px 155px;
+}
+.project-table-scroll-tf { width: 100%; min-width: 1404px; }
+
+/* Expandable panel sits as its own block between grid rows (not a grid child). */
+.rev-detail-panel { display: none; border-bottom: 1px solid var(--border); }
+.rev-detail-panel.open { display: block; background: #FFFFFF; }
+.rev-detail-panel .rev-detail-inner {
+    padding: 18px 20px 20px 48px;
+    border-left: 3px solid rgba(200,16,46,.35);
+    margin: 0 12px;
+}
+.rev-detail-panel.open .rev-loading { padding: 12px 0; }
+
+/* Recognition-history expand panel (realisasi-style, subtle gray) */
+.rev-rec-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.rev-rec-title { display: flex; flex-direction: column; gap: 3px; }
+.rev-rec-badge {
+    font-size: 11px; font-weight: 800; letter-spacing: .05em; color: var(--dark);
+}
+.rev-rec-sub { font-size: 12px; color: var(--gray); }
+.rev-rec-figures { display: flex; gap: 22px; flex-wrap: wrap; }
+.rev-rec-fig { display: flex; flex-direction: column; gap: 2px; }
+.rev-rec-fig i { font-style: normal; font-size: 10px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: .03em; }
+.rev-rec-fig b { font-size: 13px; font-weight: 700; color: var(--dark); font-variant-numeric: tabular-nums; }
+.rev-table-wrap { overflow-x: auto; }
+.rev-rec-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 12.5px; }
+.rev-rec-table th {
+    text-align: left; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--gray); padding: 8px 10px;
+    border-bottom: 1px solid var(--border); background: #EEF0F3;
+}
+.rev-rec-table td { padding: 8px 10px; border-bottom: 1px solid #EDEEF0; color: var(--dark); vertical-align: top; }
+.rev-rec-table tbody tr:nth-child(even) { background: #FBFBFC; }
+.rev-rec-table .num { text-align: right; }
+.rev-rec-table .mono { font-family: 'Cousine', monospace; font-size: 12px; color: #475569; }
+.rev-rec-date { white-space: nowrap; }
+.rev-rec-desc { max-width: 320px; }
+.rev-rec-empty { text-align: center; color: var(--gray); padding: 20px !important; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* TF / NTF Research list ONE shared grid, grain PP x Akun.
+   Columns: No, Organization, Kode PP, Kode Akun, Nama Akun,
+   Realisasi Bulan, Realisasi YTD, RKA YTD. Table uses available width. */
+.project-table-grid-gl {
+    grid-template-columns:
+        50px 230px 90px 110px minmax(260px, 1fr) 170px 170px 170px;
+}
+.project-table-scroll-gl { min-width: 1250px; width: max-content; }
+
+/* ---------- Revenue detail table layout refinements ---------- */
+/* Nama Proyek: high priority, allow up to 2 lines, no aggressive ellipsis. */
+.rev-name-cell {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+    white-space: normal;
+    word-break: break-word;
+}
+/* Grand total label spans across identity columns (col 7 for NTF: after 6 empties). */
+/* Search bar consistent height + spacing between filter/search/title/table. */
+.rev-search-form {
+    display: flex; align-items: center; gap: 8px;
+    margin: 18px 0 16px;
+    max-width: 560px;
+}
+.rev-search-input-wrap { position: relative; flex: 1; }
+.rev-search-input-wrap .rev-search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    width: 16px; height: 16px; color: #94A3B8; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+}
+.rev-search-input {
+    width: 100%; height: 42px; border: 1px solid #CBD5E1; border-radius: 9px;
+    background: #fff; padding: 0 12px 0 36px; font-size: 13px; color: #1F2937;
+    font-family: inherit; transition: border-color .15s ease, box-shadow .15s ease;
+}
+.rev-search-input:focus { outline: none; border-color: #C8102E; box-shadow: 0 0 0 3px rgba(200,16,46,.12); }
+.rev-search-input::placeholder { color: #94A3B8; }
+.rev-search-btn {
+    height: 42px; padding: 0 18px; border: 0; border-radius: 9px;
+    background: #C8102E; color: #fff; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+.rev-search-btn:hover { background: #A30D25; }
+.rev-table-card-outer { margin-top: 4px; }
+.rev-acc-cell .mono { font-family: 'Cousine', monospace; font-size: 12px; color: #475569; }
+
+/* Revenue source category cards row (TF / NTF Project / NTF Research) */
+.rev-source-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    margin: 26px 0 4px;
+}
+.rev-source-cards .source-card {
+    cursor: pointer;
+    transition: box-shadow .2s, transform .2s;
+    color: var(--dark);
+}
+.rev-source-cards .source-card:hover {
+    box-shadow: 0 6px 18px rgba(34,34,34,.10);
+    transform: translateY(-2px);
+}
+@media (max-width: 900px) {
+    .rev-source-cards { grid-template-columns: 1fr; }
 }

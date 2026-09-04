@@ -15,6 +15,7 @@ disabled, so /static/ (the logo) is served directly from public/ here.
 """
 
 from django.conf import settings
+from django.contrib import admin
 from django.http import FileResponse, Http404
 from django.urls import include, path, re_path
 
@@ -42,13 +43,16 @@ def _static_file(request, path):
 
 
 urlpatterns = [
-    # Financial dashboard is the landing page (/) — see finance/urls.py.
+    # Financial dashboard is the landing page (/) see finance/urls.py.
     path('', include('finance.urls')),
     # Original dashboard moved under /dashboard/.
     path('dashboard/', views.index, name='dashboard'),
     path('dashboard/data', views.data, name='dashboard-data'),
     path('dashboard/data/table', views.realisasi, name='realisasi'),
     path('dashboard/data/export', views.export, name='realisasi-export'),
+    # Revenue module (database-driven; replaces mock on /dashboard/ stepwise).
+    path('dashboard/revenue/', include('finance.urls_revenue')),
+    path('admin/', admin.site.urls),
     re_path(r'^build/(?P<path>.*)$', _build_file, name='build-assets'),
     re_path(r'^static/(?P<path>.*)$', _static_file, name='static-fallback'),
 ]

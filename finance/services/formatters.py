@@ -23,10 +23,10 @@ def format_rupiah_compact(value, decimals=1):
     """Format an amount in IDR to a compact Indonesian string.
 
     Defaults to "M" (Miliar). Values >= 1 trillion render as "T".
-    Negative values get a leading minus. Returns 'N/A' for None.
+    Negative values get a leading minus. None -> 'Rp0' (empty nominal).
     """
     if value is None:
-        return 'N/A'
+        return 'Rp0'
     v = _dec(value)
     sign = '-'
     v = abs(v)
@@ -41,18 +41,18 @@ def format_rupiah_compact(value, decimals=1):
 
 
 def format_percent(value, decimals=1):
-    """Format a percentage with the given decimals; None -> 'N/A'."""
+    """Format a percentage with the given decimals; None -> '-'."""
     if value is None:
-        return 'N/A'
+        return '-'
     v = _dec(value)
     q = v.quantize(Decimal(10) ** -decimals, rounding=ROUND_HALF_UP)
     return f'{q:.{decimals}f}%'
 
 
 def format_signed_percent(value, decimals=2):
-    """Format a signed percentage (+10.53%) for YoY; None -> 'N/A'."""
+    """Format a signed percentage (+10.53%) for YoY; None -> '-'."""
     if value is None:
-        return 'N/A'
+        return '-'
     v = _dec(value)
     q = v.quantize(Decimal(10) ** -decimals, rounding=ROUND_HALF_UP)
     sign = '+' if v > 0 else ''

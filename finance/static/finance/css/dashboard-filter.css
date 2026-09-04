@@ -1,5 +1,5 @@
 /* ============================================================
-   Financial filter toolbar — corporate, minimal, premium.
+   Financial filter toolbar corporate, minimal, premium.
    Loaded only on pages that include filter_toolbar.html.
    ============================================================ */
 
@@ -84,7 +84,7 @@
 }
 .df-label-empty { height: 15px; }
 
-/* Inputs — consistent 42px height */
+/* Inputs consistent 42px height */
 .df-input-wrap { position: relative; display: flex; align-items: center; }
 .df-input-icon {
     position: absolute; left: 12px; color: #94A3B8; pointer-events: none;
@@ -231,7 +231,7 @@
 }
 
 /* ============================================================
-   Revenue Overview filter card — single-select variant.
+   Revenue Overview filter card single-select variant.
    Shares .df-card / .df-field / .df-btn / .df-chips tokens with
    the Data Tuition Fee toolbar (same design system).
    ============================================================ */
@@ -273,4 +273,32 @@
     .df-form-finance { grid-template-columns: 1fr; }
     .df-form-finance .df-apply { grid-column: span 1; }
     .df-form-finance .df-apply .df-btn { width: 100%; }
+}
+
+/* ---------- Revenue detail filter (6 controls: Tahun, Bulan, Organization,
+   Kode PP, Akun Pendapatan, Terapkan) ---------- */
+.df-form-revenue2 {
+    grid-template-columns:
+        minmax(110px, 1fr)
+        minmax(110px, 1fr)
+        minmax(200px, 2fr)
+        minmax(120px, 1.1fr)
+        minmax(240px, 2.2fr)
+        auto;
+}
+.df-form-revenue2 .df-apply { align-items: flex-start; }
+.df-form-revenue2 .df-apply .df-btn { width: auto; min-width: 130px; white-space: nowrap; }
+@media (max-width: 1399px) {
+    .df-form-revenue2 { grid-template-columns: repeat(3, 1fr); }
+    .df-form-revenue2 .df-apply { grid-column: span 1; align-items: flex-end; }
+}
+@media (max-width: 899px) {
+    .df-form-revenue2 { grid-template-columns: repeat(2, 1fr); }
+    .df-form-revenue2 .df-apply { grid-column: span 2; align-items: flex-start; }
+    .df-form-revenue2 .df-apply .df-btn { min-width: 160px; }
+}
+@media (max-width: 559px) {
+    .df-form-revenue2 { grid-template-columns: 1fr; }
+    .df-form-revenue2 .df-apply { grid-column: span 1; }
+    .df-form-revenue2 .df-apply .df-btn { width: 100%; }
 }

@@ -11,7 +11,7 @@
 /* Disable transitions during initial state restore (avoids chart-measure race). */
 .no-transition, .no-transition * { transition: none !important; }
 
-/* KPI cards: no movement on hover — the number stays still. */
+/* KPI cards: no movement on hover  the number stays still. */
 [data-kpi] {
     transition: box-shadow .2s ease;
 }

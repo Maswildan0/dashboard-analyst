@@ -4,7 +4,7 @@ Django settings for the dashboard analyst project.
 Hosts two applications:
 - `dashboard`: the original mock realisasi dashboard (no database).
 - `finance`: the Financial Analyst Dashboard (SQLite for development,
-  PostgreSQL for production — see DATABASES).
+  PostgreSQL for production see DATABASES).
 """
 
 import os
@@ -19,7 +19,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g(r9e+!%wd$#q+
 DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 
 # Vercel sends the deployment host (e.g. dashboard-orpin-iota-64.vercel.app)
-# as HTTP_HOST; allow any host here — the app serves public mock data only.
+# as HTTP_HOST; allow any host here the app serves public mock data only.
 ALLOWED_HOSTS = ['*']
 
 # Application definition

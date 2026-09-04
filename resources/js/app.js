@@ -99,6 +99,260 @@ const MONTHS_FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Ju
 
 const charts = {};
 
+const chartState = {
+    payload: null,          // last payload applied to the charts
+    controller: null,       // AbortController of the refresh currently in flight
+};
+
+function numArr(v) {
+    return Array.isArray(v) ? v.filter(function (n) { return typeof n === 'number' && Number.isFinite(n); }) : [];
+}
+
+function dataHasContent(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    var a = numArr(payload.chartA && payload.chartA.rka).concat(
+        numArr(payload.chartA && payload.chartA.realisasi),
+        numArr(payload.chartD && payload.chartD.tahunSekarang),
+        numArr(payload.chartD && payload.chartD.tahunLalu),
+        numArr(payload.chartD && payload.chartD.capaian)
+    );
+    if (a.length) return true;
+    var b = payload.chartB;
+    if (b) {
+        var values = b.type === 'pie'
+            ? numArr((b.pie || []).map(function (s) { return s && s.value; }))
+            : numArr((b.items || []).map(function (s) { return s && s.realisasi; }));
+        if (values.length) return true;
+    }
+    return false;
+}
+
+function isValidPayload(payload) {
+    return dataHasContent(payload);
+}
+
+function validData(v) {
+    return Array.isArray(v) ? v.filter(function (n) { return typeof n === 'number' && Number.isFinite(n); }) : [];
+}
+
+function destroyChart(key) {
+    if (charts[key]) { charts[key].destroy(); charts[key] = null; }
+}
+
+function setChartVisible(id, visible) {
+    var el = document.getElementById(id);
+    if (el) el.style.visibility = visible ? 'visible' : 'hidden';
+}
+
+function showChartBEmpty(message) {
+    var holder = document.getElementById('chartB');
+    if (!holder) return;
+    holder.innerHTML = '';
+    var empty = document.createElement('div');
+    empty.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;' +
+        'height:100%;min-height:280px;color:#94A3B8;font-size:13px;font-weight:500;' +
+        'font-family:Inter,Open Sans,sans-serif;';
+    empty.textContent = message || 'Tidak ada data untuk ditampilkan';
+    holder.appendChild(empty);
+}
+
+// Empty / failed payloads clear every chart section instead of leaving stale
+// canvas state behind (the source of random blank charts).
+function clearChartSections() {
+    destroyChart('A'); destroyChart('D'); destroyChart('E'); destroyChart('B');
+    setChartVisible('chartA', false);
+    setChartVisible('chartD', false);
+    setChartVisible('chartE', false);
+    showChartBEmpty();
+}
+
+// Single render entry point for boot and every filter refresh. Validates the
+// payload first, then creates or updates each chart independently so one bad
+// section can never take the other charts down.
+function renderDashboard(payload, animateKpis) {
+    chartState.payload = payload || null;
+    window.__DASHBOARD__ = payload || null; // keep download/fullscreen tools in sync
+
+    if (!isValidPayload(payload)) {
+        clearChartSections();
+        return;
+    }
+
+    if (animateKpis) renderKpis(payload.kpis);
+
+    // Each section renders in its own guard so a failure on one chart can
+    // never blank or break the others.
+    try {
+        // Chart A: bar, RKA vs Realisasi.
+        var ca = payload.chartA;
+        if (ca && Array.isArray(ca.bulan) && Array.isArray(ca.rka) && Array.isArray(ca.realisasi)) {
+            var aMax = autoMax(ca.rka.concat(ca.realisasi));
+            if (!charts.A) {
+                charts.A = new Chart(document.getElementById('chartA'), {
+                    type: 'bar',
+                    data: {
+                        labels: ca.bulan,
+                        datasets: [
+                            barDataset(ca.rka, GRAY, 'RKA'),
+                            barDataset(ca.realisasi, RED, 'Realisasi')
+                        ]
+                    },
+                    options: baseOptions(aMax, 'Jt')
+                });
+            } else {
+                charts.A.data.labels = ca.bulan;
+                charts.A.data.datasets[0].data = validData(ca.rka);
+                charts.A.data.datasets[1].data = validData(ca.realisasi);
+                charts.A.options.scales.y.max = aMax;
+                charts.A.options.scales.y.ticks.stepSize = aMax / 5;
+                charts.A.update();
+            }
+            setChartVisible('chartA', true);
+        } else {
+            destroyChart('A');
+            setChartVisible('chartA', false);
+        }
+    } catch (err) {
+        console.error('[dashboard] A render failed:', err);
+        destroyChart('A'); setChartVisible('chartA', false);
+    }
+    try {
+        // Charts D + E share the YoY series (chartD payload).
+        var cd = payload.chartD;
+        if (cd && Array.isArray(cd.bulan) && Array.isArray(cd.tahunLalu) && Array.isArray(cd.tahunSekarang) && Array.isArray(cd.capaian)) {
+            var dMax = autoMax(cd.tahunLalu.concat(cd.tahunSekarang));
+            if (!charts.D) {
+                charts.D = new Chart(document.getElementById('chartD'), {
+                    type: 'line',
+                    data: {
+                        labels: cd.bulan,
+                        datasets: [
+                            { label: 'Tahun Ini', data: cd.tahunSekarang, borderColor: RED, backgroundColor: RED, pointBackgroundColor: RED, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
+                            { label: 'Tahun Sebelum', data: cd.tahunLalu, borderColor: GRAY, backgroundColor: GRAY, pointBackgroundColor: GRAY, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
+                            { label: 'Capaian', data: cd.capaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y1' }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+                        resizeDelay: 100,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function (ctx) {
+                                        var v = ctx.parsed.y;
+                                        if (ctx.dataset.label === 'Capaian') return ctx.dataset.label + ': ' + v + '%';
+                                        return ctx.dataset.label + ': Rp ' + (v * 1000000).toLocaleString('id-ID');
+                                    }
+                                },
+                            },
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: Object.assign({}, TICK) },
+                            y: { grid: { color: GRID }, min: 0, max: dMax, ticks: Object.assign({}, TICK, { stepSize: dMax / 5, callback: function (v) { return v + 'Jt'; } }) },
+                            y1: { position: 'right', grid: { display: false }, min: 0, max: 120, ticks: Object.assign({}, TICK, { stepSize: 30, callback: function (v) { return v + '%'; } }) }
+                        },
+                    },
+                });
+            } else {
+                charts.D.data.labels = cd.bulan;
+                charts.D.data.datasets[0].data = validData(cd.tahunSekarang);
+                charts.D.data.datasets[1].data = validData(cd.tahunLalu);
+                charts.D.data.datasets[2].data = validData(cd.capaian);
+                charts.D.options.scales.y.max = dMax;
+                charts.D.options.scales.y.ticks.stepSize = dMax / 5;
+                charts.D.update();
+            }
+            setChartVisible('chartD', true);
+            if (!charts.E) {
+                charts.E = new Chart(document.getElementById('chartE'), {
+                    type: 'bar',
+                    data: {
+                        labels: cd.bulan,
+                        datasets: [
+                            barDataset(cd.tahunLalu, GRAY, 'Tahun Sebelum'),
+                            barDataset(cd.tahunSekarang, RED, 'Tahun Ini'),
+                            { label: 'Capaian', type: 'line', data: cd.capaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0, yAxisID: 'y1' }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+                        resizeDelay: 100,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function (ctx) {
+                                        var v = ctx.parsed.y;
+                                        if (ctx.dataset.label === 'Capaian') return ctx.dataset.label + ': ' + v + '%';
+                                        return ctx.dataset.label + ': Rp ' + (v * 1000000).toLocaleString('id-ID');
+                                    }
+                                },
+                            },
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: Object.assign({}, TICK) },
+                            y: { grid: { color: GRID }, min: 0, max: dMax, ticks: Object.assign({}, TICK, { stepSize: dMax / 5, callback: function (v) { return v + 'Jt'; } }) },
+                            y1: { position: 'right', grid: { display: false }, min: 0, max: 120, ticks: Object.assign({}, TICK, { stepSize: 30, callback: function (v) { return v + '%'; } }) }
+                        },
+                    },
+                });
+            } else {
+                charts.E.data.labels = cd.bulan;
+                charts.E.data.datasets[0].data = validData(cd.tahunLalu);
+                charts.E.data.datasets[1].data = validData(cd.tahunSekarang);
+                charts.E.data.datasets[2].data = validData(cd.capaian);
+                charts.E.options.scales.y.max = dMax;
+                charts.E.options.scales.y.ticks.stepSize = dMax / 5;
+                charts.E.update();
+            }
+            setChartVisible('chartE', true);
+        } else {
+            destroyChart('D');
+            destroyChart('E');
+            setChartVisible('chartD', false);
+            setChartVisible('chartE', false);
+        }
+    } catch (err) {
+        console.error('[dashboard] DE render failed:', err);
+        destroyChart('D'); destroyChart('E'); setChartVisible('chartD', false); setChartVisible('chartE', false);
+    }
+    try {
+        // Chart B: doughnut (pie) or HTML triwulan bars; placeholder when absent.
+        var holder = document.getElementById('chartB');
+        var cb = payload.chartB;
+        if (holder && cb && cb.type === 'pie' && Array.isArray(cb.pie) && cb.pie.length) {
+            renderChartBPie(cb.pie); // destroys a previous charts.B instance first
+            var note = document.getElementById('chartBNote');
+            if (note) note.textContent = cb.note || '';
+        } else if (holder && cb && cb.items && cb.items.length) {
+            destroyChart('B');
+            renderChartB(cb.items); // HTML bars: no canvas instance
+            var h2b = holder.closest('.rounded-2xl') ? holder.closest('.rounded-2xl').querySelector('h2') : null;
+            if (h2b) h2b.textContent = 'Capaian Realisasi per Triwulan';
+            var note2 = document.getElementById('chartBNote');
+            if (note2) note2.textContent = cb.note || '';
+        } else if (holder && !cb) {
+            showChartBEmpty();
+        }
+    } catch (err) {
+        console.error('[dashboard] B render failed:', err);
+        if (document.getElementById('chartB')) showChartBEmpty();
+    }
+
+    // Idempotent: per-chart onClick is overwritten, wireCursor replaces its
+    // own listeners, DOM bindings use onclick properties, toolbar guards on
+    // card.__toolbar.
+    initDashboardDrill();
+    addChartToolbar();
+}
+
 function renderChartB(items) {
     const el = document.getElementById('chartB');
     el.innerHTML = items.map((it, i) => `
@@ -119,13 +373,20 @@ function renderChartB(items) {
 }
 
 function renderChartBPie(slices) {
-    const el = document.getElementById('chartB');
-    el.innerHTML = '<div class="relative flex-1 flex items-center justify-center min-h-[310px]"><canvas id="chartBPie" class="block max-h-[300px] max-w-full"></canvas></div>';
-    const card = el.closest('.rounded-2xl');
-    const h2 = card?.querySelector('h2');
+    const holder = document.getElementById('chartB');
+    if (!holder) return;
+    holder.innerHTML = '';
+    const wrapEl = document.createElement('div');
+    wrapEl.className = 'relative flex-1 flex items-center justify-center min-h-[310px]';
+    const canvas = document.createElement('canvas');
+    canvas.id = 'chartBPie';
+    canvas.className = 'block max-h-[300px] max-w-full';
+    wrapEl.appendChild(canvas);
+    holder.appendChild(wrapEl);
+    const card = holder.closest('.rounded-2xl');
+    const h2 = card ? card.querySelector('h2') : null;
     if (h2) h2.textContent = 'Komposisi Realisasi TF & NTF';
-    const canvas = document.getElementById('chartBPie');
-    if (charts.B) charts.B.destroy();
+    if (charts.B) { charts.B.destroy(); charts.B = null; }
     charts.B = new Chart(canvas, {
         type: 'doughnut',
         data: {
@@ -239,51 +500,6 @@ function renderKpis(kpis) {
     });
 }
 
-function applyPayload(payload) {
-    renderKpis(payload.kpis);
-
-    charts.A.data.labels = payload.chartA.bulan;
-    charts.A.data.datasets[0].data = payload.chartA.rka;
-    charts.A.data.datasets[1].data = payload.chartA.realisasi;
-    charts.A.options.scales.y.max = autoMax([...payload.chartA.rka, ...payload.chartA.realisasi]);
-    charts.A.options.scales.y.ticks.stepSize = charts.A.options.scales.y.max / 5;
-    charts.A.update();
-
-    // Chart B (Komposisi pie / triwulan) was removed from the page; guard
-    // against the missing element so the other charts keep updating.
-    if (document.getElementById('chartB')) {
-        if (payload.chartB.type === 'pie') {
-            renderChartBPie(payload.chartB.pie);
-        } else {
-            if (charts.B) charts.B.destroy();
-            charts.B = null;
-            renderChartB(payload.chartB.items);
-            const h2 = document.getElementById('chartB').closest('.rounded-2xl')?.querySelector('h2');
-            if (h2) h2.textContent = 'Capaian Realisasi per Triwulan';
-        }
-        const note = document.getElementById('chartBNote');
-        if (note) note.textContent = payload.chartB.note;
-    }
-
-    charts.D.data.labels = payload.chartD.bulan;
-    charts.D.data.datasets[0].data = payload.chartD.tahunLalu;
-    charts.D.data.datasets[1].data = payload.chartD.tahunSekarang;
-    charts.D.data.datasets[2].data = payload.chartD.capaian;
-    charts.D.options.scales.y.max = autoMax([...payload.chartD.tahunLalu, ...payload.chartD.tahunSekarang]);
-    charts.D.options.scales.y.ticks.stepSize = charts.D.options.scales.y.max / 5;
-    charts.D.update();
-
-    if (charts.E) {
-        charts.E.data.labels = payload.chartD.bulan;
-        charts.E.data.datasets[0].data = payload.chartD.tahunLalu;
-        charts.E.data.datasets[1].data = payload.chartD.tahunSekarang;
-        charts.E.data.datasets[2].data = payload.chartD.capaian;
-        charts.E.options.scales.y.max = autoMax([...payload.chartD.tahunLalu, ...payload.chartD.tahunSekarang]);
-        charts.E.options.scales.y.ticks.stepSize = charts.E.options.scales.y.max / 5;
-        charts.E.update();
-    }
-}
-
 function autoMax(values) {
     const peak = Math.max(...values, 1);
     const raw = peak * 1.08;
@@ -294,15 +510,40 @@ function autoMax(values) {
 }
 
 async function refresh() {
-    const params = new URLSearchParams();
-    document.querySelectorAll('select[data-filter]').forEach((sel) => {
+    var params = new URLSearchParams();
+    document.querySelectorAll('select[data-filter]').forEach(function (sel) {
         params.set(sel.dataset.filter, sel.value);
     });
-    const res = await fetch(window.__DASHBOARD_URL__ + '?' + params.toString());
-    if (!res.ok) return;
-    const payload = await res.json();
-    window.__DASHBOARD__ = payload; // keep global in sync for download/fullscreen tools
-    applyPayload(payload);
+
+    // A newer filter selection supersedes any refresh still in flight: abort
+    // the previous request so an out-of-order response can never paint stale
+    // data over the newest filter.
+    if (chartState.controller) chartState.controller.abort();
+    var controller = new AbortController();
+    chartState.controller = controller;
+
+    // Data is always dynamic: bypass HTTP cache and bust any intermediate
+    // cache with a timestamp so every fetch returns fresh values.
+    var url = window.__DASHBOARD_URL__ + '?' + params.toString() + '&_=' + Date.now();
+
+    var res;
+    try {
+        res = await fetch(url, { method: 'GET', cache: 'no-store', signal: controller.signal });
+    } catch (err) {
+        if (err && err.name === 'AbortError') return; // superseded; a newer refresh owns the screen
+        chartState.controller = null;
+        return; // network failure: keep the last good charts instead of blanking
+    }
+    if (controller.signal.aborted || !res.ok) return;
+    var payload;
+    try {
+        payload = await res.json();
+    } catch (err) {
+        return; // malformed body: keep the last good charts
+    }
+    if (controller.signal.aborted) return;
+    chartState.controller = null;
+    renderDashboard(payload, true);
 }
 
 window.__refreshDashboard = refresh;
@@ -334,8 +575,14 @@ function initDashboardDrill() {
             const els = chart.getElementsAtEventForMode(e, 'nearest', { intersect }, false);
             canvas.style.cursor = els.length ? 'pointer' : '';
         };
-        canvas.addEventListener('mousemove', setCursor);
-        canvas.addEventListener('mouseleave', () => { canvas.style.cursor = ''; });
+        if (canvas.__wfLeave) canvas.removeEventListener('mouseleave', canvas.__wfLeave);
+        if (canvas.__wfMove) canvas.removeEventListener('mousemove', canvas.__wfMove);
+        var onMove = setCursor;
+        var onLeave = function () { canvas.style.cursor = ''; };
+        canvas.__wfMove = onMove;
+        canvas.__wfLeave = onLeave;
+        canvas.addEventListener('mousemove', onMove);
+        canvas.addEventListener('mouseleave', onLeave);
     };
 
     if (charts.A) {
@@ -420,21 +667,21 @@ function initDashboardDrill() {
         const period = card.dataset.period;
         if (!period) return;
         card.style.cursor = 'pointer';
-        card.addEventListener('click', () => {
+        card.onclick = () => {
             if (period === 'agustus') {
                 drillThrough({ bulan: 'Agustus' });
             } else {
                 drillThrough({});
             }
-        });
+        };
     });
 
     const chartB = document.getElementById('chartB');
     if (chartB) {
-        chartB.addEventListener('click', (e) => {
+        chartB.onclick = (e) => {
             const wrap = e.target.closest('[data-triwulan]');
             if (wrap) drillThrough({ triwulan: wrap.dataset.triwulan });
-        });
+        };
     }
     // (Chart B pie slice drill is skipped when the element is absent.)
 }
@@ -667,110 +914,11 @@ function toggleChartFullscreen(canvas, card) {
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function () {
     initSidebar();
 
-    const d = window.__DASHBOARD__;
-
-    if (d) {
-        charts.A = new Chart(document.getElementById('chartA'), {
-            type: 'bar',
-            data: {
-                labels: d.chartA.bulan,
-                datasets: [
-                    barDataset(d.chartA.rka, GRAY, 'RKA'),
-                    barDataset(d.chartA.realisasi, RED, 'Realisasi'),
-                ],
-            },
-            options: baseOptions(autoMax([...d.chartA.rka, ...d.chartA.realisasi]), 'Jt'),
-        });
-
-        if (document.getElementById('chartB')) {
-            if (d.chartB.type === 'pie') {
-                renderChartBPie(d.chartB.pie);
-            } else {
-                renderChartB(d.chartB.items);
-            }
-        }
-
-        const dMax = autoMax([...d.chartD.tahunLalu, ...d.chartD.tahunSekarang]);
-        charts.D = new Chart(document.getElementById('chartD'), {
-            type: 'line',
-            data: {
-                labels: d.chartD.bulan,
-                datasets: [
-                    { label: 'Tahun Ini', data: d.chartD.tahunSekarang, borderColor: RED, backgroundColor: RED, pointBackgroundColor: RED, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
-                    { label: 'Tahun Sebelum', data: d.chartD.tahunLalu, borderColor: GRAY, backgroundColor: GRAY, pointBackgroundColor: GRAY, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
-                    { label: 'Capaian', data: d.chartD.capaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y1' },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
-                resizeDelay: 100,
-                plugins: {
-                    legend: { display: false },
-                    datalabels: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: (ctx) => {
-                                const v = ctx.parsed.y;
-                                if (ctx.dataset.label === 'Capaian') return `${ctx.dataset.label}: ${v}%`;
-                                return `${ctx.dataset.label}: Rp ${(v * 1_000_000).toLocaleString('id-ID')}`;
-                            },
-                        },
-                    },
-                },
-                scales: {
-                    x: { grid: { display: false }, ticks: { ...TICK } },
-                    y: { grid: { color: GRID }, min: 0, max: dMax, ticks: { ...TICK, stepSize: dMax / 5, callback: (v) => v + 'Jt' } },
-                    y1: { position: 'right', grid: { display: false }, min: 0, max: 120, ticks: { ...TICK, stepSize: 30, callback: (v) => v + '%' } },
-                },
-            },
-        });
-
-        charts.E = new Chart(document.getElementById('chartE'), {
-            type: 'bar',
-            data: {
-                labels: d.chartD.bulan,
-                datasets: [
-                    barDataset(d.chartD.tahunLalu, GRAY, 'Tahun Sebelum'),
-                    barDataset(d.chartD.tahunSekarang, RED, 'Tahun Ini'),
-                    { label: 'Capaian', type: 'line', data: d.chartD.capaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0, yAxisID: 'y1' },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
-                resizeDelay: 100,
-                plugins: {
-                    legend: { display: false },
-                    datalabels: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: (ctx) => {
-                                const v = ctx.parsed.y;
-                                if (ctx.dataset.label === 'Capaian') return `${ctx.dataset.label}: ${v}%`;
-                                return `${ctx.dataset.label}: Rp ${(v * 1_000_000).toLocaleString('id-ID')}`;
-                            },
-                        },
-                    },
-                },
-                scales: {
-                    x: { grid: { display: false }, ticks: { ...TICK } },
-                    y: { grid: { color: GRID }, min: 0, max: dMax, ticks: { ...TICK, stepSize: dMax / 5, callback: (v) => v + 'Jt' } },
-                    y1: { position: 'right', grid: { display: false }, min: 0, max: 120, ticks: { ...TICK, stepSize: 30, callback: (v) => v + '%' } },
-                },
-            },
-        });
-
-
-
-        initDashboardDrill();
-        addChartToolbar();
-    }
+    var d = window.__DASHBOARD__;
+    if (d) renderDashboard(d, false);
 });
 
 function initSidebar() {
