@@ -1,0 +1,3 @@
+# Local-only dependencies: MySQL source access for migrate_mysql_to_postgres.
+# NOT installed on Vercel (target is PostgreSQL/Neon).
+mysqlclient>=2.2
