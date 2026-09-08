@@ -22,9 +22,9 @@ GitHub schema matches uncommitted local changes.
 | FK integrity | WARNING | Real source/target not inspected; audit enumerates constraints and counts orphan relationships. |
 | Business validation | WARNING | Existing code has discrepancies listed below; no automatic data corrections made. |
 | Django check | PASS | `python manage.py check`; `makemigrations --check --dry-run` reports no changes. |
-| Preview deployment | WARNING | Not deployed by this work; Vercel access unavailable. Git integration may create a preview when the branch is pushed. |
+| Preview deployment | PASS / FAIL | Git integration built commit `ef4e8be` successfully. Runtime probes on `/`, `/dashboard/`, `/dashboard/revenue/` each returned HTTP 500. |
 | Production deployment | WARNING | Not changed. Must wait for real backup, reconciliation and Preview validation. |
-| Dashboard smoke test | WARNING | Existing service/view tests run locally; no live authenticated Preview/Production smoke test yet. |
+| Dashboard smoke test | FAIL | Three Preview routes return HTTP 500. Runtime log access and protected fetch are denied by Vercel (403); cause unconfirmed. Production not probed or changed. |
 | Rollback | PASS / WARNING | Plan below; MySQL not accessed or modified. Live rollback cannot be rehearsed without access. |
 | Other issues | WARNING | Linux MySQL driver build needs system development libraries. Windows workstation requires a compatible mysqlclient wheel/build. |
 
@@ -33,6 +33,15 @@ Local test environment: Python 3.13.14, Django 6.1.1, psycopg 3.3.5.
 new tests). Temporary test fixtures are isolated and are never source/target
 replacement data. SQLite tests do not prove MySQL/PostgreSQL decimal or DDL
 compatibility. No new data migration was generated.
+
+Preview checked after opening draft PR #1:
+https://dashboard-git-migration-neon-controlled-preparation-maswildan0.vercel.app
+
+Vercel's exact access error identifies scope `maswildan0` and requires
+re-authentication to that scope. Both the project slug and the project/team IDs
+reported by the Vercel GitHub bot were checked and denied. Build success is not
+runtime success. Missing `DJANGO_SECRET_KEY`, missing/incorrect database envs,
+or another initialization issue are possibilities, not confirmed diagnoses.
 
 ## Changes prepared
 
@@ -144,6 +153,15 @@ backup through chat. Do not run `migrate` on the source.
 To give the connected Vercel tools access, reconnect the Vercel app using the
 same account/team that owns `dashboard`. CLI login on Windows authorizes that
 computer only; it does not authorize this separate cloud workspace.
+
+The current Preview HTTP 500 needs runtime logs. In Vercel, open the existing
+`dashboard` project → Deployments → the deployment for
+`migration/neon-controlled-preparation` → Runtime Logs (or the project's Logs
+tab), then reload `/dashboard/revenue/`. Share only the error name and message,
+with connection URLs, usernames and passwords removed, if app re-authentication
+cannot be completed. Check variable **names/presence** in Preview for
+`DATABASE_URL` and `DJANGO_SECRET_KEY`; never share their values. This is an
+access/configuration gate, not permission to cut over Production.
 
 ## Gated continuation — not yet executed
 
