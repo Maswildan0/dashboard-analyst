@@ -9,6 +9,7 @@
 
         <div class="menu-group-label">Revenue</div>
         <a class="menu-item {% if active_tab == 'revenue_overview' %}active{% endif %}" href="/dashboard/"><i class="bi bi-coin"></i> Revenue Overview</a>
+        <a class="menu-item {% if active_tab == 'revenue_data' %}active{% endif %}" href="{% url 'revenue:data' %}"><i class="bi bi-grid-1x2"></i> Data Revenue</a>
         <a class="menu-item {% if active_tab == 'revenue_tf' %}active{% endif %}" href="{% url 'revenue:tf' %}"><i class="bi bi-table"></i> Data TF</a>
         <a class="menu-item {% if active_tab == 'revenue_ntf_research' %}active{% endif %}" href="{% url 'revenue:ntf-research' %}"><i class="bi bi-search"></i> Data NTF Research</a>
         <a class="menu-item {% if active_tab == 'revenue_ntf_project' %}active{% endif %}" href="{% url 'revenue:ntf-project' %}"><i class="bi bi-briefcase"></i> Data NTF Project</a>

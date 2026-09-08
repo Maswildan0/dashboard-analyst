@@ -10,6 +10,7 @@ urlpatterns = [
     path('filter/accounts/', revenue_views.filter_accounts, name='filter-accounts'),
     path('tf/', revenue_views.tf_detail, name='tf'),
     path('ntf-research/', revenue_views.ntf_research_detail, name='ntf-research'),
+    path('data/', revenue_views.data_revenue_list, name='data'),
     path('ntf-project/', revenue_views.ntf_project_list, name='ntf-project'),
     path('ntf-project/<int:project_id>/recognitions/', revenue_views.project_recognitions, name='project-recognitions'),
     path('account/recognitions/', revenue_views.account_recognitions, name='account-recognitions'),

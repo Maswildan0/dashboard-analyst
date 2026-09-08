@@ -657,3 +657,45 @@ class TestPendaftaranFullProgress(RevenueBase):
         self.assertEqual(len(re.findall(r'title="Nilai Proyek: Rp299\.527\.200"', seg)), 1)
         self.assertEqual(len(re.findall(r'title="Total Pendapatan: Rp299\.527\.200"', seg)), 1)
         self.assertEqual(len(re.findall(r'width:100%', seg)), 1)
+
+
+# 30. Data Revenue unified page: filter counts + consistency with detail pages
+class TestDataRevenuePage(RevenueBase):
+    def test_filter_counts_match_category_pages(self):
+        # Seed minimal: one TF + one RS + one P project with GL
+        from finance.models import Project, GLProjectMapping
+        org = OrganizationUnit.objects.create(code='DIR-T', name='DIREKTORAT T', campus=self.campus, unit_type='OTHER')
+        pp_tf = PPMaster.objects.create(pp_code='1103', organization_unit=org)
+        pp_np = PPMaster.objects.create(pp_code='9120', organization_unit=org)
+        acc_tf = self.acc_tf
+        acc_np = RevenueAccount.objects.create(account_code='4140101', account_name='Kerjasama', revenue_category=self.cat_np)
+        acc_rs = RevenueAccount.objects.create(account_code='4151102', account_name='Penelitian', revenue_category=self.cat_nr)
+        p1 = Project.objects.create(project_number='TF-4121135-1103-01', pp=pp_tf, project_name='Pelatihan A', project_value=Decimal('100000000'), is_active=True)
+        p2 = Project.objects.create(project_number='P-9120-001', pp=pp_np, project_name='Gedung X', project_value=Decimal('200000000'), is_active=True)
+        p3 = Project.objects.create(project_number='RS-4151102-9120-01', pp=pp_np, project_name='Riset Y', project_value=Decimal('300000000'), is_active=True)
+        def gm(proj, acc, pp, y, m, amt):
+            p = make_period(y, m)
+            gl = self.gl(p, credit=amt, account=acc, pp=pp, desc=proj.project_name, tx=f'{proj.project_number}-{y}-{m}')
+            GLProjectMapping.objects.create(ledger=gl, project=proj, allocated_amount=gl.credit, match_method='PP+NAME', match_status='AUTO_MATCHED')
+        gm(p1, acc_tf, pp_tf, 2026, 8, Decimal('50000000'))
+        gm(p2, acc_np, pp_np, 2026, 8, Decimal('60000000'))
+        gm(p3, acc_rs, pp_np, 2026, 8, Decimal('70000000'))
+        # Data Revenue page shows all 3
+        resp = self.client.get('/dashboard/revenue/data/?year=2026&month=8')
+        html = resp.content.decode()
+        self.assertIn('TF', html)
+        self.assertIn('NTF Research', html)
+        # type filters
+        for typ, projname in [('TF', 'Pelatihan A'), ('NTF_RESEARCH', 'Riset Y'), ('NTF_PROJECT', 'Gedung X')]:
+            r = self.client.get(f'/dashboard/revenue/data/?year=2026&month=8&type={typ}')
+            h = r.content.decode()
+            self.assertIn(projname, h)
+        # consistency: same project row values in data revenue vs category page
+        def money(html, projname):
+            j = html.find(projname)
+            seg = html[j:j + 2600]
+            import re as _re
+            return (_re.search(r'Nilai Proyek: ([^"]+)', seg) or [None, '?'])[1]
+        d_all = self.client.get('/dashboard/revenue/data/?year=2026&month=8').content.decode()
+        p_page = self.client.get('/dashboard/revenue/ntf-project/?year=2026&month=8&per_page=100').content.decode()
+        self.assertEqual(money(d_all, 'Gedung X'), money(p_page, 'Gedung X'))

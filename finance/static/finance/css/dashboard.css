@@ -526,6 +526,23 @@ main.content .text-\[#64748B\] { color: #64748B; }
 .rev-rec-empty { text-align: center; color: var(--gray); padding: 20px !important; }
 .tabular-nums { font-variant-numeric: tabular-nums; }
 
+/* Data Revenue master table: all categories in one grid (12 cols).
+   Chevron | Tahun | Bulan | Jenis | Org | Kode PP | Nama Proyek | Kode Akun |
+   Nama Akun | Nilai Proyek | Pendapatan Diakui | Total Pendapatan */
+.project-table-grid-data {
+    grid-template-columns:
+        30px 58px 86px 92px 150px 80px minmax(260px, 1.5fr) 90px minmax(190px, 1fr) 140px 150px 150px;
+}
+.project-table-scroll-data { width: 100%; min-width: 1510px; }
+.rev-jenis-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px; letter-spacing: .02em;
+    border: 1px solid transparent; white-space: nowrap;
+}
+.rev-jenis-tf      { color: #B91C1C; background: #FEF2F2; border-color: #FECACA; }
+.rev-jenis-research{ color: #1D4ED8; background: #EFF6FF; border-color: #BFDBFE; }
+.rev-jenis-project { color: #047857; background: #ECFDF5; border-color: #A7F3D0; }
+
 /* TF / NTF Research list ONE shared grid, grain PP x Akun.
    Columns: No, Organization, Kode PP, Kode Akun, Nama Akun,
    Realisasi Bulan, Realisasi YTD, RKA YTD. Table uses available width. */

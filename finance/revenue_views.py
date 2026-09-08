@@ -103,6 +103,67 @@ _GL_SORTABLE = ['organization', 'pp_code', 'kode_akun', 'nama_akun',
 _GL_PER_PAGE = [20, 50, 100]
 
 
+def _finalize_tf_rows(rows):
+    """Shared display finalizer for every tf_program-shaped row (TF / NTF
+    Research / NTF Project / unified Data Revenue). Guarantees IDENTICAL
+    column values across pages (spec: consistency test #28).
+
+    Row semantics:
+      Nilai Proyek       = project value (Project Master, never GL);
+                           '—' when unmapped.
+      Pendapatan Diakui  = revenue recognised in the SELECTED MONTH only.
+      Total Pendapatan   = lifetime recognized up to period end.
+      progress           = PROJECT total revenue / project value.
+    """
+    for r in rows:
+        if r.get('mode') == 'tf_program':
+            if r.get('detail_mode') == 'PERIOD_ONLY':
+                # Pendaftaran: batch of the month -> Total = the month itself
+                total_val = r['total_pendapatan'] or r['realisasi_bulan']
+                _nv = r['nilai'] or 0
+                r['nilai_disp'] = _rupiah(_nv) if _nv > 0 else '—'
+                r['total_disp'] = _rupiah(total_val)
+                r['berjalan_disp'] = _rupiah(r['pendapatan_berjalan'])  # month
+                _pct_prog = 100 if _nv > 0 else 0
+            else:
+                total_val = r['total_pendapatan']   # lifetime up to period
+                _nv = r['nilai'] or 0
+                r['nilai_disp'] = '—' if _nv <= 0 else _rupiah(_nv)
+                r['total_disp'] = _rupiah(total_val)
+                r['berjalan_disp'] = _rupiah(r['pendapatan_berjalan'])  # month
+                # Progress = PROJECT total revenue (all accounts, up to
+                # period) / project value; multi-account rows share ONE
+                # project progress.
+                _ptot = r.get('project_total_pendapatan') or r['total_pendapatan']
+                if _nv > 0:
+                    try:
+                        _pct_prog = int(round(float(_ptot) / max(1.0, float(_nv)) * 100))
+                    except (TypeError, ValueError):
+                        _pct_prog = 0
+                else:
+                    _pct_prog = 0
+        elif r.get('mode') == 'account_month':
+            total = r['total_pendapatan']
+            r['nilai_disp'] = _rupiah(total)
+            r['total_disp'] = _rupiah(total)
+            r['berjalan_disp'] = _rupiah(total)
+            _pct_prog = 100
+        else:
+            r['nilai_disp'] = 'Rp0'
+            r['total_disp'] = _rupiah(r['total_pendapatan'])
+            r['berjalan_disp'] = _rupiah(r['pendapatan_berjalan'])
+            try:
+                _pct_prog = int(round(float(r['pendapatan_berjalan']) / max(1.0, float(r['total_pendapatan'])) * 100))
+            except (TypeError, ValueError):
+                _pct_prog = 0
+        if not r.get('akun_disp'):
+            r['akun_disp'] = '-'
+        r['progress_width'] = min(100, _pct_prog)
+        r['progress_color'] = _progress_color(_pct_prog)
+        r['no'] = None  # filled by template via counter
+    return rows
+
+
 def _gl_list(request, revenue_type):
     """TF / NTF Research page.
 
@@ -346,6 +407,10 @@ _NTF_SORTABLE = ['tahun', 'bulan', 'unit', 'no_proyek', 'kode_pp',
                  'organization', 'nama', 'nama_proyek', 'akun',
                  'nilai', 'total_pendapatan', 'pendapatan_berjalan']
 _NTF_PER_PAGE = [20, 50, 100]
+_DATA_SORTABLE = ['tahun', 'bulan', 'jenis', 'unit', 'no_proyek', 'kode_pp',
+                  'organization', 'nama', 'nama_proyek', 'akun',
+                  'nilai', 'total_pendapatan', 'pendapatan_berjalan']
+_DATA_PER_PAGE = [25, 50, 100]
 
 
 def ntf_project_list(request):
@@ -592,6 +657,193 @@ def project_recognitions(request, project_id):
         **_base_ctx(request, ctx, 'revenue_ntf_project'),
         **frag_ctx,
     })
+
+
+# --------------------------------------------------------------------------
+# DATA REVENUE — unified master/detail table of EVERY revenue category
+# (TF + NTF Research + NTF Project in one page).
+# Every row comes from the SAME per-(project x PP x account) builders used by
+# the per-category pages, so column values are IDENTICAL to Data TF / NTF
+# Research / NTF Project (shared _finalize_tf_rows display logic).
+# --------------------------------------------------------------------------
+_DATA_JENIS = {'TF': 'TF', 'NTF_RESEARCH': 'NTF Research', 'NTF_PROJECT': 'NTF Project'}
+
+
+def data_revenue_list(request):
+    ctx = _ctx_from_request(request)
+
+    search = (request.GET.get('q') or '').strip()
+    sort = request.GET.get('sort') if request.GET.get('sort') in _DATA_SORTABLE else ''
+    # default: Total Pendapatan DESC (biggest revenue first)
+    direction = 'desc' if (request.GET.get('dir') or 'desc').lower() != 'asc' else 'asc'
+    if not sort:
+        sort = 'total_pendapatan'
+        direction = 'desc'
+    try:
+        per_page = int(request.GET.get('per_page', '25'))
+        if per_page not in _DATA_PER_PAGE:
+            per_page = 25
+    except (TypeError, ValueError):
+        per_page = 25
+
+    rtype = ctx.revenue_type  # 'all' | 'TF' | 'NTF_RESEARCH' | 'NTF_PROJECT'
+    all_rows = []
+    if rtype in ('all', 'Semua', '') or rtype == 'TF':
+        all_rows += rps.tf_program_rows(ctx, search=search)
+    if rtype in ('all', 'Semua', '') or rtype == 'NTF_RESEARCH':
+        all_rows += rps.research_object_rows(ctx, search=search)
+    if rtype in ('all', 'Semua', '') or rtype in ('NTF_PROJECT', 'NTF_PROJECT'):
+        # contract projects (P-) + layanan/sertifikasi objek (SRV-)
+        all_rows += rps.project_rows(ctx, search=search)
+        all_rows += rps.service_object_rows(ctx, search=search)
+
+    # normalize every row to the shared display shape (identical to detail pages)
+    for r in all_rows:
+        r['bulan'] = month_name(r['bulan'])
+        if 'kode_akun' in r:
+            r['akun'] = r.get('kode_akun') or ''
+            r['akun_nama'] = r.get('nama_akun') or ''
+            r['nama'] = r.get('nama_akun') or r.get('nama') or '-'
+            r['total_pendapatan'] = r.get('realisasi_bulan', Decimal('0'))
+            r['pendapatan_berjalan'] = r.get('realisasi_ytd', Decimal('0'))
+            r['month'] = ctx.month
+        r['nama'] = r['nama'] or '-'
+        r['nama_proyek'] = (r.get('nama_proyek') or '').strip() or '-'
+        # Pendaftaran PERIOD_ONLY: month batch => all three columns = month
+        if r.get('detail_mode') == 'PERIOD_ONLY':
+            _m = r.get('realisasi_bulan') or Decimal('0')
+            r['nilai'] = _m
+            r['total_pendapatan'] = _m
+            r['pendapatan_berjalan'] = _m
+        # Jenis Revenue column (from Revenue Category mapping via project prefix)
+        r['jenis'] = _DATA_JENIS.get(r.get('jenis') or '', r.get('jenis') or '-')
+        if r.get('mode') == 'tf_program':
+            r['akun_disp'] = r['akun']
+            r['kode_akun'] = (r['akun'] or '').split(' ')[0] if r['akun'] else ''
+        else:
+            r['akun_disp'] = (r['akun'] + ' ' + (r.get('akun_nama') or '')).strip() if r['akun'] != '' else ''
+        for _k in ('unit', 'no_proyek', 'pp_code', 'organization'):
+            r[_k] = (r.get(_k) or '').strip() or '-'
+
+    # search across organization/pp/name/number/account
+    if search:
+        sq = search.lower()
+        all_rows = [r for r in all_rows
+                    if sq in (r.get('organization') or '').lower()
+                    or sq in (r.get('pp_code') or '').lower()
+                    or sq in (r.get('nama_proyek') or '').lower()
+                    or sq in (r.get('no_proyek') or '').lower()
+                    or sq in (r.get('akun') or '').lower()
+                    or sq in (r.get('nama') or '').lower()]
+
+    # shared sort
+    _cmap = {
+        'tahun': lambda r: r['tahun'],
+        'bulan': lambda r: r['bulan'],
+        'jenis': lambda r: r['jenis'],
+        'unit': lambda r: (r.get('unit') or '').lower(),
+        'no_proyek': lambda r: r.get('no_proyek') or '',
+        'kode_pp': lambda r: r.get('pp_code') or '',
+        'organization': lambda r: (r.get('organization') or '').lower(),
+        'nama': lambda r: (r.get('nama') or '').lower(),
+        'nama_proyek': lambda r: (r.get('nama_proyek') or '').lower(),
+        'akun': lambda r: r.get('akun') or '',
+        'nilai': lambda r: r.get('nilai') or Decimal('0'),
+        'total_pendapatan': lambda r: r.get('total_pendapatan') or Decimal('0'),
+        'pendapatan_berjalan': lambda r: r.get('pendapatan_berjalan') or Decimal('0'),
+    }
+    if sort in _cmap:
+        all_rows.sort(key=_cmap[sort], reverse=(direction == 'desc'))
+
+    total = len(all_rows)
+    try:
+        page = max(1, int(request.GET.get('page', '1')))
+    except (TypeError, ValueError):
+        page = 1
+    pages = max(1, -(-total // per_page))
+    page = min(page, pages)
+    start = (page - 1) * per_page
+    rows = _finalize_tf_rows(all_rows[start:start + per_page])
+
+    # Grand totals (distinct Nilai per project; Total/Diakui = sum rows)
+    _seen = set()
+    g_nilai = Decimal('0')
+    for r in all_rows:
+        pk = r.get('project') and getattr(r['project'], 'pk', None)
+        if pk is not None:
+            if pk in _seen:
+                continue
+            _seen.add(pk)
+        g_nilai += r.get('nilai') or Decimal('0')
+    g_total = sum(r.get('total_pendapatan') or Decimal('0') for r in all_rows)
+    g_berjalan = sum(r.get('pendapatan_berjalan') or Decimal('0') for r in all_rows)
+    grand = {
+        'nilai_disp': _rupiah(g_nilai) if g_nilai > 0 else '—',
+        'total_disp': _rupiah(g_total),
+        'berjalan_disp': _rupiah(g_berjalan),
+    }
+    # mini summary counts (compact, non-KPI): per category record counts
+    from collections import Counter
+    _cnt = Counter(r.get('jenis') for r in all_rows)
+    mini = {'total': total,
+            'TF': _cnt.get('TF', 0),
+            'NTF Research': _cnt.get('NTF Research', 0),
+            'NTF Project': _cnt.get('NTF Project', 0)}
+
+    def query_base():
+        q = {'year': ctx.year, 'month': ctx.month}
+        if rtype not in ('all', 'Semua', ''):
+            q['type'] = rtype
+        if ctx.organization is not None:
+            q['org'] = ctx.organization.pk
+        if ctx.pp is not None:
+            q['pp'] = ctx.pp.pp_code
+        if ctx.revenue_account is not None:
+            q['account'] = ctx.revenue_account.account_code
+        if search:
+            q['q'] = search
+        if per_page != 25:
+            q['per_page'] = per_page
+        return q
+
+    def sort_url(col):
+        q = query_base()
+        q['sort'] = col
+        q['dir'] = 'desc' if (sort == col and direction == 'asc') else 'asc'
+        return request.path + '?' + _qs(q)
+
+    def page_url(pg):
+        q = query_base()
+        q['page'] = pg
+        return request.path + '?' + _qs(q)
+
+    return render(request, 'finance/revenue/data_revenue.html', {
+        **_base_ctx(request, ctx, 'revenue_data'),
+        'ctx': ctx,
+        'rows': rows,
+        'grand': grand,
+        'mini': mini,
+        'total': total,
+        'page': page,
+        'pages': pages,
+        'per_page': per_page,
+        'per_page_options': _DATA_PER_PAGE,
+        'q': search,
+        'sort': sort,
+        'dir': direction,
+        'sortUrl': sort_url,
+        'pageUrl': page_url,
+        'first_display': min(start + 1, total) if total else 0,
+        'last_display': min(start + per_page, total),
+        'prev_page': max(1, page - 1),
+        'next_page': min(pages, page + 1),
+        'arrow_map': {c: ('▲' if sort == c and direction == 'asc' else '▼' if sort == c else '') for c in _DATA_SORTABLE},
+        'page_name': 'Revenue',
+        'is_data_revenue': True,
+        'month_label': month_name(ctx.month),
+        'page_list': _page_list(page, pages),
+    })
+
 
 
 # --------------------------------------------------------------------------

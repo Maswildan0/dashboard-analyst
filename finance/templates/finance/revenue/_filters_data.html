@@ -1,0 +1,79 @@
+{% comment %}Revenue filter bar for the unified DATA REVENUE page: adds the
+Jenis Revenue dropdown (Semua/TF/NTF Research/NTF Project) on top of the
+standard year/month/org/PP/account filters. Type cascades into Account via
+revenue-filter-cascade.js (rv-type -> filter/accounts/?type=).{% endcomment %}
+<div class="df-card" id="revenue-filter-card">
+    <div class="df-card-head">
+        <div class="df-head-left">
+            <span class="df-head-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 3.5h13M4 8h8M6.5 12.5h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </span>
+            <div>
+                <div class="df-head-title">Filter Data Revenue</div>
+                <div class="df-head-desc">Sesuaikan data yang ditampilkan pada dashboard</div>
+            </div>
+        </div>
+        <div class="df-head-actions">
+            <a class="df-btn df-btn-ghost" href="{% url 'revenue:data' %}">Reset</a>
+        </div>
+    </div>
+
+    <form id="revenue-filter-form" class="df-form df-form-revenue2" method="GET">
+        <div class="df-field">
+            <label class="df-label" for="rv-type">Jenis Revenue</label>
+            <select id="rv-type" name="type" class="df-select df-native-select" data-type-cascade>
+                <option value="all"{% if not ctx.revenue_type or ctx.revenue_type == 'all' or ctx.revenue_type == 'Semua' %} selected{% endif %}>Semua Revenue</option>
+                <option value="TF"{% if ctx.revenue_type == 'TF' %} selected{% endif %}>TF</option>
+                <option value="NTF_RESEARCH"{% if ctx.revenue_type == 'NTF_RESEARCH' %} selected{% endif %}>NTF Research</option>
+                <option value="NTF_PROJECT"{% if ctx.revenue_type == 'NTF_PROJECT' %} selected{% endif %}>NTF Project</option>
+            </select>
+        </div>
+        <div class="df-field">
+            <label class="df-label" for="rv-year">Tahun</label>
+            <select id="rv-year" name="year" class="df-select df-native-select">
+                {% for y in years %}
+                    <option value="{{ y }}"{% if ctx.year == y %} selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="df-field">
+            <label class="df-label" for="rv-month">Bulan</label>
+            <select id="rv-month" name="month" class="df-select df-native-select">
+                {% for m in months %}
+                    <option value="{{ m }}"{% if ctx.month == m %} selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="df-field">
+            <label class="df-label" for="rv-org">Organization</label>
+            <select id="rv-org" name="org" class="df-select df-native-select" data-cascade-pp>
+                <option value="all"{% if not ctx.organization %} selected{% endif %}>Semua Organization</option>
+                {% for o in organizations %}
+                    <option value="{{ o.pk }}"{% if ctx.organization and ctx.organization.pk == o.pk %} selected{% endif %}>{{ o.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="df-field">
+            <label class="df-label" for="rv-pp">Kode PP</label>
+            <select id="rv-pp" name="pp" class="df-select df-native-select" data-pp-options>
+                <option value="all"{% if not ctx.pp %} selected{% endif %}>Semua PP</option>
+                {% for p in pps %}
+                    <option value="{{ p.pp_code }}"{% if ctx.pp and ctx.pp.pp_code == p.pp_code %} selected{% endif %}>{{ p.pp_code }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="df-field">
+            <label class="df-label" for="rv-account">Akun Pendapatan</label>
+            <select id="rv-account" name="account" class="df-select df-native-select" data-account-options>
+                <option value="all"{% if not ctx.revenue_account %} selected{% endif %}>Semua Akun</option>
+                {% for a in accounts %}
+                    <option value="{{ a.account_code }}"{% if ctx.revenue_account and ctx.revenue_account.account_code == a.account_code %} selected{% endif %}>{{ a.account_code }} · {{ a.account_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="df-field df-apply">
+            <span class="df-label df-label-empty" aria-hidden="true"></span>
+            <button type="submit" class="df-btn df-btn-primary">Terapkan</button>
+        </div>
+    </form>
+</div>

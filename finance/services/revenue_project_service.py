@@ -156,6 +156,18 @@ def _project_unit(project, unit_map=None):
     return snap.unit_raw if snap and snap.unit_raw else ''
 
 
+def _jenis_from_prefix(project_number):
+    """Revenue category for display/grouping, derived from the project
+    number prefix (TF- = Tuition Fee, RS- = NTF Research objek,
+    SRV-/P- = NTF Project)."""
+    n = project_number or ''
+    if n.startswith('TF-'):
+        return 'TF'
+    if n.startswith('RS-'):
+        return 'NTF_RESEARCH'
+    return 'NTF_PROJECT'
+
+
 def _bulk_unit_map(projects):
     """One query: latest NTF snapshot unit per project for the given list."""
     pids = [p.pk for p in projects]
@@ -313,6 +325,7 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
             rows.append({
                 'project': project,
                 'mode': 'tf_program',
+                'jenis': _jenis_from_prefix(project.project_number or ''),
                 'tahun': ctx.year,
                 'bulan': ctx.month,
                 'month': ctx.month,
@@ -805,6 +818,7 @@ def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc')
             rows.append({
                 'project': project,
                 'mode': 'tf_program',
+                'jenis': _jenis_from_prefix(project.project_number),
                 'tahun': ctx.year,
                 'bulan': ctx.month,
                 'month': ctx.month,
