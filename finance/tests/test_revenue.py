@@ -699,3 +699,39 @@ class TestDataRevenuePage(RevenueBase):
         d_all = self.client.get('/dashboard/revenue/data/?year=2026&month=8').content.decode()
         p_page = self.client.get('/dashboard/revenue/ntf-project/?year=2026&month=8&per_page=100').content.decode()
         self.assertEqual(money(d_all, 'Gedung X'), money(p_page, 'Gedung X'))
+
+
+# 31. Multi-select filter backend (Data Revenue): kombinasi jenis, multi periode
+class TestMultiFilterBackend(RevenueBase):
+    def test_multi_type_and_period(self):
+        from finance.models import Project, GLProjectMapping
+        org = OrganizationUnit.objects.create(code='DIR-M', name='DIREKTORAT M', campus=self.campus, unit_type='OTHER')
+        pp = PPMaster.objects.create(pp_code='9120', organization_unit=org)
+        acc_tf = self.acc_tf
+        acc_np = RevenueAccount.objects.create(account_code='4140101', account_name='Kerja Sama', revenue_category=self.cat_np)
+        p1 = Project.objects.create(project_number='TF-4121135-9120-01', pp=pp, project_name='Program A', project_value=Decimal('100000000'), is_active=True)
+        p2 = Project.objects.create(project_number='P-9120-001', pp=pp, project_name='Gedung X', project_value=Decimal('200000000'), is_active=True)
+        def gm(proj, acc, y, m, amt):
+            p = make_period(y, m)
+            gl = self.gl(p, credit=amt, account=acc, pp=pp, desc=proj.project_name, tx=f'{proj.pk}-{y}-{m}')
+            GLProjectMapping.objects.create(ledger=gl, project=proj, allocated_amount=gl.credit, match_method='PP+NAME', match_status='AUTO_MATCHED')
+        gm(p1, acc_tf, 2026, 7, Decimal('50000000'))
+        gm(p1, acc_tf, 2026, 8, Decimal('60000000'))
+        gm(p2, acc_np, 2026, 8, Decimal('70000000'))
+        # Semua (default latest 2026-08): 2 rows
+        resp = self.client.get('/dashboard/revenue/data/?tahun[]=2026&bulan[]=8')
+        h = resp.content.decode()
+        m = __import__('re').search(r'dari (\d+) data', h)
+        self.assertEqual(int(m.group(1)), 2)
+        # filter TF only -> 1 row
+        r = self.client.get('/dashboard/revenue/data/?tahun[]=2026&bulan[]=8&jenis[]=TF')
+        m2 = __import__('re').search(r'dari (\d+) data', r.content.decode())
+        self.assertEqual(int(m2.group(1)), 1)
+        # multi bulan 7+8 -> TF appears twice (multi-period), project once
+        r2 = self.client.get('/dashboard/revenue/data/?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF')
+        m3 = __import__('re').search(r'dari (\d+) data', r2.content.decode())
+        self.assertEqual(int(m3.group(1)), 2)
+        # search by project name still works combined
+        r3 = self.client.get('/dashboard/revenue/data/?tahun[]=2026&bulan[]=8&q=Gedung')
+        m4 = __import__('re').search(r'dari (\d+) data', r3.content.decode())
+        self.assertEqual(int(m4.group(1)), 1)

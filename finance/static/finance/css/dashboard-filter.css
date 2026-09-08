@@ -302,3 +302,55 @@
     .df-form-revenue2 .df-apply { grid-column: span 1; }
     .df-form-revenue2 .df-apply .df-btn { width: 100%; }
 }
+
+/* ---------- Revenue table filter: two-row compact layout ----------
+   Row 1 = the six dropdown filters (grid template above). Row 2 = search
+   + action buttons spanning the full width so "Terapkan" never floats alone
+   and no dead space is left under the fields. */
+.df-form-revenue2 {
+    grid-template-columns:
+        minmax(120px, 1fr)
+        minmax(110px, 1fr)
+        minmax(110px, 1fr)
+        minmax(190px, 1.6fr)
+        minmax(110px, .9fr)
+        minmax(210px, 1.8fr);
+    row-gap: 10px;
+    column-gap: 12px;
+    align-items: end;
+}
+.df-form-revenue2 .df-search-row { grid-column: 1 / -1; align-items: flex-end; }
+.df-form-revenue2 .df-actions {
+    grid-column: 1 / -1; align-items: center;
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding-top: 2px;
+}
+.df-action-btns { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: flex-end; }
+.df-action-btns .df-btn { height: 40px; }
+.df-action-btns .df-btn[data-ms-apply] { min-width: 130px; }
+.df-action-btns .df-btn[data-ms-clear-all] { min-width: 96px; }
+.df-form-revenue2 .df-search-row .df-input-wrap { width: 100%; }
+.df-form-revenue2 .df-search-row .df-input { height: 40px; }
+.df-form-revenue2 .df-label { white-space: nowrap; }
+@media (max-width: 1399px) {
+    .df-form-revenue2 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .df-form-revenue2 .df-search-row,
+    .df-form-revenue2 .df-actions { grid-column: 1 / -1; }
+    .df-action-btns { justify-content: flex-end; }
+}
+@media (max-width: 899px) {
+    .df-form-revenue2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .df-form-revenue2 .df-search-row,
+    .df-form-revenue2 .df-actions { grid-column: 1 / -1; }
+    .df-action-btns { justify-content: stretch; }
+    .df-action-btns .df-btn { flex: 1; }
+}
+@media (max-width: 559px) {
+    .df-form-revenue2 { grid-template-columns: 1fr; }
+    .df-form-revenue2 .df-search-row,
+    .df-form-revenue2 .df-actions { grid-column: auto; }
+    .df-action-btns { flex-direction: column; }
+    .df-action-btns .df-btn { width: 100%; }
+}

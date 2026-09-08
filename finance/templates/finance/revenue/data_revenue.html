@@ -6,7 +6,7 @@
 
 {% block content %}
 <div class="px-8 py-6">
-    {% include 'finance/revenue/_filters_data.html' %}
+    {% include 'finance/revenue/_filters_multi.html' with show_type=True %}
 
     {# Search bar #}
     <form method="GET" action="{{ request.path }}" class="rev-search-form">
@@ -133,6 +133,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'finance/js/revenue-filter-cascade.js' %}" defer></script>
+<script src="{% static 'finance/js/revenue-multifilter.js' %}" defer></script>
 <script src="{% static 'finance/js/revenue-project.js' %}" defer></script>
 {% endblock %}

@@ -21,14 +21,12 @@ from .services.formatters import format_rupiah_compact, format_percent
 
 
 def _ctx_from_request(request):
+    # Let RevenueContext read params itself so both plain (?year=) and
+    # bracketed (?tahun[]=) styles resolve; None args = read from request.
     return RevenueContext(
         request,
-        year=request.GET.get('year'),
-        month=request.GET.get('month'),
-        revenue_type=request.GET.get('type'),
-        organization_id=request.GET.get('org'),
-        pp_code=request.GET.get('pp'),
-        account_code=request.GET.get('account'),
+        years=None, months=None, revenue_types=None,
+        organization_ids=None, pp_codes=None, account_codes=None,
     )
 
 
@@ -37,6 +35,9 @@ def _base_ctx(request, ctx=None, active_tab='revenue_overview'):
     years, months = rsel.period_options()
     opts = rsel.cascade_options(ctx.organization, ctx.revenue_type)
     last_sync = SimkugSyncLog.objects.filter(status__in=['SUCCESS', 'PARTIAL']).order_by('-finished_at').first()
+    # Multi-select option sets (all active master rows, regardless of current
+    # parent selection; JS cascade narrows PP/Account client-side).
+    jenis = [('TF', 'TF'), ('NTF_RESEARCH', 'NTF Research'), ('NTF_PROJECT', 'NTF Project')]
     return {
         'ctx': ctx,
         'years': years,
@@ -45,6 +46,12 @@ def _base_ctx(request, ctx=None, active_tab='revenue_overview'):
         'organizations': opts['organizations'],
         'pps': opts['pps'],
         'accounts': opts['accounts'],
+        'jenis_options': jenis,
+        'tahun_options': years,
+        'bulan_options': months,
+        'org_options': opts['organizations'],
+        'pp_options': opts['pps'],
+        'account_options': opts['accounts'],
         'last_sync': last_sync,
         'assets_head': _assets_head(),
         'fonts_head': _fonts_head(),
@@ -686,18 +693,22 @@ def data_revenue_list(request):
     except (TypeError, ValueError):
         per_page = 25
 
-    rtype = ctx.revenue_type  # 'all' | 'TF' | 'NTF_RESEARCH' | 'NTF_PROJECT'
+    # Multi-period: one row set per selected (year, month); rows carry the
+    # period they belong to so Tahun/Bulan columns reflect each selection.
+    rtype_values = ctx.type_values or ['all']
     all_rows = []
-    if rtype in ('all', 'Semua', '') or rtype == 'TF':
-        all_rows += rps.tf_program_rows(ctx, search=search)
-    if rtype in ('all', 'Semua', '') or rtype == 'NTF_RESEARCH':
-        all_rows += rps.research_object_rows(ctx, search=search)
-    if rtype in ('all', 'Semua', '') or rtype in ('NTF_PROJECT', 'NTF_PROJECT'):
-        # contract projects (P-) + layanan/sertifikasi objek (SRV-)
-        all_rows += rps.project_rows(ctx, search=search)
-        all_rows += rps.service_object_rows(ctx, search=search)
+    for year, month in ctx.periods:
+        pctx = ctx.for_period(year, month)
+        if 'all' in rtype_values or 'TF' in rtype_values:
+            all_rows += rps.tf_program_rows(pctx, search=search)
+        if 'all' in rtype_values or 'NTF_RESEARCH' in rtype_values:
+            all_rows += rps.research_object_rows(pctx, search=search)
+        if 'all' in rtype_values or 'NTF_PROJECT' in rtype_values:
+            # contract projects (P-) + layanan/sertifikasi objek (SRV-)
+            all_rows += rps.project_rows(pctx, search=search)
+            all_rows += rps.service_object_rows(pctx, search=search)
 
-    # normalize every row to the shared display shape (identical to detail pages)
+# normalize every row to the shared display shape (identical to detail pages)
     for r in all_rows:
         r['bulan'] = month_name(r['bulan'])
         if 'kode_akun' in r:
@@ -792,8 +803,8 @@ def data_revenue_list(request):
 
     def query_base():
         q = {'year': ctx.year, 'month': ctx.month}
-        if rtype not in ('all', 'Semua', ''):
-            q['type'] = rtype
+        if ctx.type_values and 'all' not in ctx.type_values:
+            q['type'] = ctx.type_values[0] if len(ctx.type_values) == 1 else ctx.type_values
         if ctx.organization is not None:
             q['org'] = ctx.organization.pk
         if ctx.pp is not None:
