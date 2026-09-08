@@ -6,8 +6,7 @@ Aplikasi monitoring & analisis kinerja keuangan organisasi/universitas — Reven
 
 ## Teknologi
 
-- Python 3.13 + Django 6.1
-- SQLite (development) / PostgreSQL (production via env)
+- MariaDB/MySQL (XAMPP `financial_dashboard`, default) — SQLite hanya utk Vercel cold start
 - Apache ECharts (trend chart)
 - Bootstrap Icons + CSS kustom corporate
 

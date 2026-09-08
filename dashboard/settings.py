@@ -12,6 +12,8 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+import dj_database_url  # noqa: E402 (parses DATABASE_URL -> Django settings)
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g(r9e+!%wd$#q+2wn)@nzaq0e4bf#=mk=0r9kub9%m5x6u$&wc')
 
@@ -63,22 +65,26 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dashboard.wsgi.application'
 
-# Database selection via DB_ENGINE env (dev default = SQLite):
-#   DB_ENGINE=mysql     -> MariaDB/MySQL (XAMPP phpMyAdmin, root/'' @127.0.0.1:3306)
-#   DB_ENGINE=postgres  -> PostgreSQL
-#   (unset)             -> SQLite file (local dev / Vercel cold start)
-if os.environ.get('DB_ENGINE') == 'mysql':
+# Database selection.
+#   1) DATABASE_URL set  -> use it (production: Neon PostgreSQL on Vercel;
+#                           local override when exported). No credentials are
+#                           hard-coded anywhere; read purely from env.
+#   2) DB_ENGINE=postgres -> PostgreSQL via discrete PG* env vars.
+#   3) otherwise          -> local MariaDB/MySQL (XAMPP financial_dashboard).
+#   VERCEL (no DATABASE_URL) falls back to /tmp SQLite so cold start works.
+_db_url = os.environ.get('DATABASE_URL')
+if _db_url:
     DATABASES = {
-        'default': {
-            'ENGINE': 'dashboard.db_backends.mariadb',
-            'NAME': os.environ.get('DB_NAME', 'financial_dashboard'),
-            'USER': os.environ.get('DB_USER', 'root'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-            'PORT': os.environ.get('DB_PORT', '3306'),
-            'OPTIONS': {'charset': 'utf8mb4'},
-        }
+        'default': dj_database_url.parse(
+            _db_url,
+            conn_max_age=600,
+            ssl_require='sslmode=require' in _db_url.lower() or 'neon.tech' in _db_url.lower(),
+        )
     }
+    # Serverless-friendly pooling is handled by Neon's pooled endpoint in the
+    # connection string; keep Django conservative.
+    if DATABASES['default']['ENGINE'].endswith('postgresql'):
+        DATABASES['default'].setdefault('CONN_MAX_AGE', 60)
 elif os.environ.get('DB_ENGINE') == 'postgres':
     DATABASES = {
         'default': {
@@ -90,14 +96,27 @@ elif os.environ.get('DB_ENGINE') == 'postgres':
             'PORT': os.environ.get('DB_PORT', '5432'),
         }
     }
-else:
-    # Vercel Lambda filesystem is read-only except /tmp; keep the sqlite file
-    # there so migrate/seed can run at cold start. Local dev keeps it in repo.
-    db_path = Path('/tmp/db.sqlite3') if os.environ.get('VERCEL') else BASE_DIR / 'db.sqlite3'
+elif os.environ.get('VERCEL'):
+    # Serverless cold start without DATABASE_URL: keep a scratch SQLite in /tmp
+    # so build/migrate can run (real deployments always set DATABASE_URL).
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': db_path,
+            'NAME': Path('/tmp/db.sqlite3'),
+        }
+    }
+else:
+    # Local default: MariaDB/MySQL (XAMPP). Backend shim relaxes Django 6's
+    # MariaDB >= 10.11 requirement and disables RETURNING below 10.5.
+    DATABASES = {
+        'default': {
+            'ENGINE': 'dashboard.db_backends.mariadb',
+            'NAME': os.environ.get('DB_NAME', 'financial_dashboard'),
+            'USER': os.environ.get('DB_USER', 'root'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+            'PORT': os.environ.get('DB_PORT', '3306'),
+            'OPTIONS': {'charset': 'utf8mb4'},
         }
     }
 

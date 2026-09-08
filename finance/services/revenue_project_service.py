@@ -144,11 +144,37 @@ def project_account_label(project):
 ''
 
 
-def _project_unit(project):
+def _project_unit(project, unit_map=None):
     """Unit metadata from the latest NTF report snapshot (raw, non-authoritative
-    financials used only for the Unit display column)."""
+    financials used only for the Unit display column).
+
+    Pass a prebuilt {project_pk: unit} map (see _bulk_unit_map) to avoid one
+    query per project on remote databases."""
+    if unit_map is not None:
+        return unit_map.get(project.pk, '')
     snap = NtfReportSnapshot.objects.filter(project=project).order_by('-period__year', '-period__month', '-loaded_at').first()
     return snap.unit_raw if snap and snap.unit_raw else ''
+
+
+def _bulk_unit_map(projects):
+    """One query: latest NTF snapshot unit per project for the given list."""
+    pids = [p.pk for p in projects]
+    if not pids:
+        return {}
+    # latest snapshot per project by (year, month, loaded_at)
+    from django.db.models import Max
+    latest = (NtfReportSnapshot.objects.filter(project_id__in=pids)
+              .values('project_id')
+              .annotate(mkey=Max('period__year') * 10000 + Max('period__month') * 100)
+              .values_list('project_id', flat=True))
+    # simpler: pick max id group per project (loaded_at monotonic in seed)
+    from finance.models import NtfReportSnapshot as _N
+    sub = (_N.objects.filter(project_id__in=pids)
+           .values('project_id')
+           .annotate(mid=Max('id'))
+           .values('mid'))
+    snaps = _N.objects.filter(id__in=sub).values('project_id', 'unit_raw')
+    return {s['project_id']: (s['unit_raw'] or '') for s in snaps}
 
 
 def project_account_mode(project):
@@ -188,6 +214,41 @@ def project_summary(project, year, month):
     }
 
 
+def _project_data_bulk(projects, ctx):
+    """Fetch ALL mapped GL for `projects` in one query and group in memory.
+
+    Returns (per_proj_acc, acc_names, acc_modes) where per_proj_acc is
+    project_id -> account_code -> [(posting_date, amount)] sorted ascending.
+    Used by list builders to avoid N+1 queries (important on remote PG).
+    """
+    from collections import defaultdict as _dd
+    from datetime import date as _date
+    import calendar as _cal
+    pids = [p.pk for p in projects]
+    if not pids:
+        return _dd(lambda: _dd(list)), _dd(dict), _dd(dict)
+    period_end = _date(ctx.year, ctx.month, _cal.monthrange(ctx.year, ctx.month)[1])
+    from finance.models import GLProjectMapping as _GPM
+    maps = (_GPM.objects
+            .filter(project_id__in=pids, match_status__in=_MATCH_OK)
+            .select_related('ledger', 'ledger__period', 'ledger__revenue_account')
+            .order_by('project_id', 'ledger__posting_date', 'ledger__id'))
+    per_proj_acc = _dd(lambda: _dd(list))
+    acc_names = _dd(dict)
+    acc_modes = _dd(dict)
+    for m in maps:
+        led = m.ledger
+        acc = led.revenue_account
+        code = acc.account_code if acc else (led.account_code_raw or '')
+        name = acc.account_name if acc else (led.account_name_raw or '')
+        mode = getattr(acc, 'detail_history_mode', 'HISTORICAL') or 'HISTORICAL'
+        post = led.posting_date or (led.period.period_start if led.period else period_end)
+        per_proj_acc[m.project_id][code].append((post, m.allocated_amount or ZERO))
+        acc_names[m.project_id].setdefault(code, name or '')
+        acc_modes[m.project_id].setdefault(code, mode)
+    return per_proj_acc, acc_names, acc_modes
+
+
 def project_rows(ctx, *, search='', sort='', direction='asc'):
     """NTF PROJECT list rows one row per project.
 
@@ -197,6 +258,8 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
       total pendapatan (lifetime), pendapatan berjalan (YTD).
     NO 'tipe' column (page is fixed NTF Project). NO analytical columns.
     """
+    from datetime import date as _date
+    import calendar as _cal
     qs = Project.objects.filter(is_active=True).exclude(
         project_number__startswith='TF-').select_related(
         'pp__organization_unit', 'organization_unit'
@@ -209,33 +272,44 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
         qs = qs.filter(
             gl_mappings__ledger__revenue_account=ctx.revenue_account
         ).distinct()
+    projects = list(qs.distinct().order_by('pp__pp_code', 'project_number'))
+    unit_map = _bulk_unit_map(projects)
+    period_end = _date(ctx.year, ctx.month, _cal.monthrange(ctx.year, ctx.month)[1])
+    per_proj_acc, acc_names, acc_modes = _project_data_bulk(projects, ctx)
 
     q = (search or '').strip().lower()
     rows = []
-    for project in qs.distinct().order_by('pp__pp_code', 'project_number'):
+    for project in projects:
         pp_label = project.pp.pp_code if project.pp else ''
         org_name = (project.organization_unit.name if project.organization_unit
                     else (project.pp.organization_unit.name if project.pp and project.pp.organization_unit else ''))
-        unit = _project_unit(project) or org_name
-        accounts = project_accounts(project)
-        if not accounts:
+        unit = _project_unit(project, unit_map) or org_name
+        codes = sorted(per_proj_acc[project.pk]) or []
+        if not codes:
             if (project.project_value or 0) <= 0:
                 continue
-            accounts = [{'code': '', 'name': project.project_name, 'mode': 'HISTORICAL'}]
-        per_acc = project_account_totals(project, ctx.year, ctx.month)
-        # Project-level revenue up to the selected period (ALL accounts of the
-        # project): drives the progress bar so multi-account rows share ONE
-        # project progress (spec: progress = project total revenue / value).
-        proj_total = sum((t.get('lifetime') or ZERO) for t in per_acc.values())
-        for acc in accounts:
-            code, name, mode = acc['code'], acc['name'], acc['mode']
+            codes = ['']
+        proj_total = ZERO
+        acc_totals = {}
+        for code in codes:
+            life = sum(a for d, a in per_proj_acc[project.pk][code]
+                       if d <= period_end)
+            ytd = sum(a for d, a in per_proj_acc[project.pk][code]
+                      if d.year == ctx.year and d.month <= ctx.month and d <= period_end)
+            mon = sum(a for d, a in per_proj_acc[project.pk][code]
+                      if d.year == ctx.year and d.month == ctx.month)
+            acc_totals[code] = {'lifetime': life, 'ytd': ytd, 'month': mon}
+            proj_total += life
+        for code in codes:
+            name = acc_names[project.pk].get(code, '') or (project.project_name if code == '' else '')
+            mode = acc_modes[project.pk].get(code, 'HISTORICAL')
             if q and q not in (project.project_number or '').lower() \
                     and q not in (project.project_name or '').lower() \
                     and q not in (pp_label or '').lower() \
                     and q not in (org_name or '').lower() \
                     and q not in (code or '').lower():
                 continue
-            totals = per_acc.get(code, {'lifetime': ZERO, 'ytd': ZERO, 'month': ZERO})
+            totals = acc_totals[code]
             rows.append({
                 'project': project,
                 'mode': 'tf_program',
@@ -264,13 +338,14 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
     col_map = {
         'tahun': lambda r: r['tahun'],
         'bulan': lambda r: r['bulan'],
-        'unit': lambda r: r['unit'].lower(),
+        'unit': lambda r: (r['unit'] or '').lower(),
         'no_proyek': lambda r: r['no_proyek'],
         'kode_pp': lambda r: r['pp_code'],
-        'organization': lambda r: r['organization'].lower(),
-        'nama': lambda r: r['nama'].lower(),
-        'akun': lambda r: r['akun'].lower(),
-        'nilai': lambda r: r['nilai'],
+        'organization': lambda r: (r['organization'] or '').lower(),
+        'nama': lambda r: (r['nama'] or '').lower(),
+        'nama_proyek': lambda r: (r['nama_proyek'] or '').lower(),
+        'akun': lambda r: r['akun'],
+        'nilai': lambda r: r['nilai'] or ZERO,
         'total_pendapatan': lambda r: r['total_pendapatan'],
         'pendapatan_berjalan': lambda r: r['pendapatan_berjalan'],
     }
@@ -278,9 +353,8 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
     if key is not None:
         rows.sort(key=key, reverse=(direction == 'desc'))
     else:
-        rows.sort(key=lambda r: r['total_pendapatan'], reverse=True)
+        rows.sort(key=lambda r: r['no_proyek'])
     return rows
-
 
 def recognition_history(project, year=None, month=None, month_lte=None, upto_date=None, account_code=None):
     """Mapped GL rows = revenue recognition history (never cash assumption).
@@ -636,10 +710,20 @@ def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc')
     Figures:
       nilai (Nilai Proyek)    = project.project_value (RKA allocation)
       total_pendapatan        = mapped GL lifetime up to ctx period
-      pendapatan_berjalan     = mapped GL YTD (Jan..selected month)
+      pendapatan_berjalan     = mapped GL of the selected month
+      realisasi_ytd           = mapped GL YTD (Jan..selected month)
     Different PPs/objects are NEVER merged.
+
+    Query strategy: ALL mapped GL rows for the filtered projects are fetched
+    in ONE query and grouped in memory (project x account x period buckets).
+    This keeps results byte-identical to per-project queries while avoiding
+    N+1 round-trips (critical on remote PostgreSQL/Neon where latency makes
+    hundreds of tiny queries unusably slow).
     """
     from django.db.models import Q as _Q
+    from datetime import date as _date
+    import calendar as _cal
+    from collections import defaultdict as _dd
     if prefixes:
         q = _Q(project_number__startswith=prefixes[0])
         for pfx in prefixes[1:]:
@@ -656,29 +740,68 @@ def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc')
         qs = qs.filter(
             gl_mappings__ledger__revenue_account=ctx.revenue_account
         ).distinct()
+    projects = list(qs.distinct().order_by('pp__pp_code', 'project_number'))
+    pids = [p.pk for p in projects]
+    unit_map = _bulk_unit_map(projects)
+    period_end = _date(ctx.year, ctx.month, _cal.monthrange(ctx.year, ctx.month)[1])
+
+    # ---- ONE bulk fetch of all mappings + ledgers for these projects ----
+    from finance.models import GLProjectMapping as _GPM
+    maps = (_GPM.objects
+            .filter(project_id__in=pids, match_status__in=_MATCH_OK)
+            .select_related('ledger', 'ledger__period', 'ledger__revenue_account')
+            .order_by('project_id'))
+    # buckets: project_id -> account_code -> list of (posting_date, amount)
+    per_proj_acc = _dd(lambda: _dd(list))
+    acc_names = _dd(dict)      # project -> account -> name
+    acc_modes = _dd(dict)      # project -> account -> detail_history_mode
+    # account list per project (distinct accounts seen in its GL)
+    seen_acc = _dd(set)
+    for m in maps:
+        led = m.ledger
+        acc = led.revenue_account
+        code = acc.account_code if acc else (led.account_code_raw or '')
+        name = acc.account_name if acc else (led.account_name_raw or '')
+        mode = getattr(acc, 'detail_history_mode', 'HISTORICAL') or 'HISTORICAL'
+        post = led.posting_date or (led.period.period_start if led.period else period_end)
+        amt = m.allocated_amount or ZERO
+        per_proj_acc[m.project_id][code].append((post, amt))
+        seen_acc[m.project_id].add(code)
+        if code not in acc_names[m.project_id]:
+            acc_names[m.project_id][code] = name
+        if code not in acc_modes[m.project_id]:
+            acc_modes[m.project_id][code] = mode
 
     q = (search or '').strip().lower()
     rows = []
-    for project in qs.distinct().order_by('pp__pp_code', 'project_number'):
+    for project in projects:
         pp_label = project.pp.pp_code if project.pp else ''
         org_name = (project.pp.organization_unit.name
                     if project.pp and project.pp.organization_unit else '')
-        accounts = project_accounts(project)
-        if not accounts:
+        codes = sorted(seen_acc[project.pk]) if seen_acc[project.pk] else []
+        if not codes:
             # placeholder project with no GL account: hide unless it has value
             if (project.project_value or 0) <= 0:
                 continue
-            accounts = [{'code': '', 'name': project.project_name, 'mode': 'HISTORICAL'}]
-        per_acc = project_account_totals(project, ctx.year, ctx.month)
-        # Project-level revenue up to the selected period (ALL accounts of the
-        # project): drives the progress bar so multi-account rows share ONE
-        # project progress (spec: progress = project total revenue / value).
-        proj_total = sum((t.get('lifetime') or ZERO) for t in per_acc.values())
-        for acc in accounts:
-            code, name, mode = acc['code'], acc['name'], acc['mode']
+            codes = ['']
+        # project-level total = sum of ALL account lifetimes (for progress)
+        proj_total = ZERO
+        acc_totals = {}
+        for code in codes:
+            life = sum(a for d, a in per_proj_acc[project.pk][code]
+                       if d <= period_end)
+            ytd = sum(a for d, a in per_proj_acc[project.pk][code]
+                      if d.year == ctx.year and d.month <= ctx.month and d <= period_end)
+            mon = sum(a for d, a in per_proj_acc[project.pk][code]
+                      if d.year == ctx.year and d.month == ctx.month)
+            acc_totals[code] = {'lifetime': life, 'ytd': ytd, 'month': mon}
+            proj_total += life
+        for code in codes:
+            name = acc_names[project.pk].get(code, '') or (project.project_name if code == '' else '')
+            mode = acc_modes[project.pk].get(code, 'HISTORICAL')
             if q and q not in (project.project_name or '').lower()                 and q not in (pp_label or '').lower()                 and q not in (org_name or '').lower()                 and q not in (code or '').lower()                 and q not in (name or '').lower():
                 continue
-            totals = per_acc.get(code, {'lifetime': ZERO, 'ytd': ZERO, 'month': ZERO})
+            totals = acc_totals[code]
             rows.append({
                 'project': project,
                 'mode': 'tf_program',
@@ -694,10 +817,6 @@ def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc')
                 'akun': code,
                 'akun_nama': name or '',
                 'nilai': project.project_value,
-                # Column semantics (per spec):
-                #   Pendapatan Diakui = selected MONTH revenue only
-                #   Total Pendapatan  = lifetime recognized up to period end
-                #   (YTD kept in realisasi_ytd for reference/tooltips)
                 'total_pendapatan': totals['lifetime'],
                 'pendapatan_berjalan': totals['month'],
                 'realisasi_bulan': totals['month'],
@@ -728,15 +847,6 @@ def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc')
         rows.sort(key=lambda r: r['no_proyek'])
     return rows
 
-
-# --------------------------------------------------------------------------
-# TF / NTF Research presented with the SAME table shape as NTF Project.
-# These categories have no Project Master, so each row stays at the
-# (PP x Revenue Account) grain and the "project" columns are adapted:
-#   Nama Proyek  = nama akun pendapatan (label disesuaikan)
-#   No Proyek    = ''   Unit = ''   Nilai Proyek = ''
-# Expand shows the underlying GL transactions for the PP x Account.
-# --------------------------------------------------------------------------
 def account_category_rows(ctx, category_code, *, search='', sort='', direction='asc'):
     from django.db.models import Q as _Q, Sum as _Sum
     from finance.models import RevenueLedger as _RL

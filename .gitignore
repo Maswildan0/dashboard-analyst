@@ -6,7 +6,7 @@ __pycache__/
 venv/
 
 # Django
-db.sqlite3
+/backups/
 revenue_dummy_v2.sqlite3
 /staticfiles/
 
@@ -22,3 +22,5 @@ node_modules/
 Thumbs.db
 .idea/
 .vscode/
+.vercel
+.env*

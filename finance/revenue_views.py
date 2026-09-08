@@ -563,11 +563,13 @@ def project_recognitions(request, project_id):
     detail_mode = 'PERIOD_ONLY' if is_period_only else 'HISTORICAL'
     is_tf_program = project.project_number.startswith('TF-')
     acc_name = summary.get('acc_name', '')
+    # Summary figures render in FULL rupiah (never compact 'M'/'T') so the
+    # recognition history panel shows exact amounts, e.g. Rp2.969.515.120.
     ctx_disp = {
-        'month': format_rupiah_compact(summary['recognized_month']),
-        'ytd': format_rupiah_compact(summary['ytd']),
-        'lifetime': format_rupiah_compact(summary['lifetime']),
-        'remaining': format_rupiah_compact(summary['remaining']),
+        'month': _rupiah(summary['recognized_month']),
+        'ytd': _rupiah(summary['ytd']),
+        'lifetime': _rupiah(summary['lifetime']),
+        'remaining': _rupiah(summary['remaining']),
         'pct': format_percent(summary['recognition_pct']),
         'detail_mode': detail_mode,
         'is_tf_program': is_tf_program,
