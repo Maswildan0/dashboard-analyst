@@ -24,6 +24,13 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
+Database initialization is explicit. Startup no longer runs migrations or
+generates sample data. Do **not** run seed commands against an existing source
+or a Neon migration target. For the MySQL-to-Neon work, read
+[the migration audit and access steps](docs/neon-migration.md).
+
+The optional sample-data command above is for a disposable local demo only.
+
 Buka `http://127.0.0.1:8000/financial/`.
 
 ## Struktur
@@ -64,4 +71,15 @@ python manage.py test finance
 
 ## Postgres production
 
-Set env: `DB_ENGINE=postgres DB_NAME DB_USER DB_PASSWORD DB_HOST DB_PORT`.
+`DATABASE_URL` takes precedence and requires PostgreSQL with SSL. Vercel cannot
+fall back to temporary SQLite. Configure `DJANGO_SECRET_KEY` on Vercel; never
+commit or paste its value. Python 3.13 is selected in `.python-version`.
+
+Legacy `DB_ENGINE=postgres` / `DB_ENGINE=mysql` with `DB_NAME DB_USER DB_PASSWORD
+DB_HOST DB_PORT` remains available when `DATABASE_URL` is absent. MySQL also
+requires `pip install -r requirements-migration.txt` on that workstation/runtime.
+
+To load one local file explicitly, set `DJANGO_ENV_FILE` to its path. Process
+environment variables take precedence. For a migration audit, prefer
+`scripts/run_migration_preflight.py`, which selects the source and target files
+separately and never prints connection strings.

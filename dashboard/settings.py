@@ -10,13 +10,28 @@ Hosts two applications:
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
+
+from .database_config import database_config
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load only the explicitly selected local file. Vercel supplies process envs.
+# Existing process variables take precedence; no automatic .env discovery.
+if os.environ.get('DJANGO_ENV_FILE'):
+    env_path = Path(os.environ['DJANGO_ENV_FILE'])
+    if not env_path.is_file():
+        raise ImproperlyConfigured('DJANGO_ENV_FILE does not point to a file.')
+    load_dotenv(env_path, override=False, interpolate=False)
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g(r9e+!%wd$#q+2wn)@nzaq0e4bf#=mk=0r9kub9%m5x6u$&wc')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
+DEBUG = os.environ.get('DJANGO_DEBUG', 'false' if os.environ.get('VERCEL') else 'true').lower() in ('1', 'true', 'yes')
+if os.environ.get('VERCEL') and not os.environ.get('DJANGO_SECRET_KEY'):
+    raise ImproperlyConfigured('DJANGO_SECRET_KEY must be configured on Vercel.')
 
 # Vercel sends the deployment host (e.g. dashboard-orpin-iota-64.vercel.app)
 # as HTTP_HOST; allow any host here the app serves public mock data only.
@@ -63,43 +78,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dashboard.wsgi.application'
 
-# Database selection via DB_ENGINE env (dev default = SQLite):
-#   DB_ENGINE=mysql     -> MariaDB/MySQL (XAMPP phpMyAdmin, root/'' @127.0.0.1:3306)
-#   DB_ENGINE=postgres  -> PostgreSQL
-#   (unset)             -> SQLite file (local dev / Vercel cold start)
-if os.environ.get('DB_ENGINE') == 'mysql':
-    DATABASES = {
-        'default': {
-            'ENGINE': 'dashboard.db_backends.mariadb',
-            'NAME': os.environ.get('DB_NAME', 'financial_dashboard'),
-            'USER': os.environ.get('DB_USER', 'root'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-            'PORT': os.environ.get('DB_PORT', '3306'),
-            'OPTIONS': {'charset': 'utf8mb4'},
-        }
-    }
-elif os.environ.get('DB_ENGINE') == 'postgres':
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'financial_dashboard'),
-            'USER': os.environ.get('DB_USER', 'postgres'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-            'PORT': os.environ.get('DB_PORT', '5432'),
-        }
-    }
-else:
-    # Vercel Lambda filesystem is read-only except /tmp; keep the sqlite file
-    # there so migrate/seed can run at cold start. Local dev keeps it in repo.
-    db_path = Path('/tmp/db.sqlite3') if os.environ.get('VERCEL') else BASE_DIR / 'db.sqlite3'
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': db_path,
-        }
-    }
+DATABASES = {'default': database_config(os.environ, BASE_DIR)}
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/ref/settings/#static-files

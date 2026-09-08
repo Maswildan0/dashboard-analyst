@@ -2,10 +2,7 @@
   "builds": [
     {
       "src": "dashboard/wsgi.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "15mb"
-      }
+      "use": "@vercel/python"
     },
     {
       "src": "public/**",
