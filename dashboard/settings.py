@@ -73,6 +73,15 @@ WSGI_APPLICATION = 'dashboard.wsgi.application'
 #   3) otherwise          -> local MariaDB/MySQL (XAMPP financial_dashboard).
 #   VERCEL (no DATABASE_URL) falls back to /tmp SQLite so cold start works.
 _db_url = os.environ.get('DATABASE_URL')
+if not _db_url:
+    # Vercel Neon integrations export DATABASE_POSTGRES_URL (pooled) and
+    # DATABASE_URL_UNPOOLED; fall back to them so the app uses Neon without
+    # requiring a duplicate DATABASE_URL variable.
+    for cand in ('DATABASE_POSTGRES_URL', 'DATABASE_URL_UNPOOLED', 'DATABASE_POSTGRES_URL_NON_POOLING'):
+        v = os.environ.get(cand)
+        if v and 'postgres' in v and '[SENSITIVE]' not in v:
+            _db_url = v
+            break
 if _db_url:
     DATABASES = {
         'default': dj_database_url.parse(
