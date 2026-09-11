@@ -6,10 +6,13 @@
        name="<dimension>[]" (plus a "Semua" master option)
      - submit = plain GET: checked values become ?dim[]=a&dim[]=b ; "Semua"
        checked means NO constraint for that dimension
-     - cascading: selecting Organization filters the PP option list in-place;
-       selecting Jenis (type) filters the Account option list in-place
-     - clicked-outside closes panels; "Semua" master clears specifics and
-       vice-versa; label renders "1 dipilih / N dipilih" compactly.
+     - cascading: selecting Organizations narrows the Kode PP option list;
+       selecting Jenis Revenue narrows the Akun option list. Multi-parent
+       selections show the union of their children.
+     - clicked-outside closes panels; "Pilih semua"/"Bersihkan" act on the
+       visible (cascaded) options; the trigger label renders the selection
+       compactly ("1 dipilih" / "N dipilih").
+     - chip summary uses the human label of each selected option.
 
    No framework — vanilla JS, works on all four revenue table pages.
 */
@@ -43,21 +46,30 @@
         account: '{n} akun',
     };
 
-    // parent -> child cascade by option value prefix
+    // parent -> child cascade (child option carries data-ms-parent)
     const CASCADE = [
-        { parent: 'org', child: 'pp', parentEmpty: 'Semua' },
-        { parent: 'jenis', child: 'account', parentEmpty: 'Semua' },
+        { parent: 'org', child: 'pp' },
+        { parent: 'jenis', child: 'account' },
     ];
 
     const msByName = (n) => form.querySelector('[data-multiselect][data-ms-name="' + n + '"]');
     const labelEl = (ms) => ms.querySelector('[data-ms-label]');
     const allBox = (ms) => ms.querySelector('[data-ms-all] input');
     const optionBoxes = (ms) => [...ms.querySelectorAll('[data-ms-option] input')].filter(b => b !== allBox(ms));
-    const valueOf = (cb) => (cb.checked ? cb.value : null);
+    const optionText = (input) => {
+        const opt = input.closest('[data-ms-option]');
+        const txt = opt && opt.querySelector('.df-option-text');
+        return txt ? txt.textContent.trim() : input.value;
+    };
+
+    /* ---------- chips (chipsBox declared early: refreshLabel -> updateChips) ---------- */
+    const chipsBox = form.parentElement.querySelector('[data-ms-chips]');
+    const chipsList = chipsBox ? chipsBox.querySelector('.df-chips-list') : null;
+    const clearAllBtn = chipsBox ? chipsBox.querySelector('[data-ms-clear-all-chips]') : null;
 
     function refreshLabel(ms) {
         const name = ms.dataset.msName;
-        const checked = optionBoxes(ms).filter(b => b.checked).map(b => b.value);
+        const checked = optionBoxes(ms).filter(b => b.checked);
         const all = allBox(ms);
         if (checked.length === 0 || all.checked) {
             labelEl(ms).textContent = DIM_EMPTY[name];
@@ -65,20 +77,63 @@
         } else {
             if (all) all.checked = false;
             labelEl(ms).textContent = checked.length === 1
-                ? checked[0]
+                ? optionText(checked[0])
                 : DIM_COUNT[name].replace('{n}', checked.length);
         }
         updateChips();
     }
 
-    /* ---------- chips (declared early: refreshLabel -> updateChips) ---------- */
-    const chipsBox = form.parentElement.querySelector('[data-ms-chips]');
-    const chipsList = chipsBox ? chipsBox.querySelector('.df-chips-list') : null;
-    const clearAllBtn = chipsBox ? chipsBox.querySelector('[data-ms-clear-all-chips]') : null;
+    /* ---------- visibility: search text AND parent cascade ---------- */
+    function isCascadeVisible(opt, parentSelected) {
+        if (!parentSelected.length) return true;
+        const needed = opt.dataset.msParent;
+        return !needed || parentSelected.includes(needed);
+    }
+
+    function parentSelectedValues(ms) {
+        const rule = CASCADE.find(r => r.child === ms.dataset.msName);
+        if (!rule) return [];
+        const parentMs = msByName(rule.parent);
+        if (!parentMs) return [];
+        return optionBoxes(parentMs).filter(b => b.checked).map(b => b.value);
+    }
+
+    function applyVisibility(ms) {
+        const search = ms.querySelector('[data-ms-search]');
+        const needle = (search ? search.value : '').trim().toLowerCase();
+        const parentSelected = parentSelectedValues(ms);
+        ms.querySelectorAll('[data-ms-option]').forEach((opt) => {
+            if (opt.hasAttribute('data-ms-all')) { opt.dataset.hidden = '0'; return; }
+            const matchesSearch = !needle || opt.textContent.trim().toLowerCase().includes(needle);
+            opt.dataset.hidden = matchesSearch && isCascadeVisible(opt, parentSelected) ? '0' : '1';
+        });
+    }
+
+    /* Cascade a parent change: hide non-matching children AND deselect any
+       child that the new parent selection no longer covers, so the submitted
+       query never carries stale PP/account values. */
+    function cascade(parentName) {
+        const rule = CASCADE.find(r => r.parent === parentName);
+        if (!rule) return;
+        const childMs = msByName(rule.child);
+        if (!childMs) return;
+        const parentMs = msByName(rule.parent);
+        const parentSelected = parentMs
+            ? optionBoxes(parentMs).filter(b => b.checked).map(b => b.value)
+            : [];
+        if (parentSelected.length) {
+            optionBoxes(childMs).forEach((b) => {
+                const opt = b.closest('[data-ms-option]');
+                const needed = opt && opt.dataset.msParent;
+                if (b.checked && needed && !parentSelected.includes(needed)) b.checked = false;
+            });
+        }
+        applyVisibility(childMs);
+        refreshLabel(childMs);
+    }
 
     /* ---------- dropdown open/close + search ---------- */
     form.querySelectorAll('[data-multiselect]').forEach((ms) => {
-        try {
         const trigger = ms.querySelector('[data-ms-trigger]');
         const panel = ms.querySelector('[data-ms-panel]');
         const search = ms.querySelector('[data-ms-search]');
@@ -87,16 +142,10 @@
         const open = () => {
             panel.hidden = false;
             trigger.setAttribute('aria-expanded', 'true');
-            if (search) { search.value = ''; filter(); search.focus(); }
+            if (search) { search.value = ''; applyVisibility(ms); search.focus(); }
+            else { applyVisibility(ms); }
         };
         const close = () => { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); };
-        const filter = () => {
-            const needle = (search ? search.value : '').toLowerCase();
-            ms.querySelectorAll('[data-ms-option]').forEach((opt) => {
-                const txt = opt.textContent.trim().toLowerCase();
-                opt.dataset.hidden = (needle && !txt.includes(needle)) ? '1' : '0';
-            });
-        };
 
         trigger.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -110,22 +159,29 @@
             if (!ms.contains(e.target)) close();
         });
         if (search) {
-            search.addEventListener('input', filter);
+            search.addEventListener('input', () => applyVisibility(ms));
             search.addEventListener('keydown', (e) => e.stopPropagation());
         }
         ms.querySelector('[data-ms-select-all]')?.addEventListener('click', () => {
-            optionBoxes(ms).forEach(b => { b.checked = true; });
+            optionBoxes(ms).forEach((b) => {
+                const opt = b.closest('[data-ms-option]');
+                if (opt && opt.dataset.hidden === '1') return; // only visible options
+                b.checked = true;
+            });
             const a = allBox(ms); if (a) a.checked = false;
             refreshLabel(ms);
+            cascade(name);
         });
         ms.querySelector('[data-ms-clear]')?.addEventListener('click', () => {
             optionBoxes(ms).forEach(b => { b.checked = false; });
             const a = allBox(ms); if (a) a.checked = true;
             refreshLabel(ms);
+            cascade(name);
         });
         allBox(ms)?.addEventListener('change', () => {
             if (allBox(ms).checked) optionBoxes(ms).forEach(b => { b.checked = false; });
             refreshLabel(ms);
+            cascade(name);
         });
         optionBoxes(ms).forEach((b) => {
             b.addEventListener('change', () => {
@@ -136,43 +192,25 @@
             });
         });
 
-        // label should already reflect server-side selections
+        // label + visibility should reflect the server-side selections on load
+        applyVisibility(ms);
         refreshLabel(ms);
-        } catch (e) { throw e; }
     });
 
-    /* ---------- cascading: narrow child option list from parent selection ----------
-       Child option carries data-ms-parent = the parent value it belongs to
-       (PP option -> organization pk; Account option -> category code).
-       When the parent has checked values, children whose data-ms-parent is
-       not among them are hidden; clearing the parent shows all children. */
-    function cascade(parentName) {
-        const rule = CASCADE.find(r => r.parent === parentName);
-        if (!rule) return;
-        const parentMs = msByName(rule.parent);
-        const childMs = msByName(rule.child);
-        if (!parentMs || !childMs) return;
-        const selected = optionBoxes(parentMs).filter(b => b.checked).map(b => b.value);
-        childMs.querySelectorAll('[data-ms-option]').forEach((opt) => {
-            if (opt.dataset.msAll !== undefined) return; // keep "Semua" always visible
-            const needed = opt.dataset.msParent;
-            opt.dataset.hidden = (selected.length && needed && !selected.includes(needed)) ? '1' : '0';
-        });
-    }
-
-
+    /* ---------- active filter chips ---------- */
     function activeSurvey() {
         const out = {};
         Object.keys(DIM_EMPTY).forEach((n) => {
             const ms = msByName(n);
             if (!ms) return;
-            const vals = optionBoxes(ms).filter(b => b.checked).map(b => b.value);
-            out[n] = vals;
+            out[n] = optionBoxes(ms).filter(b => b.checked).map(b => ({ value: b.value, label: optionText(b) }));
         });
-        const q = (form.querySelector('input[name="q"]').value || '').trim();
+        const qEl = form.querySelector('input[name="q"]');
+        const q = qEl ? (qEl.value || '').trim() : '';
         if (q) out.q = q;
         return out;
     }
+
     function updateChips() {
         if (!chipsBox || !chipsList) return;
         const v = activeSurvey();
@@ -195,17 +233,22 @@
             const vals = v[k];
             if (!vals.length) return;
             const label = DIM_LABEL[k] || k;
-            vals.forEach((val) => {
-                add(label, val, () => {
-                    const box = ms.querySelector('input[value="' + CSS.escape(val) + '"]');
+            vals.forEach((item) => {
+                add(label, item.label, () => {
+                    const box = ms.querySelector('input[value="' + CSS.escape(item.value) + '"]');
                     if (box) box.checked = false;
                     const a = allBox(ms); if (a) a.checked = (optionBoxes(ms).filter(b => b.checked).length === 0);
                     refreshLabel(ms); cascade(k);
                 });
             });
         });
-        if (v.q) add('Pencarian', v.q, () => { form.querySelector('input[name="q"]').value = ''; updateChips(); });
+        if (v.q) add('Pencarian', v.q, () => {
+            const qEl = form.querySelector('input[name="q"]');
+            if (qEl) qEl.value = '';
+            updateChips();
+        });
     }
+
     if (clearAllBtn) clearAllBtn.addEventListener('click', () => {
         Object.keys(DIM_EMPTY).forEach((n) => {
             const ms = msByName(n); if (!ms) return;
@@ -213,16 +256,16 @@
             const a = allBox(ms); if (a) a.checked = true;
             refreshLabel(ms);
         });
-        form.querySelector('input[name="q"]').value = '';
+        const qEl = form.querySelector('input[name="q"]');
+        if (qEl) qEl.value = '';
+        Object.keys(DIM_EMPTY).forEach((n) => cascade(n));
         updateChips();
     });
 
     /* ---------- submit ---------- */
-    // The form is a plain GET submit; checkboxes named x[] are serialized
-    // automatically as multiple ?x[]= values. Django's QueryDict.getlist
-    // reads both ?x= and ?x[]= (handled server-side in RevenueContext).
+    // Plain GET submit: checkboxes named x[] serialize to repeated ?x[]=
+    // values; Django's QueryDict.getlist reads them all (RevenueContext).
 
     /* ---------- init ---------- */
     updateChips();
-    Object.keys(DIM_EMPTY).forEach((n) => cascade(n));
 })();

@@ -136,8 +136,10 @@ class RevenueContext:
         # normalize 'Semua'/'all' -> empty (no constraint)
         self.year_values = _int_list([y for y in years if str(y) not in ('', 'Semua', 'all')])
         self.month_values = _int_list([m for m in months if str(m) not in ('', 'Semua', 'all')])
-        self.type_values = _str_list(
-            [t for t in (revenue_types or []) if str(t) not in ('', 'Semua', 'all', 'Semua Revenue')])
+        # Revenue categories are stored uppercase; normalising the requested
+        # type lets hand-written links work too (?type=ntf_project).
+        self.type_values = [t.upper() for t in _str_list(
+            [t for t in (revenue_types or []) if str(t) not in ('', 'Semua', 'all', 'Semua Revenue')])]
         self.org_values = _str_list(
             [o for o in (organization_ids or []) if str(o) not in ('', 'Semua', 'all', 'Semua Organization')])
         self.pp_values = _str_list(
@@ -280,3 +282,107 @@ class RevenueContext:
             pp_codes=[p.pp_code for p in self.pps],
             account_codes=[a.account_code for a in self.accounts],
         )
+
+
+# ---------------------------------------------------------------------------
+# Deep links into the revenue tables (card = slicer).
+#
+# The Revenue Overview (/dashboard/) exposes its own filter allowlists whose
+# values do NOT all exist in the finance master data. Translating them here —
+# and validating every value — keeps a card from ever opening an empty page,
+# and gives the template the same value maps so the client can rebuild the
+# links after an in-place filter apply.
+# ---------------------------------------------------------------------------
+def revenue_value_maps(years=(), direktorat=(), pp_codes=(), tipe_values=()):
+    """{dimension -> {overview value -> revenue query value(s) or None}}.
+
+    A value maps to a LIST because one overview option can cover several
+    revenue categories (Overview 'Tipe' NTF = NTF Project + NTF Research).
+    None means the overview value has no counterpart in the finance master
+    data (or is the "Semua" reset value), so it must be dropped instead of
+    being sent to a table that would then render nothing.
+    """
+    valid_years = {int(v) for v in FinancialPeriod.objects.values_list('year', flat=True).distinct()}
+    organizations = {}
+    for pk, code, name in OrganizationUnit.objects.filter(is_active=True).values_list('pk', 'code', 'name'):
+        for key in (code, name):
+            if key:
+                organizations.setdefault(str(key).strip().lower(), pk)
+    valid_pps = {str(v).strip().lower() for v in PPMaster.objects.filter(is_active=True).values_list('pp_code', flat=True)}
+    valid_types = set(RevenueCategory.objects.filter(is_active=True).values_list('code', flat=True))
+
+    # The Overview 'Tipe' filter splits revenue into TF vs NTF (the same split
+    # as the composition pie); NTF covers both NTF categories.
+    type_codes = {'TF': ['TF'], 'NTF': ['NTF_PROJECT', 'NTF_RESEARCH']}
+
+    def as_year(value):
+        try:
+            year = int(value)
+        except (TypeError, ValueError):
+            return None
+        return year if year in valid_years else None
+
+    def as_organization(value):
+        pk = organizations.get(str(value or '').strip().lower())
+        return [pk] if pk is not None else None
+
+    def as_pp(value):
+        raw = str(value or '').strip()
+        return [raw] if raw.lower() in valid_pps else None
+
+    def as_types(value):
+        codes = type_codes.get(str(value or '').strip().upper())
+        if not codes:
+            return None
+        matched = [c for c in codes if c in valid_types]
+        return matched or None
+
+    # Keys mirror the Revenue Overview filter names (dashboard.views.
+    # _dashboard_filters) so a value map is looked up by the same name.
+    return {
+        'tahun': {v: as_year(v) for v in years},
+        'direktorat': {v: as_organization(v) for v in direktorat},
+        'kodePP': {v: as_pp(v) for v in pp_codes},
+        'tipe': {v: as_types(v) for v in tipe_values},
+    }
+
+
+def revenue_detail_params(filters=None, period=None, value_maps=None):
+    """Query params ({name: [values]}) carrying Revenue Overview state.
+
+    filters: overview filters {'tipe','direktorat','kodePP','tahun'}
+    period:  (year, month) the overview cards summarise; the month is always
+             carried, the year is the fallback when 'tahun' is not a real
+             period year.
+    Param order is canonical (tahun, bulan, org, pp, jenis) so the links are
+    identical to the ones the client rebuilds from the same filter state.
+    """
+    f = filters or {}
+    maps = value_maps or revenue_value_maps(
+        years=[f.get('tahun')],
+        direktorat=[f.get('direktorat')],
+        pp_codes=[f.get('kodePP')],
+        tipe_values=[f.get('tipe')],
+    )
+    params = {}
+    year = maps['tahun'].get(f.get('tahun'))
+    if year is None and period is not None:
+        year = int(period[0])
+    if year is not None:
+        params[PARAM_YEARS + '[]'] = [year]
+    if period is not None:
+        params[PARAM_MONTHS + '[]'] = [int(period[1])]
+    for dimension, param in (('direktorat', PARAM_ORGS), ('kodePP', PARAM_PPS), ('tipe', PARAM_TYPES)):
+        values = maps.get(dimension, {}).get(f.get(dimension))
+        if values:
+            params[param + '[]'] = list(values)
+    return params
+
+
+def build_revenue_detail_url(route, params=None):
+    """`route` reversed + `params` (as built by revenue_detail_params)."""
+    from django.urls import reverse
+    from urllib.parse import urlencode
+    path = reverse(route)
+    query = urlencode(params or {}, doseq=True)
+    return f'{path}?{query}' if query else path

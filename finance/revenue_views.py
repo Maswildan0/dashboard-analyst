@@ -33,11 +33,20 @@ def _ctx_from_request(request):
 def _base_ctx(request, ctx=None, active_tab='revenue_overview'):
     ctx = ctx or _ctx_from_request(request)
     years, months = rsel.period_options()
-    opts = rsel.cascade_options(ctx.organization, ctx.revenue_type)
+    # Full option sets: never narrowed by the FIRST selected parent, so the
+    # client-side cascade can offer every value of every selected parent
+    # (multi-select). Empty selection == all parent values.
+    opts = rsel.cascade_options()
     last_sync = SimkugSyncLog.objects.filter(status__in=['SUCCESS', 'PARTIAL']).order_by('-finished_at').first()
-    # Multi-select option sets (all active master rows, regardless of current
-    # parent selection; JS cascade narrows PP/Account client-side).
+    # Dropdown option sets (master rows); PP/Account follow their parents
+    # below so cascading works even before the client JS runs.
     jenis = [('TF', 'TF'), ('NTF_RESEARCH', 'NTF Research'), ('NTF_PROJECT', 'NTF Project')]
+    # Cascade the option lists server-side too: PP options follow the selected
+    # Organizations, Account options follow the selected Jenis Revenue. With
+    # multiple parents this is the UNION of their children; with no parent
+    # selected everything is offered (client JS keeps cascading live).
+    _org_ids = {o.pk for o in ctx.organizations}
+    _cat_ids = {c.pk for c in ctx.categories}
     return {
         'ctx': ctx,
         'years': years,
@@ -48,10 +57,12 @@ def _base_ctx(request, ctx=None, active_tab='revenue_overview'):
         'accounts': opts['accounts'],
         'jenis_options': jenis,
         'tahun_options': years,
-        'bulan_options': months,
+        'bulan_options': [{'value': m, 'label': month_name(m)} for m in months],
         'org_options': opts['organizations'],
-        'pp_options': opts['pps'],
-        'account_options': opts['accounts'],
+        'pp_options': [p for p in opts['pps']
+                       if not _org_ids or p.organization_unit_id in _org_ids],
+        'account_options': [a for a in opts['accounts']
+                            if not _cat_ids or a.revenue_category_id in _cat_ids],
         'last_sync': last_sync,
         'assets_head': _assets_head(),
         'fonts_head': _fonts_head(),
@@ -181,12 +192,9 @@ def _gl_list(request, revenue_type):
     it is received), so Total Pendapatan == Pendapatan Berjalan == sum of the
     detail rows.
     """
-    ctx = _ctx_from_request(request)
-    if ctx.revenue_type in ('', 'all', 'Semua'):
-        ctx = RevenueContext(year=ctx.year, month=ctx.month, revenue_type=revenue_type,
-                             organization_id=ctx.organization.pk if ctx.organization else None,
-                             pp_code=ctx.pp.pp_code if ctx.pp else None,
-                             account_code=ctx.revenue_account.account_code if ctx.revenue_account else None)
+    # Page type is FIXED (TF / NTF Research): force it while keeping every
+    # other multi-select dimension (tahun/bulan/org/pp/akun) from the request.
+    ctx = RevenueContext(request, revenue_types=[revenue_type])
 
     search = (request.GET.get('q') or '').strip()
     sort = request.GET.get('sort') if request.GET.get('sort') in _NTF_SORTABLE else ''
@@ -198,16 +206,21 @@ def _gl_list(request, revenue_type):
     except (TypeError, ValueError):
         per_page = 20
 
-    if revenue_type == 'TF':
-        # Data TF = per program (Project TF-) x PP: one row per real TF
-        # program (Pendaftaran PIN SMBB, QRMO, Pusat Bahasa, …). Nilai =
-        # program's RKA allocation; figures from mapped GL (like NTF).
-        all_rows = rps.tf_program_rows(ctx, search=search,
-                                       sort=sort, direction=direction)
-    else:
-        # NTF Research = per objek hibah/penelitian (Project RS-) x PP.
-        all_rows = rps.research_object_rows(ctx, search=search,
-                                            sort=sort, direction=direction)
+    # Multi-period: one batch per selected (year, month); rows carry the
+    # period they belong to so Tahun/Bulan are exact under multi-select.
+    all_rows = []
+    for _year, _month in ctx.periods or [(ctx.year, ctx.month)]:
+        pctx = ctx.for_period(_year, _month)
+        if revenue_type == 'TF':
+            # Data TF = per program (Project TF-) x PP
+            all_rows += rps.tf_program_rows(pctx, search=search)
+        else:
+            # NTF Research = per objek hibah/penelitian (Project RS-) x PP
+            all_rows += rps.research_object_rows(pctx, search=search)
+    if sort:
+        _key = _row_sort_key(sort)
+        if _key is not None:
+            all_rows.sort(key=_key, reverse=(direction == 'desc'))
 
     # Normalise once for ALL rows (grand totals + page slice) so both the
     # row list and the grand-total line see the aliased fields.
@@ -221,7 +234,7 @@ def _gl_list(request, revenue_type):
             r['nama'] = r.get('nama_akun') or r.get('nama') or '-'
             r['total_pendapatan'] = r.get('realisasi_bulan', Decimal('0'))
             r['pendapatan_berjalan'] = r.get('realisasi_ytd', Decimal('0'))
-            r['month'] = ctx.month
+            r['month'] = r.get('month') or ctx.month
         r['nama'] = r['nama'] or '-'
         r['nama_proyek'] = (r.get('nama_proyek') or '').strip() or '-'
         # Pendapatan Pendaftaran (4111101, PERIOD_ONLY) is a period-specific
@@ -341,18 +354,7 @@ def _gl_list(request, revenue_type):
     tab = 'revenue_tf' if revenue_type == 'TF' else 'revenue_ntf_research'
 
     def query_base():
-        q = {'year': ctx.year, 'month': ctx.month}
-        if ctx.organization is not None:
-            q['org'] = ctx.organization.pk
-        if ctx.pp is not None:
-            q['pp'] = ctx.pp.pp_code
-        if ctx.revenue_account is not None:
-            q['account'] = ctx.revenue_account.account_code
-        if search:
-            q['q'] = search
-        if per_page != 20:
-            q['per_page'] = per_page
-        return q
+        return _filter_query(ctx, search, per_page, 20)
 
     def sort_url(col):
         q = query_base()
@@ -434,9 +436,17 @@ def ntf_project_list(request):
     except (TypeError, ValueError):
         per_page = 20
 
-    # NTF Project = contract projects (P-) + layanan/sertifikasi objek (SRV-)
-    all_rows = rps.project_rows(ctx, search=search, sort=sort, direction=direction)
-    all_rows += rps.service_object_rows(ctx, search=search, sort=sort, direction=direction)
+    # NTF Project = contract projects (P-) + layanan/sertifikasi objek (SRV-);
+    # one batch per selected (year, month) so multi-period selections work.
+    all_rows = []
+    for _year, _month in ctx.periods or [(ctx.year, ctx.month)]:
+        pctx = ctx.for_period(_year, _month)
+        all_rows += rps.project_rows(pctx, search=search)
+        all_rows += rps.service_object_rows(pctx, search=search)
+    if sort:
+        _key = _row_sort_key(sort)
+        if _key is not None:
+            all_rows.sort(key=_key, reverse=(direction == 'desc'))
     # contract projects reuse the same objek-row display shape
     for r in all_rows:
         if 'project_number' not in r:
@@ -507,18 +517,7 @@ def ntf_project_list(request):
     }
 
     def query_base():
-        q = {'year': ctx.year, 'month': ctx.month}
-        if ctx.organization is not None:
-            q['org'] = ctx.organization.pk
-        if ctx.pp is not None:
-            q['pp'] = ctx.pp.pp_code
-        if ctx.revenue_account is not None:
-            q['account'] = ctx.revenue_account.account_code
-        if search:
-            q['q'] = search
-        if per_page != 20:
-            q['per_page'] = per_page
-        return q
+        return _filter_query(ctx, search, per_page, 20)
 
     def sort_url(col):
         q = query_base()
@@ -558,13 +557,54 @@ def ntf_project_list(request):
 
 
 def _qs(query):
+    """Serialize a query dict to a URL query string.
+
+    Values may be scalars or lists; list items repeat the key so the
+    multi-select params survive sort / pagination links
+    (e.g. {'bulan[]': [7, 8]} -> 'bulan[]=7&bulan[]=8').
+    """
     import urllib.parse
     parts = []
     for k, v in query.items():
-        if v is None:
-            continue
-        parts.append(f'{k}={urllib.parse.quote(str(v), safe="")}')
+        items = v if isinstance(v, (list, tuple, set)) else [v]
+        for item in items:
+            if item is None:
+                continue
+            parts.append(f'{k}={urllib.parse.quote(str(item), safe="")}')
     return '&'.join(parts)
+
+
+def _filter_query(ctx, search, per_page, per_page_default):
+    """Query params preserving ALL multi-select filters + search + page size.
+
+    Used to build sort / pagination links so no selection is dropped when the
+    user re-sorts or moves between pages.
+    """
+    q = dict(ctx.query_args())
+    if search:
+        q['q'] = [search]
+    if per_page != per_page_default:
+        q['per_page'] = [per_page]
+    return q
+
+
+def _row_sort_key(sort):
+    """Row sort key for every revenue table (TF / Research / Project / Data)."""
+    return {
+        'tahun': lambda r: r.get('tahun') or 0,
+        'bulan': lambda r: r.get('bulan') or 0,
+        'jenis': lambda r: r.get('jenis') or '',
+        'unit': lambda r: (r.get('unit') or '').lower(),
+        'no_proyek': lambda r: r.get('no_proyek') or '',
+        'kode_pp': lambda r: r.get('pp_code') or '',
+        'organization': lambda r: (r.get('organization') or '').lower(),
+        'nama': lambda r: (r.get('nama') or '').lower(),
+        'nama_proyek': lambda r: (r.get('nama_proyek') or '').lower(),
+        'akun': lambda r: r.get('akun') or '',
+        'nilai': lambda r: r.get('nilai') or Decimal('0'),
+        'total_pendapatan': lambda r: r.get('total_pendapatan') or Decimal('0'),
+        'pendapatan_berjalan': lambda r: r.get('pendapatan_berjalan') or Decimal('0'),
+    }.get(sort)
 
 
 def _progress_color(pct):
@@ -717,7 +757,7 @@ def data_revenue_list(request):
             r['nama'] = r.get('nama_akun') or r.get('nama') or '-'
             r['total_pendapatan'] = r.get('realisasi_bulan', Decimal('0'))
             r['pendapatan_berjalan'] = r.get('realisasi_ytd', Decimal('0'))
-            r['month'] = ctx.month
+            r['month'] = r.get('month') or ctx.month
         r['nama'] = r['nama'] or '-'
         r['nama_proyek'] = (r.get('nama_proyek') or '').strip() or '-'
         # Pendaftaran PERIOD_ONLY: month batch => all three columns = month
@@ -747,24 +787,10 @@ def data_revenue_list(request):
                     or sq in (r.get('akun') or '').lower()
                     or sq in (r.get('nama') or '').lower()]
 
-    # shared sort
-    _cmap = {
-        'tahun': lambda r: r['tahun'],
-        'bulan': lambda r: r['bulan'],
-        'jenis': lambda r: r['jenis'],
-        'unit': lambda r: (r.get('unit') or '').lower(),
-        'no_proyek': lambda r: r.get('no_proyek') or '',
-        'kode_pp': lambda r: r.get('pp_code') or '',
-        'organization': lambda r: (r.get('organization') or '').lower(),
-        'nama': lambda r: (r.get('nama') or '').lower(),
-        'nama_proyek': lambda r: (r.get('nama_proyek') or '').lower(),
-        'akun': lambda r: r.get('akun') or '',
-        'nilai': lambda r: r.get('nilai') or Decimal('0'),
-        'total_pendapatan': lambda r: r.get('total_pendapatan') or Decimal('0'),
-        'pendapatan_berjalan': lambda r: r.get('pendapatan_berjalan') or Decimal('0'),
-    }
-    if sort in _cmap:
-        all_rows.sort(key=_cmap[sort], reverse=(direction == 'desc'))
+    # shared sort (same key map as TF / NTF Research / NTF Project lists)
+    _key = _row_sort_key(sort)
+    if _key is not None:
+        all_rows.sort(key=_key, reverse=(direction == 'desc'))
 
     total = len(all_rows)
     try:
@@ -802,20 +828,7 @@ def data_revenue_list(request):
             'NTF Project': _cnt.get('NTF Project', 0)}
 
     def query_base():
-        q = {'year': ctx.year, 'month': ctx.month}
-        if ctx.type_values and 'all' not in ctx.type_values:
-            q['type'] = ctx.type_values[0] if len(ctx.type_values) == 1 else ctx.type_values
-        if ctx.organization is not None:
-            q['org'] = ctx.organization.pk
-        if ctx.pp is not None:
-            q['pp'] = ctx.pp.pp_code
-        if ctx.revenue_account is not None:
-            q['account'] = ctx.revenue_account.account_code
-        if search:
-            q['q'] = search
-        if per_page != 25:
-            q['per_page'] = per_page
-        return q
+        return _filter_query(ctx, search, per_page, 25)
 
     def sort_url(col):
         q = query_base()

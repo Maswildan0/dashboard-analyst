@@ -46,18 +46,43 @@
 .fc-metrics b{display:block;font-size:14px;font-weight:700;color:#222;margin-top:3px;}
 .fc-yoy{color:#16A34A;}
 @media (max-width:900px){.fc-sources{grid-template-columns:1fr;}}
+/* Cards as slicers: summary + navigation. Hover/focus stays subtle — the card
+   must not read as a button. The base shadow lives here (instead of an inline
+   style) so :hover can lift it; the RKA card is summary-only and keeps the
+   flat shadow with no lift (no click affordance). */
+.kpi-card-shadow{box-shadow:0 4px 12px rgba(0,0,0,.0313726);}
+.kpi-nav-card{cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;}
+.kpi-nav-card:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(15,23,42,.10);border-color:#D8DEE7;}
+.kpi-nav-card:active{transform:translateY(0);box-shadow:0 4px 12px rgba(0,0,0,.0313726);}
+.kpi-nav-card:focus-visible{outline:2px solid rgba(200,16,46,.5);outline-offset:2px;}
+[data-kpi]:not(.kpi-nav-card){transition:none;}
+[data-kpi]:not(.kpi-nav-card):hover{box-shadow:0 4px 12px rgba(0,0,0,.0313726);}
+a.fc-card{display:block;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;}
+a.fc-card:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(15,23,42,.10);border-color:#D8DEE7;}
+a.fc-card:active{transform:translateY(0);box-shadow:0 1px 3px rgba(34,34,34,.06);}
+a.fc-card:focus-visible{outline:2px solid rgba(200,16,46,.5);outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){
+    .kpi-nav-card,a.fc-card{transition:none;}
+    .kpi-nav-card:hover,a.fc-card:hover{transform:none;}
+}
 </style>
     {# Filter card consistent with Data Tuition Fee page #}
     {% include 'components/revenue_filter_card.html' %}
 
 
-    {# KPI row #}
+    {# KPI row: the Realisasi card is the slicer into Data Revenue; RKA is summary-only. #}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {% for kpi in payload.kpis %}
-            <div class="relative overflow-hidden rounded-2xl bg-white border border-[#E2E8F0] p-5 cursor-pointer"
-                 data-kpi="{{ forloop.counter0 }}"
-                 data-period="{{ kpi.period }}"
-                 style="box-shadow:0px 4px 12px rgba(0,0,0,0.0313726);">
+            {% if kpi.link %}
+            <a href="{{ revenue_links|dict_get:kpi.link }}"
+               class="kpi-card-shadow kpi-nav-card relative overflow-hidden rounded-2xl bg-white border border-[#E2E8F0] p-5"
+               data-kpi="{{ forloop.counter0 }}"
+               data-revenue-link="{{ kpi.link }}"
+               title="Klik untuk melihat detail">
+            {% else %}
+            <div class="kpi-card-shadow relative overflow-hidden rounded-2xl bg-white border border-[#E2E8F0] p-5"
+                 data-kpi="{{ forloop.counter0 }}">
+            {% endif %}
                 <span class="absolute top-0 left-0 right-0 h-[4px]" style="background:{{ kpi.accent }};"></span>
                 <div class="flex items-center justify-between">
                     <span class="text-[#64748B] text-[13px] font-semibold leading-[16px]" data-kpi-title>{{ kpi.title }}</span>
@@ -84,7 +109,7 @@
                         </span>
                     {% endif %}
                 </div>
-            </div>
+            {% if kpi.link %}</a>{% else %}</div>{% endif %}
         {% endfor %}
     </div>
 
@@ -97,7 +122,7 @@
         </div>
         <div class="fc-sources">
             {% with s=composition.tf %}
-            <div class="fc-card">
+            <a class="fc-card" href="{{ revenue_links.tf }}" data-revenue-link="tf" title="Klik untuk melihat detail">
                 <div class="fc-card-head"><span>Tuition Fee</span><i class="fc-ico" style="background:rgba(200,16,46,.10);color:#C8102E;">🎓</i></div>
                 <div class="fc-value">{{ s.value_str }}</div>
                 <div class="fc-metrics">
@@ -105,10 +130,10 @@
                     <div><span>Achievement</span><b>{{ s.achievement }}</b></div>
                     <div><span>YoY</span><b class="fc-yoy">{{ s.yoy }}</b></div>
                 </div>
-            </div>
+            </a>
             {% endwith %}
             {% with s=composition.ntf_project %}
-            <div class="fc-card">
+            <a class="fc-card" href="{{ revenue_links.ntf_project }}" data-revenue-link="ntf_project" title="Klik untuk melihat detail">
                 <div class="fc-card-head"><span>NTF Project</span><i class="fc-ico" style="background:rgba(102,112,133,.12);color:#667085;">📦</i></div>
                 <div class="fc-value">{{ s.value_str }}</div>
                 <div class="fc-metrics">
@@ -116,10 +141,10 @@
                     <div><span>Achievement</span><b>{{ s.achievement }}</b></div>
                     <div><span>YoY</span><b class="fc-yoy">{{ s.yoy }}</b></div>
                 </div>
-            </div>
+            </a>
             {% endwith %}
             {% with s=composition.ntf_research %}
-            <div class="fc-card">
+            <a class="fc-card" href="{{ revenue_links.ntf_research }}" data-revenue-link="ntf_research" title="Klik untuk melihat detail">
                 <div class="fc-card-head"><span>NTF Research Income</span><i class="fc-ico" style="background:rgba(139,30,63,.10);color:#8B1E3F;">🔍</i></div>
                 <div class="fc-value">{{ s.value_str }}</div>
                 <div class="fc-metrics">
@@ -127,7 +152,7 @@
                     <div><span>Achievement</span><b>{{ s.achievement }}</b></div>
                     <div><span>YoY</span><b class="fc-yoy">{{ s.yoy }}</b></div>
                 </div>
-            </div>
+            </a>
             {% endwith %}
         </div>
         <div class="fc-bar-row">
@@ -258,7 +283,8 @@
 <script>
     window.__DASHBOARD__ = {{ payload_json|safe }};
     window.__DASHBOARD_URL__ = "{% url 'dashboard-data' %}";
-    window.__DETAIL_URL__ = "{% url 'realisasi' %}";
+    {# Destination of the chart / card drill-down (revenue slicer). #}
+    window.__REVENUE_DATA_URL__ = "{% url 'revenue:data' %}";
 </script>
 <script>
 (function () {

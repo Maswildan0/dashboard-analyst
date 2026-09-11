@@ -1,10 +1,13 @@
 {% comment %}Revenue table filter bar — multi-select dropdowns for EVERY filter
 (Tahun, Bulan, Jenis Revenue, Organization, Kode PP, Akun Pendapatan) plus a
-dedicated action row (search + Cari + Terapkan + Reset) so the card stays
-compact. Powered by revenue-multifilter.js (shared, all revenue tables).
+single compact action row: search + Cari + Terapkan + Reset.
 
-Query format: ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&org[]=..&pp[]=..&account[]=..
-"Semua ..." master option = no constraint for that dimension.
+Powered by revenue-multifilter.js (shared by Data Revenue, Data TF,
+Data NTF Research and Data NTF Project).
+
+Query format (repeated keys): ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&
+org[]=<pk>&pp[]=<code>&account[]=<code>. "Semua ..." master option = no
+constraint for that dimension.
 {% endcomment %}
 <div class="df-card" id="revenue-filter-card">
     <div class="df-card-head">
@@ -17,13 +20,9 @@ Query format: ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&org[]=..&pp[]=..&acco
                 <div class="df-head-desc">Pilih satu atau lebih nilai pada setiap filter</div>
             </div>
         </div>
-        <div class="df-head-actions">
-            <a class="df-btn df-btn-ghost" href="{{ request.path }}">Reset</a>
-        </div>
     </div>
 
     <form id="revenue-filter-form" class="df-form df-form-revenue2" method="GET">
-        {# ---- Row 1: dropdown filters (multi-select) ---- #}
         {% if show_type %}
         <div class="df-field" data-multiselect data-ms-name="jenis" data-ms-label="Jenis Revenue">
             <span class="df-label" id="df-lbl-jenis">Jenis Revenue</span>
@@ -34,7 +33,7 @@ Query format: ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&org[]=..&pp[]=..&acco
             <div class="df-panel" data-ms-panel hidden role="listbox" aria-labelledby="df-lbl-jenis">
                 <div class="df-panel-list">
                     <label class="df-option" data-ms-option data-ms-all>
-                        <input type="checkbox" name="jenis[]" value="Semua" {% if ctx.type_values|length == 0 %}checked{% endif %}>
+                        <input type="checkbox" name="jenis[]" value="Semua" {% if not ctx.type_values %}checked{% endif %}>
                         <span class="df-check" aria-hidden="true"></span>
                         <span class="df-option-text">Semua Revenue</span>
                     </label>
@@ -59,7 +58,7 @@ Query format: ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&org[]=..&pp[]=..&acco
             <div class="df-panel" data-ms-panel hidden role="listbox" aria-labelledby="df-lbl-tahun">
                 <div class="df-panel-list">
                     <label class="df-option" data-ms-option data-ms-all>
-                        <input type="checkbox" name="tahun[]" value="Semua" {% if ctx.year_values|length == 0 %}checked{% endif %}>
+                        <input type="checkbox" name="tahun[]" value="Semua" {% if not ctx.year_values %}checked{% endif %}>
                         <span class="df-check" aria-hidden="true"></span>
                         <span class="df-option-text">Semua tahun</span>
                     </label>
@@ -83,15 +82,15 @@ Query format: ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&org[]=..&pp[]=..&acco
             <div class="df-panel" data-ms-panel hidden role="listbox" aria-labelledby="df-lbl-bulan">
                 <div class="df-panel-list">
                     <label class="df-option" data-ms-option data-ms-all>
-                        <input type="checkbox" name="bulan[]" value="Semua" {% if ctx.month_values|length == 0 %}checked{% endif %}>
+                        <input type="checkbox" name="bulan[]" value="Semua" {% if not ctx.month_values %}checked{% endif %}>
                         <span class="df-check" aria-hidden="true"></span>
                         <span class="df-option-text">Semua bulan</span>
                     </label>
                     {% for m in bulan_options %}
                     <label class="df-option" data-ms-option>
-                        <input type="checkbox" name="bulan[]" value="{{ m }}" {% if m in ctx.month_values %}checked{% endif %}>
+                        <input type="checkbox" name="bulan[]" value="{{ m.value }}" {% if m.value in ctx.month_values %}checked{% endif %}>
                         <span class="df-check" aria-hidden="true"></span>
-                        <span class="df-option-text">{{ m }}</span>
+                        <span class="df-option-text">{{ m.label }}</span>
                     </label>
                     {% endfor %}
                 </div>
@@ -109,14 +108,18 @@ Query format: ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&org[]=..&pp[]=..&acco
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8"/></svg>
                     <input type="text" data-ms-search placeholder="Cari organization..." class="df-search-input" aria-label="Cari organization">
                 </div>
+                <div class="df-panel-actions">
+                    <button type="button" class="df-panel-link" data-ms-select-all>Pilih semua</button>
+                    <button type="button" class="df-panel-link" data-ms-clear>Bersihkan</button>
+                </div>
                 <div class="df-panel-list" data-ms-list>
                     <label class="df-option" data-ms-option data-ms-all>
-                        <input type="checkbox" name="org[]" value="Semua" {% if ctx.organization|length == 0 %}checked{% endif %}>
+                        <input type="checkbox" name="org[]" value="Semua" {% if not ctx.organizations %}checked{% endif %}>
                         <span class="df-check" aria-hidden="true"></span>
                         <span class="df-option-text">Semua Organization</span>
                     </label>
                     {% for o in org_options %}
-                    <label class="df-option" data-ms-option>
+                    <label class="df-option" data-ms-option data-ms-parent="{{ o.pk }}">
                         <input type="checkbox" name="org[]" value="{{ o.pk }}" {% if o in ctx.organizations %}checked{% endif %}>
                         <span class="df-check" aria-hidden="true"></span>
                         <span class="df-option-text">{{ o.name }}</span>
@@ -137,14 +140,18 @@ Query format: ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&org[]=..&pp[]=..&acco
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8"/></svg>
                     <input type="text" data-ms-search placeholder="Cari kode PP..." class="df-search-input" aria-label="Cari kode PP">
                 </div>
+                <div class="df-panel-actions">
+                    <button type="button" class="df-panel-link" data-ms-select-all>Pilih semua</button>
+                    <button type="button" class="df-panel-link" data-ms-clear>Bersihkan</button>
+                </div>
                 <div class="df-panel-list" data-ms-list>
                     <label class="df-option" data-ms-option data-ms-all>
-                        <input type="checkbox" name="pp[]" value="Semua" {% if ctx.pp|length == 0 %}checked{% endif %}>
+                        <input type="checkbox" name="pp[]" value="Semua" {% if not ctx.pps %}checked{% endif %}>
                         <span class="df-check" aria-hidden="true"></span>
                         <span class="df-option-text">Semua PP</span>
                     </label>
                     {% for p in pp_options %}
-                    <label class="df-option" data-ms-option data-ms-parent="{{ p.organization_unit_id|default:'' }}" data-ms-org-pk="{{ p.organization_unit_id|default:'' }}">
+                    <label class="df-option" data-ms-option data-ms-parent="{{ p.organization_unit_id|default:'' }}">
                         <input type="checkbox" name="pp[]" value="{{ p.pp_code }}" {% if p in ctx.pps %}checked{% endif %}>
                         <span class="df-check" aria-hidden="true"></span>
                         <span class="df-option-text">{{ p.pp_code }}</span>
@@ -165,9 +172,13 @@ Query format: ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&org[]=..&pp[]=..&acco
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8"/></svg>
                     <input type="text" data-ms-search placeholder="Cari akun..." class="df-search-input" aria-label="Cari akun">
                 </div>
+                <div class="df-panel-actions">
+                    <button type="button" class="df-panel-link" data-ms-select-all>Pilih semua</button>
+                    <button type="button" class="df-panel-link" data-ms-clear>Bersihkan</button>
+                </div>
                 <div class="df-panel-list" data-ms-list>
                     <label class="df-option" data-ms-option data-ms-all>
-                        <input type="checkbox" name="account[]" value="Semua" {% if ctx.revenue_account|length == 0 %}checked{% endif %}>
+                        <input type="checkbox" name="account[]" value="Semua" {% if not ctx.accounts %}checked{% endif %}>
                         <span class="df-check" aria-hidden="true"></span>
                         <span class="df-option-text">Semua Akun</span>
                     </label>
@@ -182,19 +193,16 @@ Query format: ?tahun[]=2026&bulan[]=7&bulan[]=8&jenis[]=TF&org[]=..&pp[]=..&acco
             </div>
         </div>
 
-        {# ---- Row 2: action row (search + buttons), always on its own line ---- #}
-        <div class="df-field df-search-row">
-            <span class="df-label df-label-empty" aria-hidden="true"></span>
-            <div class="df-input-wrap">
+        {# ---- Action row: search + Cari + Terapkan + Reset, always one line ---- #}
+        <div class="df-actionrow">
+            <div class="df-input-wrap df-search-grow">
                 <svg class="df-input-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8"/></svg>
                 <input type="text" name="q" value="{{ q }}" placeholder="Cari organization, kode PP, nama proyek, atau akun..." autocomplete="off" class="df-input">
             </div>
-        </div>
-        <div class="df-field df-actions">
-            <span class="df-label df-label-empty" aria-hidden="true"></span>
             <div class="df-action-btns">
-                <button type="submit" class="df-btn df-btn-primary" data-ms-apply>Terapkan</button>
-                <button type="button" class="df-btn df-btn-outline" data-ms-clear-all>Reset</button>
+                <button type="submit" class="df-btn df-btn-outline">Cari</button>
+                <button type="submit" class="df-btn df-btn-primary">Terapkan</button>
+                <a class="df-btn df-btn-ghost" href="{{ request.path }}">Reset</a>
             </div>
         </div>
         <input type="hidden" name="per_page" value="{{ per_page }}">

@@ -40,8 +40,8 @@ _FONT_FACE_TEMPLATE = """@font-face {{
 # Stable hashed filenames from the committed Vite build (public/build). Kept
 # hardcoded so the asset tags render even when the manifest file is not on
 # the Lambda filesystem (Vercel serves public/** as CDN static files).
-_CSS_FILE = 'assets/styles-C5UTFmiW.css'
-_JS_FILE = 'assets/app-COUFk9KT.js'
+_CSS_FILE = 'assets/styles-Fi6iS1TL.css'
+_JS_FILE = 'assets/app-B5aVAX5x.js'
 
 
 def _asset_url(name):
@@ -250,8 +250,10 @@ def _build_payload(tipe: str, direktorat: str, kode_pp: str, tahun):
 
     return {
         'kpis': [
-            {'title': 'Realisasi Bulan Berjalan', 'value': realisasi_bulan, 'icon': 'wallet', 'accent': '#EB3237', 'iconBg': '#ECFDF5', 'iconColor': '#EB3237', 'capaian': [f'{capaian_bulan}% Capaian', _capaian_color(capaian_bulan)], 'period': 'agustus'},
-            {'title': 'RKA Bulan Berjalan', 'value': target_rka_bulan, 'icon': 'folder', 'accent': '#5F5F60', 'iconBg': '#EFF6FF', 'iconColor': '#5F5F60', 'capaian': None, 'period': 'tahun'},
+            # 'link' names the destination key in revenue_links (set by
+            # _revenue_navigation); absent = summary only, not a navigation card.
+            {'title': 'Realisasi Bulan Berjalan', 'value': realisasi_bulan, 'icon': 'wallet', 'accent': '#EB3237', 'iconBg': '#ECFDF5', 'iconColor': '#EB3237', 'capaian': [f'{capaian_bulan}% Capaian', _capaian_color(capaian_bulan)], 'link': 'data'},
+            {'title': 'RKA Bulan Berjalan', 'value': target_rka_bulan, 'icon': 'folder', 'accent': '#5F5F60', 'iconBg': '#EFF6FF', 'iconColor': '#5F5F60', 'capaian': None},
         ],
         'chartA': {'bulan': bulan, 'rka': rka, 'realisasi': realisasi},
         'chartB': {
@@ -272,10 +274,45 @@ def _build_payload(tipe: str, direktorat: str, kode_pp: str, tahun):
     }
 
 
+def _revenue_navigation(filters, composition):
+    """Deep links from the Revenue Overview cards into the revenue tables.
+
+    The cards ARE the slicer: one click opens the matching table carrying the
+    filters active on this page. Values are validated against the finance
+    master data (see finance.services.revenue_context) so a card can never
+    open an empty page, and the same value maps are handed to the template so
+    the client can rebuild the links after an in-place filter apply.
+    """
+    from finance.services.revenue_context import (
+        build_revenue_detail_url, revenue_detail_params, revenue_value_maps,
+    )
+    value_maps = revenue_value_maps(
+        years=OPTIONS['tahun'],
+        direktorat=OPTIONS['direktorat'],
+        pp_codes=OPTIONS['kodePP'],
+        tipe_values=OPTIONS['tipe'],
+    )
+    period = None
+    if composition and composition.get('period_year'):
+        period = (composition['period_year'], composition['period_month'])
+    params = revenue_detail_params(filters, period, value_maps)
+    return {
+        'revenue_period': {'year': period[0], 'month': period[1]} if period else None,
+        'revenue_links': {
+            'data': build_revenue_detail_url('revenue:data', params),
+            'tf': build_revenue_detail_url('revenue:tf', params),
+            'ntf_research': build_revenue_detail_url('revenue:ntf-research', params),
+            'ntf_project': build_revenue_detail_url('revenue:ntf-project', params),
+        },
+        'revenue_filter_values': value_maps,
+    }
+
+
 def index(request):
     f = _dashboard_filters(request)
     pp_perf = _revenue_pp_performance(f.get('tahun'))
     tahun_label = pp_perf[0]['tahun_label'] if pp_perf else str(f.get('tahun'))
+    composition = _revenue_composition()
     return render(request, 'dashboard.html', {
         'options': OPTIONS,
         'filters': f,
@@ -285,9 +322,10 @@ def index(request):
         'assets_head': _assets_head(),
         'active': 'dashboard',
         'active_tab': 'revenue_overview',
-        'composition': _revenue_composition(),
+        'composition': composition,
         'pp_perf': pp_perf,
         'ctx_tahun_label': tahun_label,
+        **_revenue_navigation(f, composition),
     })
 
 
@@ -356,6 +394,10 @@ def _revenue_composition():
             'total': float(comp['total']),
             'valid': validate_revenue_composition(tf, ntf_p, ntf_r, tf + ntf_p + ntf_r),
             'period': f"{period.month:02d}/{period.year}",
+            # The real (year, month) behind 'period', used to carry the active
+            # period into the revenue table links.
+            'period_year': period.year,
+            'period_month': period.month,
             # Finance-page-compatible presentation structures.
             'prev_comp': prev_comp,
             'card': {

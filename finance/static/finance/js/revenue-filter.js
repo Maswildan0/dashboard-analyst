@@ -21,6 +21,38 @@
         return v;
     }
 
+    /* ---------- card deep links (card = slicer) ----------
+       Cards are real <a> elements, so they work without JS. Applying a filter
+       here is in-place (no reload), which would leave those hrefs stale; the
+       query is rebuilt through the shared builder owned by app.js
+       (window.revenueFilterQuery — the same one the chart drill-down uses, fed
+       by the same server-validated option contract). Only the query string is
+       replaced: each card keeps the destination path the server rendered.
+
+       The period month belongs to card links only (a chart click passes the
+       month that was clicked instead), so it is supplied here as an override.
+       Without the bundle (no server data) the server hrefs simply stand. */
+    function rebuildCardLinks() {
+        if (typeof window.revenueFilterQuery !== 'function') return;
+        const periodMonth = card.dataset.periodMonth || '';
+        const query = window.revenueFilterQuery(
+            periodMonth ? { month: periodMonth } : {}).toString();
+        document.querySelectorAll('a[data-revenue-link]').forEach((link) => {
+            link.setAttribute('href', query ? link.pathname + '?' + query : link.pathname);
+        });
+    }
+
+    /* Keep the page URL in step with the APPLIED filters: the overview filters
+       live in selects and are not in the URL otherwise, so a fresh render after
+       browser Back (Data Revenue -> Revenue Overview) would lose them.
+       replaceState keeps this out of the history stack. */
+    function syncUrl() {
+        const params = new URLSearchParams();
+        selects.forEach((sel) => { params.set(sel.dataset.filter, sel.value); });
+        history.replaceState(history.state, '',
+            location.pathname + (params.toString() ? '?' + params.toString() : ''));
+    }
+
     function countActive() {
         const v = currentValues();
         return selects.filter((sel) => v[sel.dataset.filter] !== DEFAULTS[sel.dataset.filter]).length;
@@ -74,6 +106,8 @@
             setTimeout(() => applyBtn.classList.remove('is-loading'), 400);
         }
         updateChips();
+        rebuildCardLinks();
+        syncUrl();
     }
 
     applyBtn.addEventListener('click', apply);
@@ -87,4 +121,9 @@
 
     // Selecting a value does not auto-apply; only Terapkan / chip-x / Reset do.
     updateChips();
+    // The cards summarise what is currently displayed, so their links always
+    // mirror the applied filters (server-rendered hrefs = no-JS baseline).
+    // The URL carries the same filters so Back from a destination restores them.
+    rebuildCardLinks();
+    syncUrl();
 })();

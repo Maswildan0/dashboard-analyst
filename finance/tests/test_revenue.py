@@ -735,3 +735,183 @@ class TestMultiFilterBackend(RevenueBase):
         r3 = self.client.get('/dashboard/revenue/data/?tahun[]=2026&bulan[]=8&q=Gedung')
         m4 = __import__('re').search(r'dari (\d+) data', r3.content.decode())
         self.assertEqual(int(m4.group(1)), 1)
+
+
+# 32. Multi-select filters on the category pages (TF / NTF Research / NTF
+#     Project): __in backend filtering, multi-period, link param preservation.
+class TestCategoryPageMultiSelect(RevenueBase):
+    def setUp(self):
+        super().setUp()
+        import re as _re
+        self.re = _re
+        from finance.models import Project, GLProjectMapping
+        self.org2 = OrganizationUnit.objects.create(
+            code='RI-IBSE', name='RI-IBSE', campus=self.campus, unit_type='OTHER')
+        self.pp2 = PPMaster.objects.create(pp_code='9110', organization_unit=self.org2)
+        self.p1 = Project.objects.create(
+            project_number='TF-4121135-9130-01', pp=self.pp,
+            project_name='Program Alpha', project_value=Decimal('100000000'), is_active=True)
+        self.p2 = Project.objects.create(
+            project_number='TF-4121135-9110-01', pp=self.pp2,
+            project_name='Program Beta', project_value=Decimal('200000000'), is_active=True)
+        self.org3 = OrganizationUnit.objects.create(
+            code='RI-DSSM', name='RI-DSSM', campus=self.campus, unit_type='OTHER')
+        self.pp3 = PPMaster.objects.create(pp_code='9120', organization_unit=self.org3)
+        self.p_rs = Project.objects.create(
+            project_number='RS-4130101-9110-01', pp=self.pp2,
+            project_name='Riset Gamma', project_value=Decimal('300000000'), is_active=True)
+        self.p_np = Project.objects.create(
+            project_number='P-9120-001', pp=self.pp3,
+            project_name='Gedung Delta', project_value=Decimal('400000000'), is_active=True)
+        mappings = [
+            (self.p1, self.pp, self.acc_tf),
+            (self.p2, self.pp2, self.acc_tf),
+            (self.p_rs, self.pp2, self.acc_nr),
+            (self.p_np, self.pp3, self.acc_np),
+        ]
+        for proj, pp, acc in mappings:
+            for month in (7, 8):
+                period = make_period(2026, month)
+                gl = self.gl(period, credit=Decimal('10000000'), account=acc,
+                             pp=pp, desc=proj.project_name, tx=f'{proj.pk}-{month}')
+                GLProjectMapping.objects.create(
+                    ledger=gl, project=proj, allocated_amount=gl.credit,
+                    match_method='PP+NAME', match_status='AUTO_MATCHED')
+
+    def _count(self, url, **params):
+        resp = self.client.get(url, params)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        m = self.re.search(r'dari (\d+) data', html)
+        return (int(m.group(1)) if m else 0), html
+
+    def test_tf_multi_month_and_org(self):
+        base = '/dashboard/revenue/tf/'
+        # both months, both orgs -> 2 projects x 2 periods
+        n, html = self._count(base, **{'tahun[]': ['2026'], 'bulan[]': ['7', '8']})
+        self.assertEqual(n, 4)
+        # one org -> half the rows
+        n1, _ = self._count(base, **{'tahun[]': ['2026'], 'bulan[]': ['7', '8'],
+                                     'org[]': [str(self.org.pk)]})
+        self.assertEqual(n1, 2)
+        n2, _ = self._count(base, **{'tahun[]': ['2026'], 'bulan[]': ['7', '8'],
+                                     'org[]': [str(self.org.pk), str(self.org2.pk)]})
+        self.assertEqual(n2, 4)
+        self.assertIn('Program Alpha', html)
+        self.assertIn('Program Beta', html)
+        # single period keeps one row per project
+        n8, _ = self._count(base, **{'tahun[]': ['2026'], 'bulan[]': ['8']})
+        self.assertEqual(n8, 2)
+
+    def test_multi_parent_pp_and_account_do_not_error(self):
+        base = '/dashboard/revenue/tf/'
+        n, _ = self._count(base, **{
+            'tahun[]': ['2026'], 'bulan[]': ['7', '8'],
+            'org[]': [str(self.org.pk), str(self.org2.pk)],
+            'pp[]': [self.pp.pp_code, self.pp2.pp_code],
+            'account[]': [self.acc_tf.account_code],
+        })
+        self.assertEqual(n, 4)
+        # pp narrowed to one parent
+        n_pp2, _ = self._count(base, **{
+            'tahun[]': ['2026'], 'bulan[]': ['8'], 'pp[]': [self.pp2.pp_code]})
+        self.assertEqual(n_pp2, 1)
+
+    def test_sort_and_page_links_preserve_multi_values(self):
+        base = '/dashboard/revenue/tf/'
+        _, html = self._count(base, **{
+            'tahun[]': ['2026'], 'bulan[]': ['7', '8'],
+            'org[]': [str(self.org.pk), str(self.org2.pk)]})
+        for needle in ('tahun[]=2026', 'bulan[]=7', 'bulan[]=8',
+                       f'org[]={self.org.pk}', f'org[]={self.org2.pk}'):
+            self.assertIn(needle, html, f'sort/page link dropped {needle}')
+        # per-page form preserves the same selections as hidden inputs
+        self.assertIn('name="bulan[]"', html)
+        self.assertIn('name="org[]"', html)
+
+    def test_research_and_project_pages_multi_month(self):
+        # NTF Research: one RS- objek, scoped by PP -> 1 row per selected month
+        r1, _ = self._count('/dashboard/revenue/ntf-research/',
+                            **{'tahun[]': ['2026'], 'bulan[]': ['8'],
+                               'pp[]': [self.pp2.pp_code]})
+        r2, _ = self._count('/dashboard/revenue/ntf-research/',
+                            **{'tahun[]': ['2026'], 'bulan[]': ['7', '8'],
+                               'pp[]': [self.pp2.pp_code]})
+        self.assertEqual(r1, 1)
+        self.assertEqual(r2, 2)
+        # NTF Project: one P- project, scoped by PP -> 1 row per selected month
+        n1, _ = self._count('/dashboard/revenue/ntf-project/',
+                            **{'tahun[]': ['2026'], 'bulan[]': ['8'],
+                               'pp[]': [self.pp3.pp_code]})
+        n2, _ = self._count('/dashboard/revenue/ntf-project/',
+                            **{'tahun[]': ['2026'], 'bulan[]': ['7', '8'],
+                               'pp[]': [self.pp3.pp_code]})
+        self.assertEqual(n1, 1)
+        self.assertEqual(n2, 2)
+
+    def test_option_lists_cascade_server_side(self):
+        # PP options follow the selected Organizations (union for multi).
+        _, html = self._count('/dashboard/revenue/tf/', **{
+            'tahun[]': ['2026'], 'bulan[]': ['8'], 'org[]': [str(self.org.pk)]})
+        pps = set(self.re.findall(r'name="pp\[\]" value="([^"]+)"', html)) - {'Semua'}
+        self.assertEqual(pps, {self.pp.pp_code})
+        _, html_both = self._count('/dashboard/revenue/tf/', **{
+            'tahun[]': ['2026'], 'bulan[]': ['8'],
+            'org[]': [str(self.org.pk), str(self.org2.pk)]})
+        pps_both = set(self.re.findall(r'name="pp\[\]" value="([^"]+)"', html_both)) - {'Semua'}
+        self.assertEqual(pps_both, {self.pp.pp_code, self.pp2.pp_code})
+        # Account options follow the selected Jenis Revenue.
+        _, dhtml = self._count('/dashboard/revenue/data/', **{
+            'tahun[]': ['2026'], 'bulan[]': ['8'], 'jenis[]': ['TF']})
+        accs = set(self.re.findall(r'name="account\[\]" value="([^"]+)"', dhtml)) - {'Semua'}
+        self.assertEqual(accs, {self.acc_tf.account_code})
+
+
+# 33. Data Revenue loads its filter state from the query string
+class TestDataRevenueQueryParams(RevenueBase):
+    URL = '/dashboard/revenue/data/'
+
+    def setUp(self):
+        super().setUp()
+        # The Tahun dropdown is built from FinancialPeriod, so the periods the
+        # links point at must exist for their options to render.
+        make_period(2025, 6)
+        make_period(2026, 6)
+
+    def _checked(self, url):
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+
+        def on(name):
+            return __import__('re').findall(
+                r'name="%s" value="([^"]*)" checked>' % __import__('re').escape(name), html)
+
+        return {'tahun': on('tahun[]'), 'bulan': on('bulan[]'),
+                'jenis': on('jenis[]'), 'org': on('org[]')}, html
+
+    def test_legacy_single_value_params_select_the_filters(self):
+        state, html = self._checked(self.URL + '?year=2026&month=6')
+        self.assertEqual(state['tahun'], ['2026'])
+        self.assertEqual(state['bulan'], ['6'])
+        self.assertIn('Juni', __import__('re').search(r'<title>([^<]*)</title>', html).group(1))
+
+    def test_type_param_is_case_insensitive(self):
+        # Hand-written links may use lowercase (?type=ntf_project).
+        state, _ = self._checked(self.URL + '?year=2026&month=6&type=ntf_project')
+        self.assertEqual(state['jenis'], ['NTF_PROJECT'])
+        state, _ = self._checked(self.URL + '?year=2026&month=6&type=NTF_RESEARCH')
+        self.assertEqual(state['jenis'], ['NTF_RESEARCH'])
+
+    def test_unknown_params_and_dimensions_are_ignored(self):
+        # 'unit' has no counterpart on this page: it must not break anything.
+        state, _ = self._checked(self.URL + '?year=2026&month=6&unit=2102&bogus=1')
+        self.assertEqual(state['tahun'], ['2026'])
+        self.assertEqual(state['bulan'], ['6'])
+        self.assertEqual(state['org'], ['Semua'])
+
+    def test_multi_month_selection_from_the_url(self):
+        state, html = self._checked(self.URL + '?tahun[]=2026&bulan[]=7&bulan[]=8')
+        self.assertEqual(state['bulan'], ['7', '8'])
+        # A slicer never carries a page number: pagination restarts at page 1.
+        self.assertNotIn('name="page"', html)

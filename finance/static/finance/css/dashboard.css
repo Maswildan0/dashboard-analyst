@@ -564,31 +564,6 @@ main.content .text-\[#64748B\] { color: #64748B; }
     word-break: break-word;
 }
 /* Grand total label spans across identity columns (col 7 for NTF: after 6 empties). */
-/* Search bar consistent height + spacing between filter/search/title/table. */
-.rev-search-form {
-    display: flex; align-items: center; gap: 8px;
-    margin: 18px 0 16px;
-    max-width: 560px;
-}
-.rev-search-input-wrap { position: relative; flex: 1; }
-.rev-search-input-wrap .rev-search-icon {
-    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-    width: 16px; height: 16px; color: #94A3B8; pointer-events: none;
-    display: flex; align-items: center; justify-content: center;
-}
-.rev-search-input {
-    width: 100%; height: 42px; border: 1px solid #CBD5E1; border-radius: 9px;
-    background: #fff; padding: 0 12px 0 36px; font-size: 13px; color: #1F2937;
-    font-family: inherit; transition: border-color .15s ease, box-shadow .15s ease;
-}
-.rev-search-input:focus { outline: none; border-color: #C8102E; box-shadow: 0 0 0 3px rgba(200,16,46,.12); }
-.rev-search-input::placeholder { color: #94A3B8; }
-.rev-search-btn {
-    height: 42px; padding: 0 18px; border: 0; border-radius: 9px;
-    background: #C8102E; color: #fff; font-size: 13px; font-weight: 600;
-    cursor: pointer; font-family: inherit; white-space: nowrap;
-}
-.rev-search-btn:hover { background: #A30D25; }
 .rev-table-card-outer { margin-top: 4px; }
 .rev-acc-cell .mono { font-family: 'Cousine', monospace; font-size: 12px; color: #475569; }
 

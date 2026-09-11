@@ -276,14 +276,23 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
         project_number__startswith='TF-').select_related(
         'pp__organization_unit', 'organization_unit'
     )
-    if ctx.organization is not None:
-        qs = qs.filter(pp__organization_unit=ctx.organization)
-    if ctx.pp is not None:
-        qs = qs.filter(pp=ctx.pp)
-    if ctx.revenue_account is not None:
+    # Multi-select: every selected parent applies via __in; an explicitly
+    # requested value that resolves to nothing yields an empty list (never
+    # silently ignored). Empty list = dimension not constrained.
+    if ctx.organizations:
+        qs = qs.filter(pp__organization_unit__in=ctx.organizations)
+    elif ctx.org_values:
+        qs = qs.none()
+    if ctx.pps:
+        qs = qs.filter(pp__in=ctx.pps)
+    elif ctx.pp_values:
+        qs = qs.none()
+    if ctx.accounts:
         qs = qs.filter(
-            gl_mappings__ledger__revenue_account=ctx.revenue_account
+            gl_mappings__ledger__revenue_account__in=ctx.accounts
         ).distinct()
+    elif ctx.account_values:
+        qs = qs.none()
     projects = list(qs.distinct().order_by('pp__pp_code', 'project_number'))
     unit_map = _bulk_unit_map(projects)
     period_end = _date(ctx.year, ctx.month, _cal.monthrange(ctx.year, ctx.month)[1])
@@ -745,14 +754,23 @@ def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc')
     else:
         qs = Project.objects.filter(is_active=True)
     qs = qs.select_related('pp__organization_unit', 'organization_unit')
-    if ctx.organization is not None:
-        qs = qs.filter(pp__organization_unit=ctx.organization)
-    if ctx.pp is not None:
-        qs = qs.filter(pp=ctx.pp)
-    if ctx.revenue_account is not None:
+    # Multi-select: every selected parent applies via __in; an explicitly
+    # requested value that resolves to nothing yields an empty list (never
+    # silently ignored). Empty list = dimension not constrained.
+    if ctx.organizations:
+        qs = qs.filter(pp__organization_unit__in=ctx.organizations)
+    elif ctx.org_values:
+        qs = qs.none()
+    if ctx.pps:
+        qs = qs.filter(pp__in=ctx.pps)
+    elif ctx.pp_values:
+        qs = qs.none()
+    if ctx.accounts:
         qs = qs.filter(
-            gl_mappings__ledger__revenue_account=ctx.revenue_account
+            gl_mappings__ledger__revenue_account__in=ctx.accounts
         ).distinct()
+    elif ctx.account_values:
+        qs = qs.none()
     projects = list(qs.distinct().order_by('pp__pp_code', 'project_number'))
     pids = [p.pk for p in projects]
     unit_map = _bulk_unit_map(projects)

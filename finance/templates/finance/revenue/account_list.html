@@ -9,20 +9,6 @@
     {# Filter toolbar Tipe dihilangkan (page fixed) #}
     {% include 'finance/revenue/_filters_multi.html' %}
 
-    {# Search bar #}
-    <form method="GET" action="{{ request.path }}" class="rev-search-form">
-        <div class="relative rev-search-input-wrap">
-            <svg class="rev-search-icon" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8"/></svg>
-            <input type="text" name="q" value="{{ q }}" placeholder="Cari organization, kode PP, atau akun..." class="rev-search-input" autocomplete="off">
-        </div>
-        <input type="hidden" name="year" value="{{ ctx.year }}">
-        <input type="hidden" name="month" value="{{ ctx.month }}">
-        {% if ctx.organization %}<input type="hidden" name="org" value="{{ ctx.organization.pk }}">{% endif %}
-        {% if ctx.pp %}<input type="hidden" name="pp" value="{{ ctx.pp.pp_code }}">{% endif %}
-        {% if ctx.revenue_account %}<input type="hidden" name="account" value="{{ ctx.revenue_account.account_code }}">{% endif %}
-        <button type="submit" class="rev-search-btn">Cari</button>
-    </form>
-
     {# Table Card #}
     <div class="bg-white border border-[#E2E8F0] rounded-xl rev-table-card-outer">
         {% if rows|length == 0 %}
@@ -114,11 +100,8 @@
         </select>
     </div>
     <form id="perpage" method="GET" action="{{ request.path }}">
-        <input type="hidden" name="year" value="{{ ctx.year }}">
-        <input type="hidden" name="month" value="{{ ctx.month }}">
-        {% if ctx.organization %}<input type="hidden" name="org" value="{{ ctx.organization.pk }}">{% endif %}
-        {% if ctx.pp %}<input type="hidden" name="pp" value="{{ ctx.pp.pp_code }}">{% endif %}
-        {% if ctx.revenue_account %}<input type="hidden" name="account" value="{{ ctx.revenue_account.account_code }}">{% endif %}
+        {# Preserve every multi-select filter when the page size changes. #}
+        {% for k, vs in ctx.query_args.items %}{% for v in vs %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}{% endfor %}
         {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
         {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
         {% if dir and sort %}<input type="hidden" name="dir" value="{{ dir }}">{% endif %}
