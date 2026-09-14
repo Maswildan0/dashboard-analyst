@@ -95,7 +95,44 @@ const barPopPlugin = {
 };
 
 Chart.register(barPopPlugin);
-Chart.register(ChartDataLabels);
+
+// ChartDataLabels is registered under ITS OWN id ('datalabels') but with every
+// hook guarded. The plugin reads `chart.$datalabels._labels` in
+// afterDatasetsDraw, and that expando is only populated by beforeUpdate /
+// afterUpdate. A draw that runs first (the responsive attach/resize path
+// renders before its debounced update lands) therefore dereferenced undefined
+// and threw `Cannot read properties of undefined (reading 'length')` inside
+// afterDatasetsDraw which aborted the whole chart render.
+//
+// The guard keeps the plugin's behaviour identical whenever the layout exists,
+// and makes it a no-op instead of a crash when it does not (a decorative
+// plugin must never take the chart down).
+const safeDataLabels = {
+    ...ChartDataLabels,
+    id: 'datalabels',
+    afterDatasetsDraw(chart, args, opts) {
+        const expando = chart.$datalabels;
+        if (!expando || !Array.isArray(expando._labels)) return;
+        return ChartDataLabels.afterDatasetsDraw.call(this, chart, args, opts);
+    },
+    afterUpdate(chart, args, opts) {
+        const expando = chart.$datalabels;
+        if (!expando || !Array.isArray(expando._datasets)) return;
+        return ChartDataLabels.afterUpdate.call(this, chart, args, opts);
+    },
+    afterDatasetUpdate(chart, args, opts) {
+        const expando = chart.$datalabels;
+        if (!expando || !Array.isArray(expando._datasets)) return;
+        return ChartDataLabels.afterDatasetUpdate.call(this, chart, args, opts);
+    },
+    beforeEvent(chart, args, opts) {
+        const expando = chart.$datalabels;
+        if (!expando || !Array.isArray(expando._labels)) return;
+        return ChartDataLabels.beforeEvent.call(this, chart, args, opts);
+    },
+};
+
+Chart.register(safeDataLabels);
 
 // Chart labels -> month NUMBER. The revenue tables filter by number, never by
 // month name, so every slicer resolves the clicked month here. Accepts the
@@ -160,8 +197,45 @@ function validData(v) {
     return Array.isArray(v) ? v.filter(function (n) { return typeof n === 'number' && Number.isFinite(n); }) : [];
 }
 
+// Chart.js labels: always an array. Anything else (undefined/null) would make
+// the plugins that walk `chart.data.labels` throw.
+function labelsArr(v) {
+    return Array.isArray(v) ? v : [];
+}
+
+function canvasFor(key) {
+    return document.getElementById('chart' + key);
+}
+
+// Destroy whatever Chart.js instance owns this canvas, then clear our own
+// reference. `Chart.getChart(canvas)` is the authoritative registry lookup: if
+// a previous `new Chart(...)` registered an instance but the assignment to
+// `charts[key]` never ran (the constructor threw), the map still looks empty
+// while the canvas is in fact occupied — which is exactly what produced
+// "Canvas is already in use. Chart with ID '0' must be destroyed before the
+// canvas with ID 'chartA' can be reused."
 function destroyChart(key) {
-    if (charts[key]) { charts[key].destroy(); charts[key] = null; }
+    const canvas = canvasFor(key);
+    // 'B' is a container div in bars mode, and Chart.getChart() only resolves
+    // real canvases — guard so the lookup can never be handed a div.
+    if (canvas && canvas.tagName === 'CANVAS') {
+        const registered = Chart.getChart(canvas);
+        if (registered) registered.destroy();
+    }
+    if (charts[key]) {
+        charts[key].destroy();
+        charts[key] = null;
+    }
+}
+
+// The ONE way a chart is created on a reusable canvas: never construct a
+// second Chart.js instance on a canvas that already has one.
+function recreateChart(key, config) {
+    destroyChart(key);
+    const canvas = canvasFor(key);
+    if (!canvas) return null;
+    charts[key] = new Chart(canvas, config);
+    return charts[key];
 }
 
 function setChartVisible(id, visible) {
@@ -212,22 +286,28 @@ function renderDashboard(payload, animateKpis) {
         var ca = payload.chartA;
         if (ca && Array.isArray(ca.bulan) && Array.isArray(ca.rka) && Array.isArray(ca.realisasi)) {
             var aMax = autoMax(ca.rka.concat(ca.realisasi));
+            // Normalise before handing anything to Chart.js: labels stay
+            // strings (validData only keeps finite numbers), series are
+            // number arrays, so the plugin layer never sees undefined.
+            var aLabels = labelsArr(ca.bulan);
+            var aRka = validData(ca.rka);
+            var aRealisasi = validData(ca.realisasi);
             if (!charts.A) {
-                charts.A = new Chart(document.getElementById('chartA'), {
+                recreateChart('A', {
                     type: 'bar',
                     data: {
-                        labels: ca.bulan,
+                        labels: aLabels,
                         datasets: [
-                            barDataset(ca.rka, GRAY, 'RKA'),
-                            barDataset(ca.realisasi, RED, 'Realisasi')
+                            barDataset(aRka, GRAY, 'RKA'),
+                            barDataset(aRealisasi, RED, 'Realisasi')
                         ]
                     },
                     options: baseOptions(aMax, 'Jt')
                 });
             } else {
-                charts.A.data.labels = ca.bulan;
-                charts.A.data.datasets[0].data = validData(ca.rka);
-                charts.A.data.datasets[1].data = validData(ca.realisasi);
+                charts.A.data.labels = aLabels;
+                charts.A.data.datasets[0].data = aRka;
+                charts.A.data.datasets[1].data = aRealisasi;
                 charts.A.options.scales.y.max = aMax;
                 charts.A.options.scales.y.ticks.stepSize = aMax / 5;
                 charts.A.update();
@@ -246,15 +326,19 @@ function renderDashboard(payload, animateKpis) {
         var cd = payload.chartD;
         if (cd && Array.isArray(cd.bulan) && Array.isArray(cd.tahunLalu) && Array.isArray(cd.tahunSekarang) && Array.isArray(cd.capaian)) {
             var dMax = autoMax(cd.tahunLalu.concat(cd.tahunSekarang));
+            var dLabels = labelsArr(cd.bulan);
+            var dNow = validData(cd.tahunSekarang);
+            var dPrev = validData(cd.tahunLalu);
+            var dCapaian = validData(cd.capaian);
             if (!charts.D) {
-                charts.D = new Chart(document.getElementById('chartD'), {
+                recreateChart('D', {
                     type: 'line',
                     data: {
-                        labels: cd.bulan,
+                        labels: dLabels,
                         datasets: [
-                            { label: 'Tahun Ini', data: cd.tahunSekarang, borderColor: RED, backgroundColor: RED, pointBackgroundColor: RED, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
-                            { label: 'Tahun Sebelum', data: cd.tahunLalu, borderColor: GRAY, backgroundColor: GRAY, pointBackgroundColor: GRAY, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
-                            { label: 'Capaian', data: cd.capaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y1' }
+                            { label: 'Tahun Ini', data: dNow, borderColor: RED, backgroundColor: RED, pointBackgroundColor: RED, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
+                            { label: 'Tahun Sebelum', data: dPrev, borderColor: GRAY, backgroundColor: GRAY, pointBackgroundColor: GRAY, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
+                            { label: 'Capaian', data: dCapaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y1' }
                         ]
                     },
                     options: {
@@ -285,24 +369,24 @@ function renderDashboard(payload, animateKpis) {
                     },
                 });
             } else {
-                charts.D.data.labels = cd.bulan;
-                charts.D.data.datasets[0].data = validData(cd.tahunSekarang);
-                charts.D.data.datasets[1].data = validData(cd.tahunLalu);
-                charts.D.data.datasets[2].data = validData(cd.capaian);
+                charts.D.data.labels = dLabels;
+                charts.D.data.datasets[0].data = dNow;
+                charts.D.data.datasets[1].data = dPrev;
+                charts.D.data.datasets[2].data = dCapaian;
                 charts.D.options.scales.y.max = dMax;
                 charts.D.options.scales.y.ticks.stepSize = dMax / 5;
                 charts.D.update();
             }
             setChartVisible('chartD', true);
             if (!charts.E) {
-                charts.E = new Chart(document.getElementById('chartE'), {
+                recreateChart('E', {
                     type: 'bar',
                     data: {
-                        labels: cd.bulan,
+                        labels: dLabels,
                         datasets: [
-                            barDataset(cd.tahunLalu, GRAY, 'Tahun Sebelum'),
-                            barDataset(cd.tahunSekarang, RED, 'Tahun Ini'),
-                            { label: 'Capaian', type: 'line', data: cd.capaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0, yAxisID: 'y1' }
+                            barDataset(dPrev, GRAY, 'Tahun Sebelum'),
+                            barDataset(dNow, RED, 'Tahun Ini'),
+                            { label: 'Capaian', type: 'line', data: dCapaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0, yAxisID: 'y1' }
                         ]
                     },
                     options: {
@@ -333,10 +417,10 @@ function renderDashboard(payload, animateKpis) {
                     },
                 });
             } else {
-                charts.E.data.labels = cd.bulan;
-                charts.E.data.datasets[0].data = validData(cd.tahunLalu);
-                charts.E.data.datasets[1].data = validData(cd.tahunSekarang);
-                charts.E.data.datasets[2].data = validData(cd.capaian);
+                charts.E.data.labels = dLabels;
+                charts.E.data.datasets[0].data = dPrev;
+                charts.E.data.datasets[1].data = dNow;
+                charts.E.data.datasets[2].data = dCapaian;
                 charts.E.options.scales.y.max = dMax;
                 charts.E.options.scales.y.ticks.stepSize = dMax / 5;
                 charts.E.update();
@@ -404,6 +488,10 @@ function renderChartB(items) {
 function renderChartBPie(slices) {
     const holder = document.getElementById('chartB');
     if (!holder) return;
+    // Normalise before Chart.js: labels/data/colors must all be arrays of the
+    // same length, never undefined.
+    const rows = Array.isArray(slices) ? slices.filter(function (s) { return s && typeof s === 'object'; }) : [];
+    if (!rows.length) { showChartBEmpty(); return; }
     holder.innerHTML = '';
     const wrapEl = document.createElement('div');
     wrapEl.className = 'relative flex-1 flex items-center justify-center min-h-[310px]';
@@ -415,14 +503,16 @@ function renderChartBPie(slices) {
     const card = holder.closest('.rounded-2xl');
     const h2 = card ? card.querySelector('h2') : null;
     if (h2) h2.textContent = 'Komposisi Realisasi TF & NTF';
-    if (charts.B) { charts.B.destroy(); charts.B = null; }
+    // Same destroy-before-create contract as every other canvas (the holder was
+    // just emptied, so the lookup is the safety net for a zombie instance).
+    destroyChart('B');
     charts.B = new Chart(canvas, {
         type: 'doughnut',
         data: {
-            labels: slices.map((s) => s.label),
+            labels: rows.map((s) => s.label),
             datasets: [{
-                data: slices.map((s) => s.value),
-                backgroundColor: slices.map((s) => s.color),
+                data: rows.map((s) => s.value),
+                backgroundColor: rows.map((s) => s.color),
                 borderWidth: 2,
                 borderColor: '#ffffff',
                 // Slice "explodes" away from center when hovered (pop).
@@ -922,6 +1012,10 @@ function toggleChartFullscreen(canvas, card) {
     const existing = document.querySelector('.chart-fullscreen');
     if (existing) {
         document.exitFullscreen && document.exitFullscreen();
+        // The fullscreen copy owns a Chart instance over its own canvas; it
+        // must be destroyed with it, otherwise every open/close leaks a chart
+        // and its ResizeObserver.
+        if (existing.__fsTeardown) existing.__fsTeardown();
         existing.remove();
         return;
     }
@@ -982,12 +1076,26 @@ function toggleChartFullscreen(canvas, card) {
         }
     });
     ro.observe(body);
+    // One teardown path for every way the overlay can close (Tutup button, the
+    // toolbar toggle, or the fullscreen API itself).
+    fs.__fsTeardown = () => {
+        ro.disconnect();
+        fsCharts.forEach((c) => c.destroy());
+        fsCharts.length = 0;
+    };
     // fullscreen API on the container
     if (fs.requestFullscreen) fs.requestFullscreen();
     fs.querySelector('[data-close]').addEventListener('click', () => {
         if (document.fullscreenElement) document.exitFullscreen();
+        fs.__fsTeardown();
         fs.remove();
     });
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && fs.isConnected) {
+            fs.__fsTeardown();
+            fs.remove();
+        }
+    }, { once: true });
     fs.querySelectorAll('[data-dl]').forEach((b) => {
         b.addEventListener('click', () => downloadChart(clone, b.dataset.dl));
     });

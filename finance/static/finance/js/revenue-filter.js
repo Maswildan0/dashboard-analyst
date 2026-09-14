@@ -91,8 +91,15 @@
         });
     }
 
+    // One in-flight render at a time: repeated clicks must not start a second
+    // refresh whose render could race the first one's chart lifecycle. The
+    // guard complements (never replaces) the destroy-before-create contract in
+    // the bundle.
+    let rendering = false;
+
     async function apply() {
-        if (applyBtn.classList.contains('is-loading')) return;
+        if (rendering) return;
+        rendering = true;
         applyBtn.classList.add('is-loading');
         try {
             if (window.__refreshDashboard) {
@@ -103,7 +110,8 @@
                 selects.forEach((sel) => sel.dispatchEvent(ev));
             }
         } finally {
-            setTimeout(() => applyBtn.classList.remove('is-loading'), 400);
+            rendering = false;
+            applyBtn.classList.remove('is-loading');
         }
         updateChips();
         rebuildCardLinks();
