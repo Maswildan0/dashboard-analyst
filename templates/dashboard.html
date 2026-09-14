@@ -276,7 +276,6 @@ a.fc-card:focus-visible{outline:2px solid rgba(200,16,46,.5);outline-offset:2px;
             <span class="rr-col-org">Organization / Direktorat</span>
             <span class="rr-col-num">Total RKA YTD</span>
             <span class="rr-col-num">Total Actual YTD</span>
-            <span class="rr-col-num">Variance</span>
             <span class="rr-col-ach">Achievement</span>
             <span class="rr-col-act"></span>
         </div>
@@ -296,7 +295,6 @@ a.fc-card:focus-visible{outline:2px solid rgba(200,16,46,.5);outline-offset:2px;
                     </span>
                     <span class="rr-col-num tabular-nums">{{ o.rka_disp }}</span>
                     <span class="rr-col-num tabular-nums rr-actual">{{ o.actual_disp }}</span>
-                    <span class="rr-col-num tabular-nums {% if not o.variance_zero %}{% if o.variance < 0 %}rr-neg{% else %}rr-pos{% endif %}{% endif %}">{{ o.variance_disp }}</span>
                     <span class="rr-col-ach">
                         <span class="rr-badge rr-badge-{{ o.ach_tier }}">{{ o.ach_disp }}</span>
                         <span class="rr-bar"><span class="rr-bar-fill rr-fill-{{ o.ach_tier }}" style="width:{{ o.ach_width }}%;"></span></span>
@@ -315,7 +313,6 @@ a.fc-card:focus-visible{outline:2px solid rgba(200,16,46,.5);outline-offset:2px;
                                     <th class="rr-d-acc">Nama Akun</th>
                                     <th class="rr-d-num">RKA YTD</th>
                                     <th class="rr-d-num">Actual YTD</th>
-                                    <th class="rr-d-num">Variance</th>
                                     <th class="rr-d-ach">Achievement</th>
                                 </tr>
                             </thead>
@@ -327,14 +324,13 @@ a.fc-card:focus-visible{outline:2px solid rgba(200,16,46,.5);outline-offset:2px;
                                     <td class="rr-d-acc" title="{{ r.account_name }}"><span class="rr-acc-name">{{ r.account_name }}</span></td>
                                     <td class="rr-d-num tabular-nums">{{ r.rka_disp }}</td>
                                     <td class="rr-d-num tabular-nums">{{ r.actual_disp }}</td>
-                                    <td class="rr-d-num tabular-nums {% if not r.variance_zero %}{% if r.variance < 0 %}rr-neg{% else %}rr-pos{% endif %}{% endif %}">{{ r.variance_disp }}</td>
                                     <td class="rr-d-ach">
                                         <span class="rr-badge rr-badge-{{ r.ach_tier }}">{{ r.ach_disp }}</span>
                                         <span class="rr-bar"><span class="rr-bar-fill rr-fill-{{ r.ach_tier }}" style="width:{{ r.ach_width }}%;"></span></span>
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="7" class="rr-empty">Tidak ada rincian PP &amp; akun untuk organisasi ini.</td></tr>
+                                <tr><td colspan="6" class="rr-empty">Tidak ada rincian PP &amp; akun untuk organisasi ini.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>

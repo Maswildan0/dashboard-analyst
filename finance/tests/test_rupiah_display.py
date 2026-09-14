@@ -1,34 +1,34 @@
 """
 Rupiah display formatting for the Revenue Ranking.
 
-The ranking renders three amount columns per row (RKA / Actual / Variance,
-plus the same trio in every PP+account detail row). These tests pin the rules
-that keep those columns reconcilable by eye:
+The ranking renders RKA YTD and Actual YTD per row, in the summary and in
+every PP+account detail row. These tests pin the rules that keep those
+columns reconcilable by eye:
 
-  * every amount in one row uses the SAME unit (so a Rp5,95 M budget and its
-    Rp0,43 M shortfall are not split across M and jt),
+  * both amounts in one row use the SAME unit (a budget and its realisation
+    must never be split across M and jt),
   * two decimals are always kept — no stripping of trailing zeros, which is
     what turned Rp5,95 M into "Rp6 M",
   * the unit comes from the largest amount in the group, with sub-million
     values falling back to whole rupiah,
-  * formatting never changes the numbers: variance stays actual - rka.
+  * rendering never changes the number it displays.
 
-Formatting is presentation only; the calculations it displays are covered by
-finance.tests.test_revenue_ranking.
+The Variance column was removed from the UI; the underlying value is still
+computed at full precision so the ranking can order by it, and that is
+covered by finance.tests.test_revenue_ranking.
 """
 
 from datetime import date
 from decimal import Decimal
 
 from django.test import TestCase
+from django.urls import reverse
 
 from dashboard.views import (
     BILLION,
     MILLION,
     _revenue_ranking,
-    _rounds_to_zero,
     rupiah_amount,
-    rupiah_signed,
     rupiah_unit,
 )
 from finance.models import (
@@ -107,19 +107,6 @@ class RupiahAmountTests(TestCase):
         unit = ('M', BILLION)
         self.assertEqual(rupiah_amount(D('-1712898148.80'), unit), '-Rp1,71 M')
 
-    def test_signed_variance(self):
-        unit = ('M', BILLION)
-        self.assertEqual(rupiah_signed(D('100000000'), unit), '+Rp0,10 M')
-        self.assertEqual(rupiah_signed(D('-428398800'), unit), '-Rp0,43 M')
-
-    def test_variance_rounding_to_zero_is_not_signed(self):
-        """A 3-sen difference is not a gain; '+Rp0,00 M' would imply one."""
-        unit = ('M', BILLION)
-        self.assertEqual(rupiah_signed(D('0.03'), unit), 'Rp0,00 M')
-        self.assertEqual(rupiah_signed(D('0'), unit), 'Rp0,00 M')
-        self.assertTrue(_rounds_to_zero('0,00'))
-        self.assertFalse(_rounds_to_zero('0,01'))
-
     def test_none_renders_as_zero(self):
         self.assertEqual(rupiah_amount(None, ('M', BILLION)), 'Rp0,00 M')
 
@@ -155,7 +142,7 @@ class RankingCssScopeTests(TestCase):
 
 
 class RankingFormatConsistencyTests(TestCase):
-    """The three amount columns of a row must share a unit and reconcile."""
+    """Both amount columns of a row must share a unit and stay exact."""
 
     def setUp(self):
         period = FinancialPeriod.objects.create(
@@ -193,24 +180,23 @@ class RankingFormatConsistencyTests(TestCase):
         org = self._org()
         self.assertTrue(org['rka_disp'].endswith('M'), org['rka_disp'])
         self.assertTrue(org['actual_disp'].endswith('M'), org['actual_disp'])
-        self.assertTrue(org['variance_disp'].endswith('M'), org['variance_disp'])
         self.assertRegex(org['rka_disp'], r'^Rp[\d.]+,\d{2} M$')
         self.assertRegex(org['actual_disp'], r'^Rp[\d.]+,\d{2} M$')
-        self.assertRegex(org['variance_disp'], r'^[-+]?Rp[\d.]+,\d{2} M$')
 
-    def test_displayed_columns_reconcile(self):
-        """Actual - RKA == Variance, within one last-digit rounding step."""
+    def test_displayed_amounts_keep_the_raw_value(self):
+        """Rendering must not change the number: re-reading the display
+        reproduces the stored amount to within one last-digit step."""
         org = self._org()
-        drift = abs((parse_display(org['actual_disp']) - parse_display(org['rka_disp']))
-                    - parse_display(org['variance_disp']))
-        # One step of the last displayed digit (0,01 M) at most.
-        self.assertLessEqual(drift, D('0.01') * BILLION)
+        for key in ('rka', 'actual'):
+            shown = parse_display(org[key + '_disp'])
+            self.assertLessEqual(abs(shown - org[key]), D('0.01') * BILLION, key)
+            self.assertIsInstance(org[key], Decimal)
 
-    def test_variance_still_uses_full_precision_not_display_values(self):
-        """The stored variance is the raw difference, never a rounded one."""
+    def test_variance_is_still_calculated_exactly(self):
+        """The column is gone, but the computed variance is unchanged:
+        full-precision actual - rka (other tests assert the ordering)."""
         org = self._org()
         self.assertEqual(org['variance'], org['actual'] - org['rka'])
-        # Both operands are Decimals with sub-unit precision, not round numbers.
         self.assertIsInstance(org['variance'], Decimal)
         self.assertNotEqual(org['variance'], org['variance'].quantize(D('1e6')))
 
@@ -219,9 +205,29 @@ class RankingFormatConsistencyTests(TestCase):
         self.assertTrue(org['rows'])
         for row in org['rows']:
             units = {s.split()[-1] for s in
-                     (row['rka_disp'], row['actual_disp'], row['variance_disp']) if s}
+                     (row['rka_disp'], row['actual_disp']) if s}
             # A row never mixes 'M' with 'jt'.
             self.assertLessEqual(len(units), 1, row)
-            drift = abs((parse_display(row['actual_disp']) - parse_display(row['rka_disp']))
-                        - parse_display(row['variance_disp']))
-            self.assertLessEqual(drift, D('0.01') * BILLION)
+
+
+class VarianceColumnRemovedTests(RankingFormatConsistencyTests):
+    """The Variance column is gone from both ranking levels.
+
+    Reuses the ranking fixture so the payload assertions run against real
+    aggregated data rather than an empty database.
+    """
+
+    def test_page_has_no_variance_column(self):
+        html = self.client.get(reverse('dashboard')).content.decode()
+        self.assertNotIn('>Variance<', html)
+
+    def test_view_no_longer_builds_variance_display_strings(self):
+        data = _revenue_ranking(2026)
+        self.assertIsNotNone(data)
+        for org in data['orgs']:
+            self.assertNotIn('variance_disp', org)
+            self.assertNotIn('variance_zero', org)
+            self.assertTrue(org['rka_disp'] and org['actual_disp'])
+            for row in org['rows']:
+                self.assertNotIn('variance_disp', row)
+                self.assertNotIn('variance_zero', row)

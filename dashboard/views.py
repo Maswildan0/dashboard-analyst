@@ -738,15 +738,14 @@ def _ach_tier(achievement):
 # ---------------------------------------------------------------------------
 # Rupiah presentation for the ranking.
 #
-# Amounts sharing a row (RKA / Actual / Variance, or one PP+account detail
-# row) are rendered with ONE unit chosen from the largest value in that group.
-# Choosing the unit per value is what made the columns unreadable: a Rp5,95 M
-# budget and its Rp0,43 M shortfall landed in different units, so the row no
-# longer reconciled by eye.
+# The amount columns of a row (RKA / Actual, and the same pair in every
+# PP+account detail row) are rendered with ONE unit chosen from the largest
+# value in that group. Picking the unit per value is what made the columns
+# unreadable: a Rp5,95 M budget and a Rp5,52 M realisation could land in
+# different units and would no longer be comparable by eye.
 #
-# Formatting is presentation only. Every input is the raw Decimal read from
-# the database, and `variance` is always the full-precision `actual - rka`;
-# nothing here feeds back into a calculation.
+# Formatting is presentation only: every input is the raw Decimal read from
+# the database, and nothing here feeds back into a calculation.
 # ---------------------------------------------------------------------------
 _ID_SEPARATORS = str.maketrans({',': '.', '.': ','})
 _DISPLAY_PLACES = Decimal('0.01')
@@ -799,21 +798,6 @@ def rupiah_amount(value, unit):
     return f'{"-" if negative else ""}Rp{digits}{suffix}'
 
 
-def rupiah_signed(value, unit):
-    """'rupiah_amount' with an explicit sign, for the variance column.
-
-    A variance that rounds to zero carries no direction, so it is shown
-    unsigned ('Rp0,00 M') rather than as a misleading '+Rp0,00 M'.
-    """
-    digits, negative, suffix = _scaled(value, unit)
-    sign = '' if _rounds_to_zero(digits) else ('-' if negative else '+')
-    return f'{sign}Rp{digits}{suffix}'
-
-
-def _rounds_to_zero(digits):
-    """True when a formatted digit string represents exactly 0,00."""
-    return set(digits) <= {'0', '.', ','}
-
 
 def _revenue_ranking(tahun):
     """Organization revenue ranking with nested PP/account detail.
@@ -845,12 +829,11 @@ def _revenue_ranking(tahun):
         return None
 
     for org in data['orgs']:
-        # One unit for the whole summary row so Actual - RKA reads as Variance.
-        unit = rupiah_unit([org['rka'], org['actual'], org['variance']])
+        # One unit for both amount columns of a row, so RKA and Actual are
+        # directly comparable.
+        unit = rupiah_unit([org['rka'], org['actual']])
         org['rka_disp'] = rupiah_amount(org['rka'], unit)
         org['actual_disp'] = rupiah_amount(org['actual'], unit)
-        org['variance_disp'] = rupiah_signed(org['variance'], unit)
-        org['variance_zero'] = _rounds_to_zero(_scaled(org['variance'], unit)[0])
         org['ach_disp'] = _pct2(org['achievement'])
         org['ach_tier'] = _ach_tier(org['achievement'])
         # Progress bar: capped at 120% so an over-achiever cannot overflow.
@@ -865,14 +848,11 @@ def _revenue_ranking(tahun):
 def _display_row(row):
     """Attach the display strings for one PP+account detail row.
 
-    Same three columns as the summary, same shared-unit rule.
+    Same two amount columns as the summary, same shared-unit rule.
     """
-    unit = rupiah_unit([row['rka'], row['actual'], row['variance']])
+    unit = rupiah_unit([row['rka'], row['actual']])
     row['rka_disp'] = rupiah_amount(row['rka'], unit)
     row['actual_disp'] = rupiah_amount(row['actual'], unit)
-    row['variance_disp'] = rupiah_signed(row['variance'], unit)
-    # A variance that displays as Rp0,00 must not be tinted as a gain/loss.
-    row['variance_zero'] = _rounds_to_zero(_scaled(row['variance'], unit)[0])
     row['ach_disp'] = _pct2(row['achievement'])
     row['ach_tier'] = _ach_tier(row['achievement'])
     row['ach_width'] = min(int(row['achievement'] or 0), 120)
