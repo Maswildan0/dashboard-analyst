@@ -6,8 +6,9 @@ pure and take/return Decimals, with explicit handling of zero/None inputs so
 the dashboard never divides by zero or renders infinity (#46).
 
 Business rules:
-- YoY always compares the CURRENT SELECTED MONTH vs the SAME MONTH of the
-  previous year (#53) never YTD.
+- YoY compares the SAME WINDOW in the previous year: the Financial
+  Performance Overview uses YTD (January..selected month) vs the same YTD
+  window of year-1. `calculate_yoy_growth` itself is window-agnostic.
 - Operating Ratio achievement is LOWER_IS_BETTER (#12).
 - SHU Margin achievement is HIGHER_IS_BETTER (#13).
 """
@@ -52,10 +53,14 @@ def calculate_shu_achievement(actual, target):
     return safe_percent(actual, target)
 
 
-def calculate_yoy_growth(current_value, previous_year_same_month_value):
-    """(current - previous) / previous × 100. Returns None when previous is 0."""
+def calculate_yoy_growth(current_value, previous_year_value):
+    """(current - previous) / previous × 100. Returns None when previous is 0.
+
+    Both values must cover the SAME window (e.g. YTD Jan..month of year N vs
+    YTD Jan..month of year N-1); the caller owns that choice.
+    """
     current = _to_decimal(current_value)
-    previous = _to_decimal(previous_year_same_month_value)
+    previous = _to_decimal(previous_year_value)
     if previous == ZERO:
         return None
     growth = ((current - previous) / previous) * Decimal('100')

@@ -3,6 +3,11 @@ Data selectors optimized read paths for the dashboard.
 
 Single aggregate queries instead of per-card queries (#71). Returns plain
 dicts with Decimals so the service layer can compute KPIs.
+
+The Financial Performance Overview reads its figures from
+finance.services.financial_overview (GL / frozen snapshots / RKA); the
+summary-table readers here are the legacy Revenue Overview composition path
+(dashboard.views._revenue_composition).
 """
 
 from decimal import Decimal
@@ -15,8 +20,8 @@ ZERO = Decimal('0')
 
 
 def get_latest_period():
-    """Most recent period with data (default filter, #5)."""
-    return FinancialPeriod.objects.filter(summaries__isnull=False).order_by('-year', '-month').first()
+    """Most recent period on file (default filter, #5)."""
+    return FinancialPeriod.objects.order_by('-year', '-month').first()
 
 
 def get_period(year, month):
@@ -24,6 +29,18 @@ def get_period(year, month):
         return FinancialPeriod.objects.get(year=year, month=month)
     except FinancialPeriod.DoesNotExist:
         return None
+
+
+def get_latest_period_of_year(year):
+    """Latest month on file for `year`, or None when the year has no period."""
+    return FinancialPeriod.objects.filter(year=year).order_by('-month').first()
+
+
+def list_years():
+    return list(
+        FinancialPeriod.objects.order_by('-year')
+        .values_list('year', flat=True).distinct()
+    )
 
 
 def get_previous_year_period(period):
@@ -46,6 +63,24 @@ def list_org_units(campus=None):
     if campus:
         qs = qs.filter(campus=campus)
     return list(qs.order_by('code'))
+
+
+def get_org_unit(unit, campus=None):
+    """OrganizationUnit for a filter value, restricted to `campus` when given.
+
+    An organization outside the selected campus resolves to None so the
+    caller can drop the invalid selection instead of reporting foreign data
+    (cascading filter, brief #26).
+    """
+    if unit is None or str(unit) in ('', 'all', 'Semua'):
+        return None
+    qs = OrganizationUnit.objects.filter(is_active=True)
+    if campus is not None:
+        qs = qs.filter(campus=campus)
+    value = str(unit)
+    if value.isdigit():
+        return qs.filter(pk=int(value)).first()
+    return qs.filter(code=value).first()
 
 
 def get_financial_summary(period, campus, organization_unit=None):

@@ -30,21 +30,51 @@ Buka `http://127.0.0.1:8000/financial/`.
 ```
 finance/
   models.py            # master data + fact tables (DecimalField, index)
-  views.py             # FinancialDashboardView + context builder
-  selectors/           # optimized aggregate queries
+  views.py             # Financial Performance Overview: filter + display context
+  selectors/           # master-data + period queries
   services/
+    financial_overview.py # SUMBER KANONIK halaman: GL/snapshot -> Revenue, RKA, KPI target
     financial_metrics.py  # SEMUA formula KPI (achievement, YoY, ratio, margin, komposisi)
     formatters.py         # Rp Miliar / persen Indonesia
-    insights.py           # rule-based analyst insights
-  management/commands/seed_financial_data.py
+    insights.py           # rule-based analyst insights (section sedang nonaktif)
+  management/commands/
+    reconcile_financial_overview.py  # cetak angka DB vs halaman utk rekonsiliasi
+    seed_financial_data.py           # sample data (legacy summary tables)
   templates/finance/      # dashboard + komponen reusable
   static/finance/         # dashboard.css + dashboard.js (sidebar, chart, tooltip)
-  tests/                  # 32 unit tests (formula + view)
+  tests/                  # unit test formula + kontrak halaman (lihat test_financial_overview.py)
+```
+
+## Sumber data Financial Performance Overview
+
+Satu sumber kanonik per metrik (`finance/services/financial_overview.py`);
+kartu, rasio, dan chart membaca payload yang sama sehingga tidak bisa
+saling bertentangan.
+
+| Metrik | Sumber | Catatan |
+|---|---|---|
+| Revenue Actual YTD | `RevenueMonthlySnapshot` (periode CLOSED, beku) + `RevenueLedger` credit−debit (periode OPEN) | skope `period → pp → OrganizationUnit → Campus`; GL tanpa mapping tetap dihitung |
+| Revenue RKA YTD | `RevenueBudget` + `RevenueBudgetMonthly` pada `RkaVersion` aktif | di-phase per bulan, dijumlah Jan..bulan terpilih (bukan RKA annual penuh) |
+| Revenue Achievement | Revenue Actual YTD / RKA YTD | RKA 0 → N/A |
+| Revenue YoY | YTD tahun berjalan vs YTD tahun-1 (window sama) | |
+| KPI Target (OR, SHU Margin) | `finance_kpitarget` | target per-campus dipakai lebih dulu, lalu target global |
+| Expense / SHU / Operating Ratio / SHU Margin | **tidak tersedia** | belum ada sumber expense otoritatif; ditampilkan N/A + log `DATA_NOT_AVAILABLE`, tidak pernah diisi angka dummy |
+
+Semua hasil YTD (Januari..bulan terpilih). Chart trend memakai **actual
+bulanan** (bukan kumulatif) Jan..bulan terpilih. Filter Tahun/Bulan/Campus/
+Organisasi memengaruhi seluruh kartu, rasio, dan chart; Organisation yang
+bukan anggota Campus terpilih otomatis dibersihkan (cascading).
+
+Rekonsiliasi development:
+
+```sh
+python manage.py reconcile_financial_overview --year 2026 --month 8 --campus BDG
 ```
 
 ## Aturan bisnis penting
 
-- **YoY selalu bulan berjalan vs bulan sama tahun sebelumnya** (#53) — bukan YTD.
+- **YoY membandingkan window yang sama** — halaman ini memakai YTD vs YTD
+  tahun sebelumnya (bukan bulan vs bulan).
 - Operating Ratio achievement: **lower is better** (Target/Actual).
 - SHU Margin achievement: **higher is better** (Actual/Target).
 - Komposisi revenue divalidasi: TF + NTF Project + NTF Research ≈ Total Revenue.

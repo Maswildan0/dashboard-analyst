@@ -19,12 +19,21 @@
         let data = {};
         try { data = JSON.parse(trendDataEl.textContent || '{}'); } catch (e) { /* keep {} */ }
         const chart = echarts.init(trendEl);
+        // A series is only charted when the backend has a source for it
+        // (Expense/SHU have none in this database); unavailable series keep
+        // their toggle disabled instead of drawing a fabricated line.
+        const available = {};
         const series = {
-            revenue: { name: 'Revenue', type: 'line', data: data.revenue || [], smooth: true, symbolSize: 6, lineStyle: { width: 3, color: '#C8102E' }, itemStyle: { color: '#C8102E' } },
-            expense: { name: 'Expense', type: 'line', data: data.expense || [], smooth: true, symbolSize: 6, lineStyle: { width: 3, color: '#6B7280' }, itemStyle: { color: '#6B7280' } },
-            shu: { name: 'SHU', type: 'line', data: data.shu || [], smooth: true, symbolSize: 6, lineStyle: { width: 3, color: '#8B0D24' }, itemStyle: { color: '#8B0D24' } },
+            revenue: { name: 'Revenue', type: 'line', smooth: true, symbolSize: 6, lineStyle: { width: 3, color: '#C8102E' }, itemStyle: { color: '#C8102E' } },
+            expense: { name: 'Expense', type: 'line', smooth: true, symbolSize: 6, lineStyle: { width: 3, color: '#6B7280' }, itemStyle: { color: '#6B7280' } },
+            shu: { name: 'SHU', type: 'line', smooth: true, symbolSize: 6, lineStyle: { width: 3, color: '#8B0D24' }, itemStyle: { color: '#8B0D24' } },
         };
-        const active = { revenue: true, expense: true, shu: true };
+        const active = {};
+        Object.keys(series).forEach((key) => {
+            available[key] = Array.isArray(data[key]);
+            active[key] = available[key];
+            if (available[key]) series[key].data = data[key];
+        });
 
         function render() {
             chart.setOption({
@@ -48,8 +57,16 @@
         }
 
         document.querySelectorAll('.trend-toggle').forEach((btn) => {
+            const key = btn.dataset.series;
+            if (!available[key]) {
+                // No source for this series: keep the control visible so the
+                // layout is unchanged, but never plot fabricated data.
+                btn.disabled = true;
+                btn.classList.remove('active');
+                btn.title = 'No source data available';
+                return;
+            }
             btn.addEventListener('click', () => {
-                const key = btn.dataset.series;
                 active[key] = !active[key];
                 btn.classList.toggle('active', active[key]);
                 render();

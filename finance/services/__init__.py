@@ -1,3 +1,9 @@
+"""Services package exports.
+
+`finance.services.financial_overview` is the canonical Financial Performance
+Overview source; the rest are shared KPI formulas, formatters and the
+revenue-module services.
+"""
 from .financial_metrics import (
     achievement_status,
     calculate_composition,
@@ -15,6 +21,20 @@ from .financial_metrics import (
 )
 from .formatters import format_percent, format_rupiah_compact, format_signed_percent
 from .insights import generate_financial_insights
+from .financial_overview import (
+    DATA_NOT_AVAILABLE,
+    MONTH_ABBR,
+    MONTH_NAMES,
+    build_financial_overview,
+    display_amount,
+    display_percent,
+    display_signed,
+    kpi_target,
+    revenue_by_category_ytd,
+    revenue_by_month,
+    rka_by_month,
+    rka_ytd,
+)
 
 __all__ = [
     'achievement_status',
@@ -34,6 +54,19 @@ __all__ = [
     'format_percent',
     'format_signed_percent',
     'generate_financial_insights',
+    # --- Financial Performance Overview (canonical) ---
+    'DATA_NOT_AVAILABLE',
+    'MONTH_ABBR',
+    'MONTH_NAMES',
+    'build_financial_overview',
+    'display_amount',
+    'display_percent',
+    'display_signed',
+    'kpi_target',
+    'revenue_by_category_ytd',
+    'revenue_by_month',
+    'rka_by_month',
+    'rka_ytd',
 ]
 
 # --- Revenue module services ---
@@ -44,7 +77,6 @@ from .revenue_service import (
     ledger_revenue,
     monthly_series,
     org_pp_performance,
-    rka_ytd,
     yoy_series,
 )
 from .revenue_budget_service import (
@@ -62,7 +94,6 @@ __all__ += [
     'ledger_revenue',
     'monthly_series',
     'org_pp_performance',
-    'rka_ytd',
     'yoy_series',
     'annual_sum',
     'compare_actual_vs_rka',
