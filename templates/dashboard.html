@@ -240,42 +240,111 @@ a.fc-card:focus-visible{outline:2px solid rgba(200,16,46,.5);outline-offset:2px;
             <span class="text-[#64748B] text-[12px] font-semibold">Bulan</span>
         </div>
     </div>
-    {# Revenue Performance by Organization / PP (comparison, per PP) #}
-    {% if pp_perf %}
+    {# Revenue Ranking by Organization (organization accordion -> PP/account) #}
+    {% if ranking %}
     <div class="mt-6 rounded-2xl bg-white border border-[#E2E8F0] p-6"
          style="box-shadow:0px 4px 12px rgba(0,0,0,0.0313726);">
-        <div class="flex items-start justify-between">
+        <div class="flex items-start justify-between gap-4 flex-wrap">
             <div>
-                <h2 class="text-[#0F172A] text-[16px] font-bold leading-[19px]">Revenue Performance by Organization / PP</h2>
-                <p class="text-[#64748B] text-[12px] mt-1">Realisasi YTD dibandingkan RKA YTD per PP {{ ctx_tahun_label }}</p>
+                <h2 class="text-[#0F172A] text-[16px] font-bold leading-[19px]">Revenue Ranking by Organization</h2>
+                <p class="text-[#64748B] text-[12px] mt-1">Urutan organisasi berdasarkan achievement revenue tertinggi</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                {% if ranking.top %}
+                <span class="rr-top-badge" title="Achievement tertinggi periode ini">
+                    <i class="bi bi-trophy-fill"></i> Top performer: {{ ranking.top }}
+                </span>
+                {% endif %}
+                <span class="rr-meta">{{ ranking.org_count }} organisasi · {{ ranking.pp_count }} PP · {{ ranking.account_count }} baris</span>
             </div>
         </div>
-        <div class="mt-4 overflow-x-auto">
-            <table class="w-full text-[13px] rev-perf-table">
-                <thead>
-                    <tr class="text-[11px] uppercase text-[#334155] border-b border-[#E2E8F0]">
-                        <th class="text-left font-bold py-2 pr-3">Organization</th>
-                        <th class="text-left font-bold py-2 pr-3">PP</th>
-                        <th class="text-right font-bold py-2 px-3">RKA YTD</th>
-                        <th class="text-right font-bold py-2 px-3">Actual YTD</th>
-                        <th class="text-right font-bold py-2 px-3">Variance</th>
-                        <th class="text-right font-bold py-2 pl-3">Achievement</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in pp_perf %}
-                    <tr class="border-b border-[#F1F5F9] {% cycle 'bg-white' 'bg-[#F8FAFC]' as rowbg %}">
-                        <td class="py-2.5 pr-3 text-[#334155]" title="{{ r.org }}">{{ r.org }}</td>
-                        <td class="py-2.5 pr-3 font-mono text-[12px] font-bold text-[#475569]">{{ r.pp }}</td>
-                        <td class="py-2.5 px-3 text-right tabular-nums whitespace-nowrap">{{ r.rka_disp }}</td>
-                        <td class="py-2.5 px-3 text-right tabular-nums whitespace-nowrap">{{ r.actual_disp }}</td>
-                        <td class="py-2.5 px-3 text-right tabular-nums whitespace-nowrap {% if r.variance < 0 %}text-[#EB3237]{% else %}text-[#10B981]{% endif %}">{{ r.variance_disp }}</td>
-                        <td class="py-2.5 pl-3 text-right tabular-nums whitespace-nowrap">{{ r.ach_disp }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+
+        <div class="rr-toolbar">
+            <div class="rr-sort" role="group" aria-label="Urutkan ranking">
+                <span class="rr-sort-label">Urutkan:</span>
+                <button type="button" class="rr-sort-btn is-active" data-rr-sort="achievement">Achievement</button>
+                <button type="button" class="rr-sort-btn" data-rr-sort="actual">Actual YTD</button>
+            </div>
+            <div class="rr-search-wrap">
+                <i class="bi bi-search"></i>
+                <input type="search" id="rr-search" class="rr-search" placeholder="Cari organisasi…" aria-label="Cari organisasi">
+            </div>
         </div>
+
+        <div class="rr-head" aria-hidden="true">
+            <span class="rr-col-rank">Rank</span>
+            <span class="rr-col-org">Organization / Direktorat</span>
+            <span class="rr-col-num">Total RKA YTD</span>
+            <span class="rr-col-num">Total Actual YTD</span>
+            <span class="rr-col-num">Variance</span>
+            <span class="rr-col-ach">Achievement</span>
+            <span class="rr-col-act"></span>
+        </div>
+
+        <div id="rr-list" class="rr-list">
+            {% for o in ranking.orgs %}
+            <div class="rr-item{% if o.rank <= 3 %} rr-rank-{{ o.rank }}{% endif %}"
+                 data-rr-item data-org="{{ o.org|lower }}" data-ach="{{ o.achievement|default_if_none:'' }}" data-actual="{{ o.actual }}">
+                <button type="button" class="rr-row" data-rr-toggle aria-expanded="false"
+                        aria-controls="rr-detail-{{ forloop.counter }}">
+                    <span class="rr-col-rank">
+                        <span class="rr-rank rr-rank-{{ o.rank }}">{{ o.rank }}</span>
+                    </span>
+                    <span class="rr-col-org">
+                        <span class="rr-org-name" title="{{ o.org }}">{{ o.org }}</span>
+                        <span class="rr-org-sub">{{ o.pp_count }} PP · {{ o.account_count }} akun</span>
+                    </span>
+                    <span class="rr-col-num tabular-nums">{{ o.rka_disp }}</span>
+                    <span class="rr-col-num tabular-nums rr-actual">{{ o.actual_disp }}</span>
+                    <span class="rr-col-num tabular-nums {% if o.variance < 0 %}rr-neg{% else %}rr-pos{% endif %}">{{ o.variance_disp }}</span>
+                    <span class="rr-col-ach">
+                        <span class="rr-badge rr-badge-{{ o.ach_tier }}">{{ o.ach_disp }}</span>
+                        <span class="rr-bar"><span class="rr-bar-fill rr-fill-{{ o.ach_tier }}" style="width:{{ o.ach_width }}%;"></span></span>
+                    </span>
+                    <span class="rr-col-act"><i class="bi bi-chevron-down rr-chevron"></i></span>
+                </button>
+
+                <div class="rr-detail" id="rr-detail-{{ forloop.counter }}" hidden>
+                    <div class="rr-detail-title">Detail PP &amp; Akun — {{ o.org }}</div>
+                    <div class="rr-detail-scroll">
+                        <table class="rr-detail-table">
+                            <thead>
+                                <tr>
+                                    <th class="rr-d-rank">#</th>
+                                    <th class="rr-d-pp">Kode PP</th>
+                                    <th class="rr-d-acc">Nama Akun</th>
+                                    <th class="rr-d-num">RKA YTD</th>
+                                    <th class="rr-d-num">Actual YTD</th>
+                                    <th class="rr-d-num">Variance</th>
+                                    <th class="rr-d-ach">Achievement</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in o.rows %}
+                                <tr>
+                                    <td class="rr-d-rank"><span class="rr-mini-rank">{{ r.rank }}</span></td>
+                                    <td class="rr-d-pp"><span class="rr-pp">{{ r.pp_code }}</span></td>
+                                    <td class="rr-d-acc" title="{{ r.account_name }}"><span class="rr-acc-name">{{ r.account_name }}</span></td>
+                                    <td class="rr-d-num tabular-nums">{{ r.rka_disp }}</td>
+                                    <td class="rr-d-num tabular-nums">{{ r.actual_disp }}</td>
+                                    <td class="rr-d-num tabular-nums {% if r.variance < 0 %}rr-neg{% else %}rr-pos{% endif %}">{{ r.variance_disp }}</td>
+                                    <td class="rr-d-ach">
+                                        <span class="rr-badge rr-badge-{{ r.ach_tier }}">{{ r.ach_disp }}</span>
+                                        <span class="rr-bar"><span class="rr-bar-fill rr-fill-{{ r.ach_tier }}" style="width:{{ r.ach_width }}%;"></span></span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="7" class="rr-empty">Tidak ada rincian PP &amp; akun untuk organisasi ini.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <p id="rr-no-match" class="rr-empty" hidden>Tidak ada organisasi yang cocok dengan pencarian.</p>
+        <p class="rr-footnote">Realisasi YTD Jan–{{ ranking.month_label }} {{ ranking.tahun_label }} dibandingkan RKA YTD. Klik baris organisasi untuk melihat rincian PP &amp; akun.</p>
     </div>
     {% endif %}
 </div>
@@ -409,6 +478,79 @@ a.fc-card:focus-visible{outline:2px solid rgba(200,16,46,.5);outline-offset:2px;
         document.addEventListener('DOMContentLoaded', animateBars);
     } else {
         animateBars();
+    }
+})();
+</script>
+<script>
+(function () {
+    'use strict';
+    // Revenue Ranking: expand/collapse one organization, re-sort the list
+    // client-side (Achievement / Actual YTD), and filter by organization name.
+    // All behaviour is progressive: the accordion stays collapsed and the
+    // server order (Achievement desc) stands if this script never runs.
+    var list = document.getElementById('rr-list');
+    if (!list) return;
+
+    var search = document.getElementById('rr-search');
+    var noMatch = document.getElementById('rr-no-match');
+    var items = Array.prototype.slice.call(list.querySelectorAll('[data-rr-item]'));
+
+    // --- expand / collapse: the whole row is the target ---
+    list.addEventListener('click', function (e) {
+        var toggle = e.target.closest('[data-rr-toggle]');
+        if (!toggle || !list.contains(toggle)) return;
+        var item = toggle.closest('[data-rr-item]');
+        var panel = document.getElementById(toggle.getAttribute('aria-controls'));
+        if (!panel) return;
+        var open = item.classList.toggle('is-open');
+        panel.hidden = !open;
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    function itemKey(item, attr) {
+        var raw = item.getAttribute(attr);
+        var n = parseFloat(raw);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    // --- sorting: Achievement desc, then Actual YTD desc (tie-breaker) ---
+    function sortBy(mode) {
+        items.sort(function (a, b) {
+            if (mode === 'actual') {
+                return (itemKey(b, 'data-actual') || 0) - (itemKey(a, 'data-actual') || 0);
+            }
+            var ak = itemKey(a, 'data-ach');
+            var bk = itemKey(b, 'data-ach');
+            // A missing achievement (RKA = 0) always sorts last.
+            if (ak === null && bk !== null) return 1;
+            if (bk === null && ak !== null) return -1;
+            if (ak !== bk) return (bk || 0) - (ak || 0);
+            return (itemKey(b, 'data-actual') || 0) - (itemKey(a, 'data-actual') || 0);
+        });
+        items.forEach(function (item) { list.appendChild(item); });
+    }
+
+    document.querySelectorAll('.rr-sort-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.rr-sort-btn').forEach(function (b) {
+                b.classList.toggle('is-active', b === btn);
+            });
+            sortBy(btn.dataset.rrSort);
+        });
+    });
+
+    // --- search by organization name ---
+    if (search) {
+        search.addEventListener('input', function () {
+            var q = search.value.trim().toLowerCase();
+            var shown = 0;
+            items.forEach(function (item) {
+                var hit = !q || item.getAttribute('data-org').indexOf(q) !== -1;
+                item.hidden = !hit;
+                if (hit) shown++;
+            });
+            if (noMatch) noMatch.hidden = shown !== 0;
+        });
     }
 })();
 </script>

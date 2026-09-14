@@ -310,8 +310,9 @@ def _revenue_navigation(filters, composition):
 
 def index(request):
     f = _dashboard_filters(request)
-    pp_perf = _revenue_pp_performance(f.get('tahun'))
-    tahun_label = pp_perf[0]['tahun_label'] if pp_perf else str(f.get('tahun'))
+    ranking = _revenue_ranking(f.get('tahun'))
+    # Header label: the period actually reported, else whatever year was asked.
+    tahun_label = (ranking['tahun_label'] if ranking else str(f.get('tahun')))
     composition = _revenue_composition()
     return render(request, 'dashboard.html', {
         'options': OPTIONS,
@@ -323,7 +324,7 @@ def index(request):
         'active': 'dashboard',
         'active_tab': 'revenue_overview',
         'composition': composition,
-        'pp_perf': pp_perf,
+        'ranking': ranking,
         'ctx_tahun_label': tahun_label,
         **_revenue_navigation(f, composition),
     })
@@ -716,77 +717,75 @@ def export(request):
     return response
 
 
-def _revenue_pp_performance(tahun):
-    """Actual & RKA YTD per PP (+ org) from the revenue database, up to the
-    latest period of the selected year. Table: Organization/PP/RKA YTD/
-    Actual YTD/Variance/Achievement shown at the bottom of /dashboard/."""
-    try:
-        from decimal import Decimal as _D
-        from finance.models import (
-            FinancialPeriod, PPMaster, RevenueBudget,
-            RevenueBudgetMonthly, RevenueLedger,
-        )
-        if isinstance(tahun, str) and tahun != 'Semua':
-            try:
-                tahun = int(tahun)
-            except ValueError:
-                tahun = 'Semua'
-        if not isinstance(tahun, int):
-            # 'Semua' (no year filter): report the most recent year on file.
-            tahun = FinancialPeriod.objects.order_by('-year').values_list('year', flat=True).first()
-        period = FinancialPeriod.objects.filter(year=tahun).order_by('-month').first()
-        if period is None:
-            # Explicit year selected but not on file: no data to report.
-            return []
-        month = period.month
-        year = period.year
+# Achievement badge tiers, shared by both ranking levels.
+ACH_TIERS = (
+    (100, 'high'),    # >= 100%  green
+    (90, 'mid'),      # 90-99.99% amber
+)
+ACH_TIER_LOW = 'low'  # < 90%  red
 
-        # Actual YTD per PP (Jan..month, mapped accounts only)
-        actual = {}
-        rows = (RevenueLedger.objects
-                .filter(period__year=year, period__month__lte=month,
-                        pp__isnull=False, revenue_account__isnull=False)
-                .values('pp_id')
-                .annotate(credit=__import__('django.db.models', fromlist=['Sum']).Sum('credit'),
-                          debit=__import__('django.db.models', fromlist=['Sum']).Sum('debit')))
-        for r in rows:
-            actual[r['pp_id']] = (r['credit'] or 0) - (r['debit'] or 0)
 
-        # RKA YTD per PP (annual phased)
-        rka = {}
-        budgets = (RevenueBudget.objects
-                   .filter(year=year, rka_version__is_active=True)
-                   .prefetch_related('monthly_rows'))
-        for b in budgets:
-            phased = [m.budget_amount for m in b.monthly_rows.filter(month__lte=month)]
-            amt = sum(phased, _D('0')) if phased else b.annual_budget * _D(month) / _D(12)
-            rka[b.pp_id] = rka.get(b.pp_id, _D('0')) + amt
+def _ach_tier(achievement):
+    if achievement is None:
+        return 'na'
+    for threshold, tier in ACH_TIERS:
+        if achievement >= threshold:
+            return tier
+    return ACH_TIER_LOW
 
-        pps = (PPMaster.objects.filter(is_active=True)
-               .select_related('organization_unit').order_by('pp_code'))
-        out = []
-        for pp in pps:
-            a = actual.get(pp.pk, _D('0'))
-            r = rka.get(pp.pk, _D('0'))
-            if a == 0 and r == 0:
-                continue
-            ach = (a / r * _D('100')) if r else None
-            out.append({
-                'tahun_label': str(year),
-                'org': pp.organization_unit.name if pp.organization_unit else '-',
-                'pp': pp.pp_code,
-                'actual': a, 'rka': r,
-                'actual_disp': _rupiah_id2(a),
-                'rka_disp': _rupiah_id2(r),
-                'variance': a - r,
-                'variance_disp': ('+' if a - r >= 0 else '-') + _rupiah_id2(abs(a - r)),
-                'ach': ach,
-                'ach_disp': _pct2(ach),
-            })
-        out.sort(key=lambda x: x['actual'], reverse=True)
-        return out
-    except Exception:
-        return []
+
+def _variance_disp(variance):
+    return ('+' if variance >= 0 else '-') + _rupiah_id2(abs(variance))
+
+
+def _revenue_ranking(tahun):
+    """Organization revenue ranking with nested PP/account detail.
+
+    Aggregation lives in finance.services.financial_overview.revenue_ranking
+    (frozen snapshots + live GL for actual, active RKA phasing for budget);
+    this wrapper only resolves the year filter and adds display strings.
+    """
+    from finance.models import FinancialPeriod
+    from finance.services.financial_overview import revenue_ranking
+
+    if isinstance(tahun, str) and tahun != 'Semua':
+        try:
+            tahun = int(tahun)
+        except ValueError:
+            tahun = 'Semua'
+    if not isinstance(tahun, int):
+        # 'Semua' (no year filter): report the most recent year on file.
+        tahun = FinancialPeriod.objects.order_by('-year').values_list('year', flat=True).first()
+    if tahun is None:
+        return None
+    period = FinancialPeriod.objects.filter(year=tahun).order_by('-month').first()
+    if period is None:
+        # Explicit year selected but not on file: no data to report.
+        return None
+
+    data = revenue_ranking(period.year, period.month)
+    if not data['orgs']:
+        return None
+
+    for org in data['orgs']:
+        org['rka_disp'] = _rupiah_id2(org['rka'])
+        org['actual_disp'] = _rupiah_id2(org['actual'])
+        org['variance_disp'] = _variance_disp(org['variance'])
+        org['ach_disp'] = _pct2(org['achievement'])
+        org['ach_tier'] = _ach_tier(org['achievement'])
+        # Progress bar: capped at 120% so an over-achiever cannot overflow.
+        org['ach_width'] = min(int(org['achievement'] or 0), 120)
+        for row in org['rows']:
+            row['rka_disp'] = _rupiah_id2(row['rka'])
+            row['actual_disp'] = _rupiah_id2(row['actual'])
+            row['variance_disp'] = _variance_disp(row['variance'])
+            row['ach_disp'] = _pct2(row['achievement'])
+            row['ach_tier'] = _ach_tier(row['achievement'])
+            row['ach_width'] = min(int(row['achievement'] or 0), 120)
+
+    data['tahun_label'] = str(period.year)
+    data['month_label'] = MONTHS[period.month - 1]
+    return data
 
 
 def _rupiah_id2(v):

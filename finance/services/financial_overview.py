@@ -32,6 +32,8 @@ from django.db.models import Sum
 from finance.models import (
     FinancialPeriod,
     KpiTarget,
+    PPMaster,
+    RevenueAccount,
     RevenueBudget,
     RevenueBudgetMonthly,
     RevenueLedger,
@@ -44,6 +46,7 @@ from .formatters import format_percent, format_rupiah_compact, format_signed_per
 logger = logging.getLogger(__name__)
 
 ZERO = Decimal('0')
+HUNDRED = Decimal('100')
 MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
               'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
 MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -208,6 +211,151 @@ def revenue_by_category_ytd(year, month, campus=None, organization=None):
             if code:
                 out[code] = out.get(code, ZERO) + _net(row['credit'], row['debit'])
     return out
+
+
+# ---------------------------------------------------------------------------
+# Revenue ranking: organization (level 1) -> PP + account (level 2).
+#
+# Both levels are aggregated from the SAME sources as the overview cards:
+# frozen snapshots (closed months) + live GL (open month) for actual, and the
+# active RKA version's monthly phasing for budget. RKA is booked per
+# (PP, account), so the organization total is the sum of its PP/account rows.
+# ---------------------------------------------------------------------------
+def _sort_ranking(rows):
+    """Achievement desc, then Actual YTD desc. A row without achievement
+    (RKA = 0) can never outrank one that has a real ratio, so it sorts last."""
+    rows.sort(key=lambda r: (
+        r['achievement'] is None,
+        -(r['achievement'] or ZERO),
+        -r['actual'],
+    ))
+    return rows
+
+
+def revenue_ranking(year, month):
+    """Organization revenue ranking with nested PP/account detail.
+
+    Level 1 grain: organization. Level 2 grain: (organization, PP, account).
+    Returns {
+      'orgs': [{rank, org, rka, actual, variance, achievement, pp_count,
+                rows: [{rank, pp_code, account_code, account_name, rka,
+                        actual, variance, achievement}]}],
+      'org_count', 'pp_count', 'account_count', 'top',
+    }
+    """
+    periods = list(FinancialPeriod.objects.filter(year=year, month__lte=month))
+    closed = [p.pk for p in periods if p.is_closed]
+    open_ = [p.pk for p in periods if not p.is_closed]
+
+    # --- actual YTD at (PP, account) grain; closed reads the frozen snapshot,
+    # the open month reads the live ledger (credit - debit).
+    actual = {}
+
+    def add_actual(key, amount):
+        actual[key] = actual.get(key, ZERO) + amount
+
+    if closed:
+        for row in (RevenueMonthlySnapshot.objects
+                    .filter(period_id__in=closed)
+                    .values('pp_id', 'revenue_account__account_code')
+                    .annotate(total=Sum('actual_amount'))):
+            add_actual((row['pp_id'], row['revenue_account__account_code']), row['total'] or ZERO)
+    if open_:
+        for row in (RevenueLedger.objects
+                    .filter(period_id__in=open_)
+                    .values('pp_id', 'revenue_account__account_code', 'account_code_raw',
+                            'account_name_raw')
+                    .annotate(credit=Sum('credit'), debit=Sum('debit'))):
+            # An unmapped GL row has no RevenueAccount relation, so it keeps its
+            # raw account code; it still counts toward the organization total.
+            code = row['revenue_account__account_code'] or row['account_code_raw'] or ''
+            add_actual((row['pp_id'], code), _net(row['credit'], row['debit']))
+
+    # --- RKA YTD at the same (PP, account) grain, phased Jan..month.
+    rka = {}
+    phased = (RevenueBudgetMonthly.objects
+              .filter(revenue_budget__year=year,
+                      revenue_budget__rka_version__is_active=True,
+                      month__lte=month)
+              .values('revenue_budget__pp_id', 'revenue_budget__revenue_account__account_code')
+              .annotate(total=Sum('budget_amount')))
+    for row in phased:
+        key = (row['revenue_budget__pp_id'], row['revenue_budget__revenue_account__account_code'])
+        rka[key] = rka.get(key, ZERO) + (row['total'] or ZERO)
+    # A budget row without phasing contributes a flat 1/12 per month instead of
+    # disappearing (same fallback the rest of the module uses).
+    unphased = (RevenueBudget.objects
+                .filter(year=year, rka_version__is_active=True, monthly_rows__isnull=True)
+                .values_list('pp_id', 'revenue_account__account_code', 'annual_budget'))
+    for pp_id, account_code, annual in unphased:
+        share = (annual or ZERO) * Decimal(month) / Decimal('12')
+        key = (pp_id, account_code)
+        rka[key] = rka.get(key, ZERO) + share
+
+    # --- masters (organization names + account names), no per-row queries.
+    pp_map = {
+        pk: (pp_code, org_name)
+        for pk, pp_code, org_name in PPMaster.objects.values_list(
+            'pk', 'pp_code', 'organization_unit__name')
+    }
+    account_names = dict(RevenueAccount.objects.values_list('account_code', 'account_name'))
+    raw_names = dict(
+        RevenueLedger.objects.filter(period__year=year, period__month__lte=month)
+        .exclude(account_code_raw='')
+        .values_list('account_code_raw', 'account_name_raw')
+    )
+
+    # --- leaves -> organizations.
+    orgs = {}
+    for key in set(actual) | set(rka):
+        pp_id, account_code = key
+        pp_code, org_name = pp_map.get(pp_id, ('', ''))
+        if not org_name:
+            org_name = pp_code or '-'
+        leaf = {
+            'pp_code': pp_code or '-',
+            'account_code': account_code or '-',
+            'account_name': (account_names.get(account_code)
+                             or raw_names.get(account_code)
+                             or account_code or '-'),
+            'actual': actual.get(key, ZERO),
+            'rka': rka.get(key, ZERO),
+        }
+        leaf['variance'] = leaf['actual'] - leaf['rka']
+        leaf['achievement'] = (
+            (leaf['actual'] / leaf['rka'] * HUNDRED) if leaf['rka'] > ZERO else None
+        )
+        orgs.setdefault(org_name, []).append(leaf)
+
+    out = []
+    for org_name, leaves in orgs.items():
+        org_actual = sum((l['actual'] for l in leaves), ZERO)
+        org_rka = sum((l['rka'] for l in leaves), ZERO)
+        _sort_ranking(leaves)
+        for i, leaf in enumerate(leaves):
+            leaf['rank'] = i + 1
+        out.append({
+            'org': org_name,
+            'actual': org_actual,
+            'rka': org_rka,
+            'variance': org_actual - org_rka,
+            'achievement': (org_actual / org_rka * HUNDRED) if org_rka > ZERO else None,
+            'pp_count': len({l['pp_code'] for l in leaves}),
+            'account_count': len(leaves),
+            'rows': leaves,
+        })
+
+    _sort_ranking(out)
+    for i, org in enumerate(out):
+        org['rank'] = i + 1
+
+    return {
+        'orgs': out,
+        'org_count': len(out),
+        'pp_count': len({l['pp_code'] for leaves in orgs.values() for l in leaves}),
+        'account_count': sum(len(v) for v in orgs.values()),
+        'top': out[0]['org'] if out else None,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -32,6 +32,7 @@ from .financial_overview import (
     kpi_target,
     revenue_by_category_ytd,
     revenue_by_month,
+    revenue_ranking,
     rka_by_month,
     rka_ytd,
 )
@@ -65,6 +66,7 @@ __all__ = [
     'kpi_target',
     'revenue_by_category_ytd',
     'revenue_by_month',
+    'revenue_ranking',
     'rka_by_month',
     'rka_ytd',
 ]
