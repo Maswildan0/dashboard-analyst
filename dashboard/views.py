@@ -12,6 +12,7 @@ import json
 import re
 import zlib
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from django.http import HttpResponse, JsonResponse
@@ -734,8 +735,84 @@ def _ach_tier(achievement):
     return ACH_TIER_LOW
 
 
-def _variance_disp(variance):
-    return ('+' if variance >= 0 else '-') + _rupiah_id2(abs(variance))
+# ---------------------------------------------------------------------------
+# Rupiah presentation for the ranking.
+#
+# Amounts sharing a row (RKA / Actual / Variance, or one PP+account detail
+# row) are rendered with ONE unit chosen from the largest value in that group.
+# Choosing the unit per value is what made the columns unreadable: a Rp5,95 M
+# budget and its Rp0,43 M shortfall landed in different units, so the row no
+# longer reconciled by eye.
+#
+# Formatting is presentation only. Every input is the raw Decimal read from
+# the database, and `variance` is always the full-precision `actual - rka`;
+# nothing here feeds back into a calculation.
+# ---------------------------------------------------------------------------
+_ID_SEPARATORS = str.maketrans({',': '.', '.': ','})
+_DISPLAY_PLACES = Decimal('0.01')
+MILLION = Decimal('1_000_000')
+BILLION = Decimal('1_000_000_000')
+TRILLION = Decimal('1_000_000_000_000')
+
+
+def rupiah_unit(amounts):
+    """Display unit shared by a group of amounts -> (suffix, divisor).
+
+    The unit comes from the LARGEST amount in the group, so every value in the
+    row is expressed on the same scale: ('M', 1e9) from a billion up,
+    ('jt', 1e6) below that, and ('', 1) under a million — where trailing
+    "0,00 jt" would misrepresent a small but non-zero amount as nothing.
+    """
+    peak = Decimal('0')
+    for value in amounts:
+        if value is None:
+            continue
+        magnitude = abs(Decimal(str(value)))
+        if magnitude > peak:
+            peak = magnitude
+    if peak >= TRILLION:
+        return 'T', TRILLION
+    if peak >= BILLION:
+        return 'M', BILLION
+    if peak >= MILLION:
+        return 'jt', MILLION
+    return '', Decimal('1')
+
+
+def _scaled(value, unit):
+    """(digit string, negative?, suffix) for `value` rendered in `unit`."""
+    suffix, divisor = unit
+    if suffix:
+        places, pattern = _DISPLAY_PLACES, ',.2f'
+    else:
+        # Whole rupiah: decimals below a million would only add noise.
+        places, pattern = Decimal('1'), ',.0f'
+    amount = (Decimal(str(value if value is not None else 0)) / divisor).quantize(
+        places, rounding=ROUND_HALF_UP)
+    digits = f'{abs(amount):{pattern}}'.translate(_ID_SEPARATORS)
+    return digits, amount < 0, (f' {suffix}' if suffix else '')
+
+
+def rupiah_amount(value, unit):
+    """'Rp5,95 M' / 'Rp559,50 jt' — same unit for the whole row."""
+    digits, negative, suffix = _scaled(value, unit)
+    return f'{"-" if negative else ""}Rp{digits}{suffix}'
+
+
+def rupiah_signed(value, unit):
+    """'rupiah_amount' with an explicit sign, for the variance column.
+
+    A variance that rounds to zero carries no direction, so it is shown
+    unsigned ('Rp0,00 M') rather than as a misleading '+Rp0,00 M'.
+    """
+    digits, negative, suffix = _scaled(value, unit)
+    sign = '' if _rounds_to_zero(digits) else ('-' if negative else '+')
+    return f'{sign}Rp{digits}{suffix}'
+
+
+def _rounds_to_zero(digits):
+    """True when a formatted digit string represents exactly 0,00."""
+    return set(digits) <= {'0', '.', ','}
 
 
 def _revenue_ranking(tahun):
@@ -768,43 +845,38 @@ def _revenue_ranking(tahun):
         return None
 
     for org in data['orgs']:
-        org['rka_disp'] = _rupiah_id2(org['rka'])
-        org['actual_disp'] = _rupiah_id2(org['actual'])
-        org['variance_disp'] = _variance_disp(org['variance'])
+        # One unit for the whole summary row so Actual - RKA reads as Variance.
+        unit = rupiah_unit([org['rka'], org['actual'], org['variance']])
+        org['rka_disp'] = rupiah_amount(org['rka'], unit)
+        org['actual_disp'] = rupiah_amount(org['actual'], unit)
+        org['variance_disp'] = rupiah_signed(org['variance'], unit)
+        org['variance_zero'] = _rounds_to_zero(_scaled(org['variance'], unit)[0])
         org['ach_disp'] = _pct2(org['achievement'])
         org['ach_tier'] = _ach_tier(org['achievement'])
         # Progress bar: capped at 120% so an over-achiever cannot overflow.
         org['ach_width'] = min(int(org['achievement'] or 0), 120)
-        for row in org['rows']:
-            row['rka_disp'] = _rupiah_id2(row['rka'])
-            row['actual_disp'] = _rupiah_id2(row['actual'])
-            row['variance_disp'] = _variance_disp(row['variance'])
-            row['ach_disp'] = _pct2(row['achievement'])
-            row['ach_tier'] = _ach_tier(row['achievement'])
-            row['ach_width'] = min(int(row['achievement'] or 0), 120)
+        org['rows'] = [_display_row(row) for row in org['rows']]
 
     data['tahun_label'] = str(period.year)
     data['month_label'] = MONTHS[period.month - 1]
     return data
 
 
-def _rupiah_id2(v):
-    try:
-        x = float(v)
-    except (TypeError, ValueError):
-        return 'Rp0'
-    a = abs(x)
-    sign = '-' if x < 0 else ''
-    def t(n):
-        s = f'{n:.1f}'
-        return s[:-2] if s.endswith('.0') else s.replace('.', ',')
-    if a >= 1e12:
-        return f'{sign}Rp{t(a/1e12)} T'
-    if a >= 1e9:
-        return f'{sign}Rp{t(a/1e9)} M'
-    if a >= 1e6:
-        return f'{sign}Rp{t(a/1e6)} jt'
-    return f'{sign}Rp{a:,.0f}'.replace(',', '.')
+def _display_row(row):
+    """Attach the display strings for one PP+account detail row.
+
+    Same three columns as the summary, same shared-unit rule.
+    """
+    unit = rupiah_unit([row['rka'], row['actual'], row['variance']])
+    row['rka_disp'] = rupiah_amount(row['rka'], unit)
+    row['actual_disp'] = rupiah_amount(row['actual'], unit)
+    row['variance_disp'] = rupiah_signed(row['variance'], unit)
+    # A variance that displays as Rp0,00 must not be tinted as a gain/loss.
+    row['variance_zero'] = _rounds_to_zero(_scaled(row['variance'], unit)[0])
+    row['ach_disp'] = _pct2(row['achievement'])
+    row['ach_tier'] = _ach_tier(row['achievement'])
+    row['ach_width'] = min(int(row['achievement'] or 0), 120)
+    return row
 
 
 def _pct2(v):

@@ -655,7 +655,8 @@ main.content .text-\[#64748B\] { color: #64748B; }
 .rr-item:last-child { border-bottom: 0; }
 .rr-item:hover { background: #FCFCFD; }
 .rr-item.is-open { background: #FCFCFD; border-left-color: var(--primary); }
-/* Rank 1-3 emphasis: a soft tinted rail + faint wash. */
+/* Rank 1-3 emphasis: a soft tinted rail + faint wash. Scoped to .rr-item so
+   it cannot reach the rank badge, which reuses the rr-rank-N class. */
 .rr-item.rr-rank-1 { border-left-color: var(--primary); background: rgba(200,16,46,.035); }
 .rr-item.rr-rank-2 { border-left-color: #C7CBD1; background: rgba(100,116,139,.045); }
 .rr-item.rr-rank-3 { border-left-color: #D9A87C; background: rgba(180,120,60,.045); }
@@ -675,9 +676,11 @@ main.content .text-\[#64748B\] { color: #64748B; }
     background: var(--light-gray); color: #475569;
     font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums;
 }
-.rr-rank-1 { background: var(--primary); color: #fff; }
-.rr-rank-2 { background: #64748B; color: #fff; }
-.rr-rank-3 { background: #B4783C; color: #fff; }
+/* Scoped to the badge: the item container carries rr-rank-N too (for the
+   top-3 rail), and an unscoped rule would paint its whole row white. */
+.rr-rank.rr-rank-1 { background: var(--primary); color: #fff; }
+.rr-rank.rr-rank-2 { background: #64748B; color: #fff; }
+.rr-rank.rr-rank-3 { background: #B4783C; color: #fff; }
 
 .rr-org-name {
     display: block; font-weight: 700; color: var(--dark);
