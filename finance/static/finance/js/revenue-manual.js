@@ -500,6 +500,17 @@
             await openVoidProject(voidBtn.dataset.rmVoidProject);
             return;
         }
+        // --- actions of one transaction inside the expanded history panel ---
+        const histEdit = ev.target.closest('[data-rm-edit-entry-from-history]');
+        if (histEdit) {
+            await openEntryEditor(histEdit.dataset.rmEditEntryFromHistory, histEdit);
+            return;
+        }
+        const histAudit = ev.target.closest('[data-rm-history-entry]');
+        if (histAudit) {
+            await openEntryHistory(histAudit.dataset.rmHistoryEntry, histAudit);
+            return;
+        }
         const detail = ev.target.closest('[data-rm-detail]');
         if (detail) {
             const row = detail.closest('.rev-row-expand');
@@ -507,6 +518,57 @@
             return;
         }
     }, true);
+
+    /** Project id owning the fragment `el` sits in (the expanded panel). */
+    function projectIdOf(el) {
+        const panel = el.closest('[data-project-panel]');
+        if (panel) return panel.dataset.projectPanel;
+        const head = el.closest('[data-rm-recognitions]');
+        return head ? head.dataset.rmRecognitions : null;
+    }
+
+    /** Load (once per project) the manual entries the row menus act on. */
+    async function ensureEntries(projectId) {
+        if (!projectId) return [];
+        if (window.__rmEntriesProject === projectId && window.__rmManageEntries) {
+            return window.__rmManageEntries;
+        }
+        const data = await getJSON(URLS.entries, { project: projectId });
+        window.__rmEntriesProject = projectId;
+        window.__rmManageEntries = data.entries || [];
+        return window.__rmManageEntries;
+    }
+
+    async function openEntryEditor(entryId, el) {
+        if (!txnForm) return;
+        const entries = await ensureEntries(projectIdOf(el));
+        const entry = entries.find((e) => String(e.id) === String(entryId));
+        if (!entry) { toast('Data transaksi tidak ditemukan.', 'error'); return; }
+        resetForm(txnForm);
+        $('[data-rm-txn-id]', txnForm).value = entry.id;
+        $('[name=transaction_date]', txnForm).value = entry.date || '';
+        $('[name=amount]', txnForm).value = entry.amount || '';
+        $('[name=evidence_number]', txnForm).value = entry.evidence_number || '';
+        $('[name=document_number]', txnForm).value = entry.document_number || '';
+        $('[name=description]', txnForm).value = entry.description || '';
+        openModal('txn-edit');
+    }
+
+    async function openEntryHistory(entryId, el) {
+        const modal = openModal('history');
+        const body = $('[data-rm-history-body]', modal);
+        $('[data-rm-history-title]', modal).textContent = 'Riwayat Perubahan';
+        $('[data-rm-history-sub]', modal).textContent =
+            'Jejak audit transaksi ini. Tidak dapat diubah.';
+        body.innerHTML = '<div class="rm-empty">Memuat riwayat perubahan…</div>';
+        try {
+            const data = await getHTML(URLS.history, { entry: entryId });
+            body.innerHTML = data.html;
+        } catch (e) {
+            body.innerHTML = '<div class="rm-empty"></div>';
+            $('.rm-empty', body).textContent = e.message;
+        }
+    }
 
     function handleRowMenu(ev) {
         const toggle = ev.target.closest('[data-rm-rowmenu-toggle]');
@@ -700,15 +762,25 @@
         });
     }
 
-    document.addEventListener('click', (ev) => {
+    document.addEventListener('click', async (ev) => {
         const btn = ev.target.closest('[data-rm-void-entry]');
         if (!btn) return;
         const id = btn.dataset.rmVoidEntry;
-        // The same button is emitted by the void picker and by the manage
-        // drawer, so the row is resolved from whichever list is loaded.
-        const entry = voidTargets.find((t) => String(t.id) === id)
+        // The same button is emitted by the void picker, the manage drawer and
+        // the expanded history panel, so the row is resolved from whichever
+        // list is loaded — fetching the project's entries when none is.
+        let entry = voidTargets.find((t) => String(t.id) === id)
             || (window.__rmManageEntries || []).find((e) => String(e.id) === id);
-        if (!entry || !voidForm) return;
+        if (!entry) {
+            try {
+                const entries = await ensureEntries(projectIdOf(btn));
+                entry = entries.find((e) => String(e.id) === id);
+            } catch (e) {
+                toast(e.message, 'error');
+            }
+        }
+        if (!entry) { toast('Data transaksi tidak ditemukan.', 'error'); return; }
+        if (!voidForm) return;
         if (pickerModal && !pickerModal.hidden) closeModal(pickerModal);
         resetForm(voidForm);
         $('[data-rm-entry-id]', voidForm).value = entry.id;

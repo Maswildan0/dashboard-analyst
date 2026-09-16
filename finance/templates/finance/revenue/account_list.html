@@ -41,6 +41,7 @@
                     <a href="{% sort_link 'nilai' %}" class="min-w-0 flex items-center justify-end gap-1 truncate px-2 hover:text-[#EB3237]" title="Urutkan Nilai Proyek">Nilai Proyek <span class="shrink-0 text-[9px]">{{ arrow_map.nilai }}</span></a>
                     <a href="{% sort_link 'pendapatan_berjalan' %}" class="min-w-0 flex items-center justify-end gap-1 truncate px-2 hover:text-[#EB3237]" title="Urutkan Pendapatan Diakui">Pendapatan Diakui <span class="shrink-0 text-[9px]">{{ arrow_map.pendapatan_berjalan }}</span></a>
                     <a href="{% sort_link 'total_pendapatan' %}" class="min-w-0 flex items-center justify-end gap-1 truncate px-2 hover:text-[#EB3237]" title="Urutkan Total Pendapatan">Total Pendapatan <span class="shrink-0 text-[9px]">{{ arrow_map.total_pendapatan }}</span></a>
+                    <span class="min-w-0 flex items-center justify-center" title="Aksi">Aksi</span>
                 </div>
 
                 {% for row in rows %}
@@ -53,7 +54,10 @@
                     <span class="min-w-0 text-center">{{ row.bulan }}</span>
                     <span class="min-w-0 text-[#334155] truncate" title="{{ row.organization }}">{{ row.organization }}</span>
                     <span class="min-w-0 text-center font-brand text-[12px] font-bold text-[#475569] truncate" style="font-family:'Cousine',monospace;" title="{{ row.pp_code }}">{{ row.pp_code }}</span>
-                    <span class="min-w-0 text-[#334155] pl-2 pr-2 rev-name-cell" title="{{ row.nama_proyek }}">{{ row.nama_proyek }}</span>
+                    <span class="min-w-0 flex items-center gap-1 pl-2 pr-2 rev-name-cell" title="{{ row.nama_proyek }}">
+                        <span class="truncate">{{ row.nama_proyek }}</span>
+                        {% if row.manual_count %}<span class="rm-badge rm-badge-manual" title="Data manual aktif: {{ row.manual_count }}">MANUAL</span>{% endif %}
+                    </span>
                     <span class="min-w-0 text-center font-brand text-[12px] font-bold text-[#475569] truncate" style="font-family:'Cousine',monospace;" title="{{ row.akun }}">{{ row.akun }}</span>
                     <span class="min-w-0 font-semibold text-[#0F172A] pl-2 pr-2 rev-name-cell" title="{{ row.nama }}">{{ row.nama }}</span>
                     <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2" title="Nilai Proyek: {{ row.nilai_disp }}">{{ row.nilai_disp }}</span>
@@ -62,10 +66,7 @@
                         <span class="whitespace-nowrap tabular-nums" title="Total Pendapatan: {{ row.total_disp }}">{{ row.total_disp }}</span>
                         <span class="project-table-progress"><span class="block h-[3px] rounded" style="width:{{ row.progress_width }}%; background:{{ row.progress_color }};"></span></span>
                     </span>
-                    {# Provenance + row actions live inside the last cell so the
-                       existing column template stays untouched (§63). #}
-                    <span class="min-w-0 flex items-center justify-end gap-1">
-                        {% if row.manual_count %}<span class="rm-badge rm-badge-manual" title="Data manual aktif: {{ row.manual_count }}">MANUAL</span>{% endif %}
+                    <span class="min-w-0 flex items-center justify-end">
                         {% include 'finance/revenue/_row_actions.html' with row=row %}
                     </span>
                 </div>
@@ -79,6 +80,7 @@
                     <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2">{{ grand.nilai_disp }}</span>
                     <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2">{{ grand.berjalan_disp }}</span>
                     <span class="min-w-0 text-right whitespace-nowrap tabular-nums px-2">{{ grand.total_disp }}</span>
+                    <span></span>
                 </div>
             </div>
         </div>

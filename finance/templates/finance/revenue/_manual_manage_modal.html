@@ -6,8 +6,8 @@ Two distinct levels, never one ambiguous "Edit":
   Project      -> Nama / No Proyek / Nilai Proyek (MANUAL projects only)
   Transaction  -> Tanggal / No Bukti / No Dokumen / Keterangan / Nominal
 
-Each transaction row carries its own Edit and Hapus. An imported project shows
-its master fields read-only and offers no delete on the source rows.
+The txn-edit dialog below edits ONE transaction: only the fields an operator
+keys appear there, and "Total Pendapatan" is never an input (it is derived).
 {% endcomment %}
 <div class="rm-modal" data-rm-modal="manage" hidden>
     <div class="rm-modal-backdrop" data-rm-close></div>
@@ -28,8 +28,6 @@ its master fields read-only and offers no delete on the source rows.
     </div>
 </div>
 
-{# Transaction-level edit form. Only the fields an operator keys appear here;
-   Total Pendapatan is never an input (§11). #}
 <div class="rm-modal" data-rm-modal="txn-edit" hidden>
     <div class="rm-modal-backdrop" data-rm-close></div>
     <div class="rm-modal-dialog" role="dialog" aria-modal="true"

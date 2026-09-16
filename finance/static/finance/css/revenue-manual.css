@@ -140,7 +140,13 @@
 .rm-badge-type { background: #F1F5F9; color: #334155; font-size: 10px; }
 .rm-prov { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
 
+/* Action column of the main grid: 40px, icon centred, never grows (§17). */
 .rm-rowmenu { position: relative; display: flex; justify-content: center; }
+.rm-rowmenu-inline { justify-content: flex-end; }
+.rm-rowmenu-inline .rm-rowmenu-panel { top: 26px; }
+/* Per-transaction action header/cell of the expanded recognition table. */
+.rev-rec-act { width: 44px; text-align: right; padding-right: 10px; }
+.rev-rec-act .rm-rowmenu-btn { width: 24px; height: 24px; font-size: 13px; }
 .rm-rowmenu-btn {
     border: 0; background: transparent; cursor: pointer; color: #94A3B8;
     width: 26px; height: 26px; border-radius: 6px; font-size: 14px;

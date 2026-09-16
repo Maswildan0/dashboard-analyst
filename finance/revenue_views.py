@@ -14,6 +14,7 @@ from dashboard.views import _assets_head, _fonts_head
 
 from .models import FinancialPeriod, Project, SimkugSyncLog
 from .manual_views import page_context as manual_page_context
+from .permissions import capabilities
 from .selectors import revenue_selectors as rsel
 from .services import revenue_service as rs
 from .services import revenue_project_service as rps
@@ -712,6 +713,9 @@ def project_recognitions(request, project_id):
         'is_manual': h.get('source_type') == 'MANUAL',
         'is_adjustment': h.get('source_type') == 'ADJUSTMENT',
         'source_type': h.get('source_type', 'IMPORTED'),
+        # Manual lines carry the entry they came from, which is what the
+        # per-transaction action menu acts on (imported GL has no such row).
+        'entry_id': h.get('entry_id'),
     } for h in history]
     month_full = month_name(ctx.month)
     month_short = month_name(ctx.month)[:3] if ctx.month else ''
@@ -739,6 +743,10 @@ def project_recognitions(request, project_id):
         'project': project, 'history': history_disp, 'history_disp': history_disp,
         'summary': summary, 'summary_disp': ctx_disp, 'ctx': ctx,
         'month_full': month_full, 'month_short': month_short, 'dash': '-',
+        # The per-transaction action menu needs the same permission set the
+        # page used, and the reported period's lock state.
+        'perms': capabilities(request.user),
+        'manual_period_closed': bool(ctx.period and ctx.period.is_closed),
     }
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         from django.template.loader import render_to_string
