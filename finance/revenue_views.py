@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, render
 from dashboard.views import _assets_head, _fonts_head
 
 from .models import FinancialPeriod, Project, SimkugSyncLog
+from .manual_views import page_context as manual_page_context
 from .selectors import revenue_selectors as rsel
 from .services import revenue_service as rs
 from .services import revenue_project_service as rps
@@ -255,7 +256,7 @@ def _gl_list(request, revenue_type):
     pages = max(1, -(-total // per_page))
     page = min(page, pages)
     start = (page - 1) * per_page
-    rows = all_rows[start:start + per_page]
+    rows = _attach_manual_flags(all_rows[start:start + per_page])
 
     for r in rows:
         if r.get('mode') == 'tf_program':
@@ -367,8 +368,10 @@ def _gl_list(request, revenue_type):
         q['page'] = pg
         return request.path + '?' + _qs(q)
 
+    page_key = 'tf' if revenue_type == 'TF' else 'ntf_research'
     return render(request, 'finance/revenue/account_list.html', {
         **_base_ctx(request, ctx, tab),
+        **manual_page_context(request, page_key),
         'ctx': ctx,
         'rows': rows,
         'grand': grand,
@@ -471,7 +474,7 @@ def ntf_project_list(request):
     pages = max(1, -(-total // per_page))
     page = min(page, pages)
     start = (page - 1) * per_page
-    rows = all_rows[start:start + per_page]
+    rows = _attach_manual_flags(all_rows[start:start + per_page])
     for r in rows:
         r['bulan'] = month_name(r['bulan'])
         # text cells: empty -> dash
@@ -532,6 +535,7 @@ def ntf_project_list(request):
 
     return render(request, 'finance/revenue/account_list.html', {
         **_base_ctx(request, ctx, 'revenue_ntf_project'),
+        **manual_page_context(request, 'ntf_project'),
         'page_name': 'NTF Project',
         'ctx': ctx,
         'rows': rows,
@@ -607,6 +611,40 @@ def _row_sort_key(sort):
     }.get(sort)
 
 
+def _attach_manual_flags(rows):
+    """Annotate project-grain rows with manual provenance for the row menu.
+
+    One query for the whole page: which projects carry manual entries (and how
+    many), and whether the project master itself is MANUAL. The template then
+    renders the provenance badge and the correct action menu (§17, §37) without
+    a query per row.
+    """
+    from collections import Counter
+    from .models import ManualRevenueEntry
+    pids = [r['project'].pk for r in rows if r.get('project') is not None]
+    counts = Counter()
+    if pids:
+        counts = Counter(ManualRevenueEntry.objects
+                         .filter(project_id__in=pids, status='POSTED')
+                         .values_list('project_id', flat=True))
+    voided = Counter()
+    if pids:
+        voided = Counter(ManualRevenueEntry.objects
+                         .filter(project_id__in=pids, status='VOID')
+                         .values_list('project_id', flat=True))
+    for r in rows:
+        project = r.get('project')
+        if project is None:
+            r['manual_count'] = 0
+            r['void_count'] = 0
+            r['project_source'] = ''
+            continue
+        r['manual_count'] = counts.get(project.pk, 0)
+        r['void_count'] = voided.get(project.pk, 0)
+        r['project_source'] = project.source_type
+    return rows
+
+
 def _progress_color(pct):
     if pct < 50:
         return '#FF383C'
@@ -669,6 +707,11 @@ def project_recognitions(request, project_id):
         'account_code': h['account_code'],
         'account_name': h['account_name'],
         'amount': 'Rp' + f'{int(h["amount"]):,}'.replace(',', '.'),
+        # Provenance is visible on manual lines; an imported GL row keeps its
+        # own voucher in the No Bukti column and gets no badge (§37, §44).
+        'is_manual': h.get('source_type') == 'MANUAL',
+        'is_adjustment': h.get('source_type') == 'ADJUSTMENT',
+        'source_type': h.get('source_type', 'IMPORTED'),
     } for h in history]
     month_full = month_name(ctx.month)
     month_short = month_name(ctx.month)[:3] if ctx.month else ''
@@ -744,7 +787,11 @@ def data_revenue_list(request):
         if 'all' in rtype_values or 'NTF_RESEARCH' in rtype_values:
             all_rows += rps.research_object_rows(pctx, search=search)
         if 'all' in rtype_values or 'NTF_PROJECT' in rtype_values:
-            # contract projects (P-) + layanan/sertifikasi objek (SRV-)
+            # Contract projects (P-) and service objects (SRV-) are disjoint
+            # project-number ranges, so both builders are concatenated below.
+            # research_object_rows() is NEVER added for this category: the
+            # RS- prefix is exclusive to NTF Research, keeping every row in
+            # this unified table backed by exactly ONE page builder (§16).
             all_rows += rps.project_rows(pctx, search=search)
             all_rows += rps.service_object_rows(pctx, search=search)
 
@@ -800,7 +847,7 @@ def data_revenue_list(request):
     pages = max(1, -(-total // per_page))
     page = min(page, pages)
     start = (page - 1) * per_page
-    rows = _finalize_tf_rows(all_rows[start:start + per_page])
+    rows = _attach_manual_flags(_finalize_tf_rows(all_rows[start:start + per_page]))
 
     # Grand totals (distinct Nilai per project; Total/Diakui = sum rows)
     _seen = set()
@@ -843,6 +890,7 @@ def data_revenue_list(request):
 
     return render(request, 'finance/revenue/data_revenue.html', {
         **_base_ctx(request, ctx, 'revenue_data'),
+        **manual_page_context(request, 'data'),
         'ctx': ctx,
         'rows': rows,
         'grand': grand,

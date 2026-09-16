@@ -32,6 +32,7 @@ from django.db.models import Sum
 from finance.models import (
     FinancialPeriod,
     KpiTarget,
+    ManualRevenueEntry,
     PPMaster,
     RevenueAccount,
     RevenueBudget,
@@ -82,9 +83,11 @@ def _net(credit, debit):
 def revenue_by_month(year, months, campus=None, organization=None):
     """{month: Decimal net revenue} for `months` of `year`.
 
-    Exactly two aggregate queries per call: one over the frozen
-    RevenueMonthlySnapshot rows of the closed periods, one over the GL rows of
-    the open periods. A month without a FinancialPeriod row is absent.
+    Frozen RevenueMonthlySnapshot rows for closed periods, live GL for open
+    ones, PLUS the additive POSTED-manual layer (`_manual_by_month`). Frozen
+    snapshots stay imported-GL only and are never rewritten, so a manual entry
+    contributes exactly once and this page agrees with the revenue module.
+    A month without a FinancialPeriod row is absent.
     """
     out = {}
     periods = list(FinancialPeriod.objects.filter(year=year, month__in=list(months)))
@@ -101,6 +104,49 @@ def revenue_by_month(year, months, campus=None, organization=None):
                        campus, organization)
         for row in qs.values('period__month').annotate(credit=Sum('credit'), debit=Sum('debit')):
             out[row['period__month']] = _net(row['credit'], row['debit'])
+    for month, amount in _manual_by_month(periods, campus, organization).items():
+        out[month] = out.get(month, ZERO) + amount
+    return out
+
+
+def _manual_scope(qs, campus=None, organization=None):
+    """Apply the campus/organization scope to a ManualRevenueEntry queryset.
+
+    Manual rows carry their OWN pp/organization_unit, so they are scoped
+    directly (never through a GL mapping that a MANUAL project does not have).
+    """
+    if campus is not None:
+        qs = qs.filter(pp__organization_unit__campus=campus)
+    if organization is not None:
+        qs = qs.filter(pp__organization_unit=organization)
+    return qs
+
+
+def _manual_by_month(periods, campus=None, organization=None):
+    """{month: Decimal} POSTED manual + adjustment totals per period."""
+    if not periods:
+        return {}
+    qs = _manual_scope(
+        ManualRevenueEntry.objects.filter(status='POSTED', period__in=list(periods)),
+        campus, organization)
+    return {
+        row['period__month']: row['total'] or ZERO
+        for row in qs.values('period__month').annotate(total=Sum('amount'))
+    }
+
+
+def _manual_by_category(periods, campus=None, organization=None, month_lte=None):
+    """{category_code: Decimal} POSTED manual totals for the given periods."""
+    if not periods:
+        return {}
+    qs = _manual_scope(
+        ManualRevenueEntry.objects.filter(status='POSTED', period__in=list(periods)),
+        campus, organization)
+    out = {}
+    for row in qs.values('revenue_category__code').annotate(total=Sum('amount')):
+        code = row['revenue_category__code']
+        if code:
+            out[code] = out.get(code, ZERO) + (row['total'] or ZERO)
     return out
 
 
@@ -210,6 +256,11 @@ def revenue_by_category_ytd(year, month, campus=None, organization=None):
             code = row['revenue_account__revenue_category__code']
             if code:
                 out[code] = out.get(code, ZERO) + _net(row['credit'], row['debit'])
+    # Additive POSTED-manual layer (see revenue_by_month) so the composition
+    # panel reports the same actual as the trend chart and the KPI card.
+    all_periods = list(FinancialPeriod.objects.filter(year=year, month__in=list(months)))
+    for code, amount in _manual_by_category(all_periods, campus, organization).items():
+        out[code] = out.get(code, ZERO) + amount
     return out
 
 
@@ -270,6 +321,14 @@ def revenue_ranking(year, month):
             # raw account code; it still counts toward the organization total.
             code = row['revenue_account__account_code'] or row['account_code_raw'] or ''
             add_actual((row['pp_id'], code), _net(row['credit'], row['debit']))
+    # POSTED manual rows join the SAME (pp, account) grain, so the ranking leaf
+    # and its organization total reconcile with the KPI card and the trend.
+    for row in (ManualRevenueEntry.objects
+                .filter(status='POSTED', period_id__in=[p.pk for p in periods])
+                .values('pp_id', 'revenue_account__account_code')
+                .annotate(total=Sum('amount'))):
+        add_actual((row['pp_id'], row['revenue_account__account_code'] or ''),
+                   row['total'] or ZERO)
 
     # --- RKA YTD at the same (PP, account) grain, phased Jan..month.
     rka = {}

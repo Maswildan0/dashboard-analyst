@@ -42,7 +42,9 @@ FINANCE_MODELS = [
 ]
 
 ALL_TABLES = [m._meta.db_table for m in FINANCE_MODELS]
-RESET_TABLES = list(reversed(ALL_TABLES))
+# Manual revenue rows are not part of the MySQL source and are protected by
+# FK RESTRICT/PROTECT, so truncate them first (see the dummy importer).
+RESET_TABLES = ['finance_manualrevenueentry'] + list(reversed(ALL_TABLES))
 
 MONEY_FIELDS = {
     'finance_project': ['project_value'],

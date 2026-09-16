@@ -7,6 +7,7 @@ from .models import (
     FinancialSummary,
     GLProjectMapping,
     KpiTarget,
+    ManualRevenueEntry,
     NtfReportSnapshot,
     OrganizationUnit,
     PPMaster,
@@ -67,8 +68,22 @@ class KpiTargetAdmin(admin.ModelAdmin):
 
 @admin.register(FinancialDataAuditLog)
 class FinancialDataAuditLogAdmin(admin.ModelAdmin):
-    list_display = ('timestamp', 'user', 'action', 'model', 'record_id')
-    readonly_fields = ('timestamp',)
+    list_display = ('timestamp', 'user', 'action', 'model', 'record_id', 'reason')
+    list_filter = ('action', 'model')
+    search_fields = ('reason',)
+    # The audit trail is immutable by design (§31): the admin exposes it for
+    # inspection only — there is no add, change or delete route.
+    readonly_fields = ('user', 'action', 'model', 'record_id', 'old_value',
+                       'new_value', 'reason', 'timestamp')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 # ---------------- Revenue module (SIMKUG-driven) ----------------
@@ -161,3 +176,20 @@ class SimkugSyncLogAdmin(admin.ModelAdmin):
     list_display = ('sync_type', 'period', 'status', 'rows_processed', 'rows_upserted', 'started_at', 'finished_at')
     list_filter = ('sync_type', 'status')
     readonly_fields = ('started_at',)
+
+
+@admin.register(ManualRevenueEntry)
+class ManualRevenueEntryAdmin(admin.ModelAdmin):
+    """Read-mostly view of manual revenue. Hapus is a VOID via the UI, so the
+    admin delete route is disabled — a finance row is never physically removed
+    (§20, §50)."""
+
+    list_display = ('transaction_date', 'period', 'source_type', 'status',
+                    'pp', 'revenue_account', 'project', 'amount', 'created_by')
+    list_filter = ('status', 'source_type', 'period__year', 'revenue_category')
+    search_fields = ('project__project_number', 'project__project_name',
+                     'evidence_number', 'document_number', 'description', 'pp__pp_code')
+    readonly_fields = ('created_at', 'updated_at', 'voided_at', 'restored_at')
+
+    def has_delete_permission(self, request, obj=None):
+        return False

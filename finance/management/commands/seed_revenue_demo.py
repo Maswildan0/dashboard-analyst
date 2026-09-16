@@ -25,6 +25,7 @@ from finance.models import (
     Campus,
     FinancialPeriod,
     GLProjectMapping,
+    ManualRevenueEntry,
     NtfReportSnapshot,
     OrganizationUnit,
     PPMaster,
@@ -231,6 +232,9 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------
     def _wipe(self):
+        # Manual revenue rows are PROTECTed by their FKs and are not part of
+        # the demo dataset, so they must go first or the deletes below raise.
+        ManualRevenueEntry.objects.all().delete()
         SimkugSyncLog.objects.all().delete()
         RevenueMonthlySnapshot.objects.all().delete()
         ProjectMonthlySnapshot.objects.all().delete()

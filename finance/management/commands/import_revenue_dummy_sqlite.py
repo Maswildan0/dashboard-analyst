@@ -40,8 +40,11 @@ FINANCE_MODELS = [
     M.KpiTarget, M.SimkugSyncLog, M.FinancialDataAuditLog,
 ]
 
-# Reverse order for truncation (children first).
-RESET_MODELS = list(reversed(FINANCE_MODELS))
+# Reverse order for truncation (children first). Manual revenue rows are keyed
+# by PROTECTed FKs and are NOT part of the canonical dummy dataset, so they are
+# cleared explicitly first: a dev --reset then wipes them instead of failing on
+# the period/project protection.
+RESET_MODELS = [M.ManualRevenueEntry] + list(reversed(FINANCE_MODELS))
 
 # Every table that must exist in the source for a PASS report.
 ALL_FINANCE_TABLES = [m._meta.db_table for m in FINANCE_MODELS]

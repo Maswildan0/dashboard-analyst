@@ -1,0 +1,85 @@
+{% comment %}
+Manual data drawer (§17, §18): the single place where an operator edits a
+MANUAL project and its individual recognition transactions.
+
+Two distinct levels, never one ambiguous "Edit":
+  Project      -> Nama / No Proyek / Nilai Proyek (MANUAL projects only)
+  Transaction  -> Tanggal / No Bukti / No Dokumen / Keterangan / Nominal
+
+Each transaction row carries its own Edit and Hapus. An imported project shows
+its master fields read-only and offers no delete on the source rows.
+{% endcomment %}
+<div class="rm-modal" data-rm-modal="manage" hidden>
+    <div class="rm-modal-backdrop" data-rm-close></div>
+    <div class="rm-modal-dialog rm-modal-lg" role="dialog" aria-modal="true"
+         aria-labelledby="rm-manage-title">
+        <div class="rm-modal-head">
+            <div>
+                <h3 class="rm-modal-title" id="rm-manage-title">Kelola Data Manual</h3>
+                <p class="rm-modal-sub" data-rm-manage-sub></p>
+            </div>
+            <button type="button" class="rm-modal-x" data-rm-close aria-label="Tutup">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="rm-modal-body" data-rm-manage-body>
+            <div class="rm-empty">Memuat data manual…</div>
+        </div>
+    </div>
+</div>
+
+{# Transaction-level edit form. Only the fields an operator keys appear here;
+   Total Pendapatan is never an input (§11). #}
+<div class="rm-modal" data-rm-modal="txn-edit" hidden>
+    <div class="rm-modal-backdrop" data-rm-close></div>
+    <div class="rm-modal-dialog" role="dialog" aria-modal="true"
+         aria-labelledby="rm-txn-title">
+        <div class="rm-modal-head">
+            <div>
+                <h3 class="rm-modal-title" id="rm-txn-title">Edit Pengakuan</h3>
+                <p class="rm-modal-sub">Perubahan pada level transaksi. Nilai
+                    project master tidak ikut berubah.</p>
+            </div>
+            <button type="button" class="rm-modal-x" data-rm-close aria-label="Tutup">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <form class="rm-form" data-rm-form="txn-edit" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="entry_id" data-rm-txn-id>
+            <div class="rm-form-error" data-rm-error hidden></div>
+            <div class="rm-grid">
+                <label class="rm-field">
+                    <span class="rm-label">Tanggal Pengakuan <b>*</b></span>
+                    <input type="date" name="transaction_date" class="rm-input" required>
+                </label>
+                <label class="rm-field">
+                    <span class="rm-label">Nominal Pengakuan <b>*</b></span>
+                    <input type="text" name="amount" class="rm-input rm-money"
+                           inputmode="decimal" required>
+                </label>
+                <label class="rm-field">
+                    <span class="rm-label">No Bukti</span>
+                    <input type="text" name="evidence_number" class="rm-input" maxlength="60">
+                </label>
+                <label class="rm-field">
+                    <span class="rm-label">No Dokumen</span>
+                    <input type="text" name="document_number" class="rm-input" maxlength="60">
+                </label>
+                <label class="rm-field rm-field-wide">
+                    <span class="rm-label">Keterangan</span>
+                    <textarea name="description" class="rm-input rm-textarea" rows="2"></textarea>
+                </label>
+            </div>
+            <div class="rm-modal-foot">
+                <span class="rm-foot-note"><i class="bi bi-clock-history"></i> Perubahan tercatat di riwayat audit.</span>
+                <div class="rm-foot-btns">
+                    <button type="button" class="rm-btn rm-btn-ghost" data-rm-close>Batal</button>
+                    <button type="submit" class="rm-btn rm-btn-primary" data-rm-submit>
+                        <span class="rm-spinner" hidden></span><span data-rm-submit-text>Simpan</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

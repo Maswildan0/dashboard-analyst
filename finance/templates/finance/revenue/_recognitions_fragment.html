@@ -40,7 +40,11 @@ Summary figures:
             {% for h in history %}
             <tr>
                 <td class="rev-rec-date">{{ h.date|date:"d M Y" }}</td>
-                <td>{{ h.voucher|default:'-' }}</td>
+                <td>
+                    {% if h.is_manual %}<span class="rm-badge rm-badge-manual">MANUAL</span>
+                    {% elif h.is_adjustment %}<span class="rm-badge rm-badge-adj">ADJ</span>
+                    {% else %}{{ h.voucher|default:'-' }}{% endif %}
+                </td>
                 <td>{{ h.document|default:'-' }}</td>
                 <td class="rev-rec-desc">{{ h.description|default:'-' }}</td>
                 <td class="rev-acc-cell"><span class="mono">{{ h.account_code|default:'-' }}</span>{% if h.account_name and h.account_name != "" %} {{ h.account_name }}{% endif %}</td>

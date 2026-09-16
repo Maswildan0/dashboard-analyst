@@ -1,0 +1,38 @@
+{% comment %}
+Audit timeline fragment (§32). Rendered per event, oldest first, with only the
+fields that actually changed. Amounts render in full rupiah.
+No edit/delete control exists here by design (§31).
+{% endcomment %}
+{% if events %}
+<div class="rm-timeline">
+    {% for e in events %}
+    <div class="rm-tl-item">
+        <div class="rm-tl-marker rm-tl-{{ e.action|lower }}"></div>
+        <div class="rm-tl-body">
+            <div class="rm-tl-head">
+                <span class="rm-tl-action rm-tl-badge-{{ e.action|lower }}">{{ e.action }}</span>
+                <span class="rm-tl-date">{{ e.date|date:"d M Y H:i" }}</span>
+                <span class="rm-tl-user">oleh {{ e.user }}</span>
+            </div>
+            {% if e.changes %}
+            <div class="rm-tl-changes">
+                {% for label, before, after in e.changes %}
+                <div class="rm-tl-change">
+                    <span class="rm-tl-label">{{ label }}</span>
+                    <span class="rm-tl-before">{{ before }}</span>
+                    <i class="bi bi-arrow-right"></i>
+                    <span class="rm-tl-after">{{ after }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if e.reason %}
+            <div class="rm-tl-reason"><i class="bi bi-chat-left-text"></i> {{ e.reason }}</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="rm-empty">Belum ada riwayat perubahan untuk data ini.</div>
+{% endif %}

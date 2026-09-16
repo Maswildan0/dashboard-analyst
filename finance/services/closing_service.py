@@ -8,6 +8,12 @@ close_revenue_period(period):
   5. set is_closed = True
   6. audit log
 
+Closing does NOT freeze POSTED manual entries into the snapshots: a frozen
+snapshot stays a faithful image of the imported GL position, and manual rows
+remain the additive layer every reader adds on top (§15, §46). Because a
+manual entry can only be created while its period is OPEN, closing a period
+locks its manual rows too — edit / void / restore are then refused (§24-#25).
+
 Re-running after close returns immediately (idempotent).
 """
 from datetime import date

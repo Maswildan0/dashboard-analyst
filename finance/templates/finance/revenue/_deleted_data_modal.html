@@ -1,0 +1,26 @@
+{% comment %}
+Deleted / VOID manual data (§22). Shown as a large modal so all four pages
+share it; the fragment is loaded from the server, which also decides whether
+each row may be restored (period still OPEN + permission).
+{% endcomment %}
+<div class="rm-modal" data-rm-modal="deleted" hidden>
+    <div class="rm-modal-backdrop" data-rm-close></div>
+    <div class="rm-modal-dialog rm-modal-xl" role="dialog" aria-modal="true"
+         aria-labelledby="rm-deleted-title">
+        <div class="rm-modal-head">
+            <div>
+                <h3 class="rm-modal-title" id="rm-deleted-title">Data Terhapus</h3>
+                <p class="rm-modal-sub">
+                    Data manual yang sudah dihapus (VOID). Tidak diikutkan dalam
+                    perhitungan dashboard; riwayat tetap tersimpan untuk audit.
+                </p>
+            </div>
+            <button type="button" class="rm-modal-x" data-rm-close aria-label="Tutup">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="rm-modal-body" data-rm-deleted-body>
+            <div class="rm-empty">Memuat data terhapus…</div>
+        </div>
+    </div>
+</div>

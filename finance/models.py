@@ -188,6 +188,7 @@ class FinancialDataAuditLog(models.Model):
     record_id = models.PositiveBigIntegerField(null=True, blank=True)
     old_value = models.JSONField(null=True, blank=True)
     new_value = models.JSONField(null=True, blank=True)
+    reason = models.TextField(blank=True, default='')
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -428,6 +429,11 @@ class Project(models.Model):
     )
     campus = models.ForeignKey(Campus, null=True, blank=True, on_delete=models.SET_NULL, related_name='projects')
     project_value = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    SOURCE_TYPES = [('IMPORTED', 'Imported'), ('MANUAL', 'Manual')]
+    # Provenance: an imported project (SIMKUG NTF report / GL seed) is
+    # read-only for master metadata; a MANUAL project was created through the
+    # manual-entry form and may be corrected while its period is OPEN.
+    source_type = models.CharField(max_length=20, choices=SOURCE_TYPES, default='IMPORTED')
     first_seen_period = models.ForeignKey(
         FinancialPeriod, null=True, blank=True, on_delete=models.SET_NULL, related_name='+'
     )
@@ -610,3 +616,110 @@ class SimkugSyncLog(models.Model):
 
     def __str__(self):
         return f'{self.sync_type} {self.started_at:%Y-%m-%d %H:%M} {self.status}'
+
+
+class ManualRevenueEntry(models.Model):
+    """Manually keyed revenue recognition / correction (transaction grain).
+
+    Provenance is explicit: an entry is either a MANUAL recognition of an
+    object the operator owns, or an ADJUSTMENT that corrects an imported
+    source (SIMKUG GL / NTF import) WITHOUT touching that source row.
+
+    Rules enforced in `finance.services.manual_revenue` (never here):
+      * period must be OPEN for create / edit / void / restore;
+      * one project = one PP = one revenue account (the account must be the
+        project's own mapped account unless the project is still unmapped);
+      * DELETE is a VOID (status), never a physical DELETE, so the audit
+        trail and the source snapshot stay reconstructible;
+      * POSTED rows feed the canonical actual; VOID rows never do.
+
+    Foreign keys are PROTECT so financial history can never be cascaded away
+    by deleting a period, project or account master row (§50).
+    """
+
+    SOURCE_TYPES = [
+        ('MANUAL', 'Manual'),
+        ('ADJUSTMENT', 'Adjustment'),
+    ]
+    STATUSES = [
+        ('POSTED', 'Posted'),
+        ('VOID', 'Void'),
+    ]
+
+    period = models.ForeignKey(
+        FinancialPeriod, on_delete=models.PROTECT, related_name='manual_entries'
+    )
+    revenue_category = models.ForeignKey(
+        RevenueCategory, on_delete=models.PROTECT, related_name='manual_entries'
+    )
+    organization_unit = models.ForeignKey(
+        OrganizationUnit, on_delete=models.PROTECT, related_name='manual_entries'
+    )
+    pp = models.ForeignKey(
+        PPMaster, on_delete=models.PROTECT, related_name='manual_entries'
+    )
+    revenue_account = models.ForeignKey(
+        RevenueAccount, on_delete=models.PROTECT, related_name='manual_entries'
+    )
+    project = models.ForeignKey(
+        Project, on_delete=models.PROTECT, related_name='manual_entries'
+    )
+
+    source_type = models.CharField(max_length=20, choices=SOURCE_TYPES, default='MANUAL')
+    status = models.CharField(max_length=10, choices=STATUSES, default='POSTED')
+
+    # --- transaction-level fields the operator actually keys (§10) ---
+    transaction_date = models.DateField()
+    evidence_number = models.CharField(max_length=60, blank=True, default='')
+    document_number = models.CharField(max_length=60, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    # Signed net revenue contribution (+ adds, - corrects). Decimal only.
+    amount = models.DecimalField(max_digits=20, decimal_places=2)
+
+    # --- adjustment provenance: the imported row being corrected ---
+    reference_ledger = models.ForeignKey(
+        RevenueLedger, null=True, blank=True, on_delete=models.PROTECT,
+        related_name='manual_adjustments'
+    )
+    reason = models.TextField(blank=True, default='')
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+'
+    )
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.TextField(blank=True, default='')
+
+    restored_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+'
+    )
+    restored_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-transaction_date', '-id']
+        indexes = [
+            models.Index(fields=['status', 'period']),
+            models.Index(fields=['project', 'revenue_account', 'status']),
+            models.Index(fields=['pp', 'revenue_account', 'status']),
+            models.Index(fields=['transaction_date']),
+        ]
+        permissions = [
+            ('restore_entry', 'Can restore a voided manual revenue entry'),
+            ('create_adjustment', 'Can create an adjustment entry'),
+            ('view_audit', 'Can view the manual revenue audit history'),
+        ]
+
+    def __str__(self):
+        return f'{self.transaction_date} {self.source_type} {self.amount} #{self.pk}'

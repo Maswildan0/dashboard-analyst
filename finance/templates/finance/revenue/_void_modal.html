@@ -1,0 +1,62 @@
+{% comment %}
+Void dialog (§21). The button says "Hapus Data", the backend performs a SOFT
+delete: the row keeps its identity and the audit trail keeps every event.
+
+The period select reuses the page's already-rendered options, so a VOIDED row
+from a CLOSED period is refused by the server even when the button was shown.
+{% endcomment %}
+<div class="rm-modal" data-rm-modal="void" hidden>
+    <div class="rm-modal-backdrop" data-rm-close></div>
+    <div class="rm-modal-dialog" role="dialog" aria-modal="true"
+         aria-labelledby="rm-void-title">
+        <div class="rm-modal-head">
+            <div>
+                <h3 class="rm-modal-title" id="rm-void-title">Hapus data manual?</h3>
+                <p class="rm-modal-sub">
+                    Data akan dikeluarkan dari perhitungan dashboard, tetapi riwayat
+                    perubahan tetap disimpan untuk kebutuhan audit.
+                </p>
+            </div>
+            <button type="button" class="rm-modal-x" data-rm-close aria-label="Tutup">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <form class="rm-form" data-rm-form="void" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="entry_id" data-rm-entry-id>
+            <div class="rm-form-error" data-rm-error hidden></div>
+
+            <div class="rm-recap" data-rm-recap></div>
+
+            <div class="rm-grid">
+                <label class="rm-field rm-field-wide">
+                    <span class="rm-label">Alasan Penghapusan <b>*</b></span>
+                    <select name="void_reason" class="rm-input" required>
+                        <option value="">— Pilih alasan —</option>
+                        {% for reason in void_reasons %}
+                        <option value="{{ reason }}">{{ reason }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="rm-field rm-field-wide" data-rm-other-wrap hidden>
+                    <span class="rm-label">Alasan Lainnya <b>*</b></span>
+                    <textarea name="void_reason_other" class="rm-input rm-textarea" rows="2"
+                              placeholder="Tuliskan alasan penghapusan"></textarea>
+                </label>
+            </div>
+
+            <div class="rm-modal-foot">
+                <span class="rm-foot-note rm-danger-note">
+                    <i class="bi bi-shield-lock"></i> Data tidak dihapus permanen (VOID).
+                </span>
+                <div class="rm-foot-btns">
+                    <button type="button" class="rm-btn rm-btn-ghost" data-rm-close>Batal</button>
+                    <button type="submit" class="rm-btn rm-btn-danger" data-rm-submit>
+                        <span class="rm-spinner" hidden></span><span data-rm-submit-text>Hapus Data</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

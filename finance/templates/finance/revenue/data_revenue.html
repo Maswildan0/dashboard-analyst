@@ -7,6 +7,7 @@
 {% block content %}
 <div class="px-8 py-6">
     {% include 'finance/revenue/_filters_multi.html' with show_type=True %}
+    {% include 'finance/revenue/_manual_actions.html' %}
 
     {# Table Card #}
     <div class="bg-white border border-[#E2E8F0] rounded-xl rev-table-card-outer">
@@ -66,6 +67,12 @@
                         <span class="whitespace-nowrap tabular-nums" title="Total Pendapatan: {{ row.total_disp }}">{{ row.total_disp }}</span>
                         <span class="project-table-progress"><span class="block h-[3px] rounded" style="width:{{ row.progress_width }}%; background:{{ row.progress_color }};"></span></span>
                     </span>
+                    {# Provenance + row actions live inside the last cell so the
+                       existing column template stays untouched (§63). #}
+                    <span class="min-w-0 flex items-center justify-end gap-1">
+                        {% if row.manual_count %}<span class="rm-badge rm-badge-manual" title="Data manual aktif: {{ row.manual_count }}">MANUAL</span>{% endif %}
+                        {% include 'finance/revenue/_row_actions.html' with row=row %}
+                    </span>
                 </div>
 
                 <div class="rev-detail-panel" {% if row.mode == 'tf_program' %}data-project-panel="{{ row.project.pk }}"{% else %}data-account-panel="{{ row.pp_code }}|{{ row.akun }}"{% endif %} hidden></div>
@@ -118,4 +125,5 @@
 {% block scripts %}
 <script src="{% static 'finance/js/revenue-multifilter.js' %}" defer></script>
 <script src="{% static 'finance/js/revenue-project.js' %}" defer></script>
+<script src="{% static 'finance/js/revenue-manual.js' %}" defer></script>
 {% endblock %}

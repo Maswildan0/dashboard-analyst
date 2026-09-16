@@ -1,0 +1,22 @@
+{% comment %}
+Audit timeline (§32). Read-only: there is deliberately no control here to
+edit or delete an audit event (§31, §60).
+{% endcomment %}
+<div class="rm-modal" data-rm-modal="history" hidden>
+    <div class="rm-modal-backdrop" data-rm-close></div>
+    <div class="rm-modal-dialog rm-modal-lg" role="dialog" aria-modal="true"
+         aria-labelledby="rm-history-title">
+        <div class="rm-modal-head">
+            <div>
+                <h3 class="rm-modal-title" id="rm-history-title" data-rm-history-title>Riwayat Perubahan</h3>
+                <p class="rm-modal-sub" data-rm-history-sub>Jejak audit yang tidak dapat diubah.</p>
+            </div>
+            <button type="button" class="rm-modal-x" data-rm-close aria-label="Tutup">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="rm-modal-body" data-rm-history-body>
+            <div class="rm-empty">Memuat riwayat perubahan…</div>
+        </div>
+    </div>
+</div>
