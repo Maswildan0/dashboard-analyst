@@ -557,6 +557,10 @@ def recognition_history(project, year=None, month=None, month_lte=None, upto_dat
         'amount': _net(m.ledger),
         'source_type': 'IMPORTED',
         'entry_id': None,
+        # The imported row this line came from. An adjustment started from this
+        # transaction must reference exactly this ledger (§9, §12), which the
+        # per-transaction menu hands over as its selected source.
+        'ledger_id': m.ledger_id,
     } for m in qs]
 
     for e in mr.entries_for_scope(project=project):

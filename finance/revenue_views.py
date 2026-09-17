@@ -16,6 +16,7 @@ from .models import FinancialPeriod, Project, SimkugSyncLog
 from .manual_views import page_context as manual_page_context
 from .permissions import capabilities
 from .selectors import revenue_selectors as rsel
+from .services import manual_revenue as mr
 from .services import revenue_service as rs
 from .services import revenue_project_service as rps
 from .services.revenue_context import RevenueContext, month_name
@@ -612,6 +613,26 @@ def _row_sort_key(sort):
     }.get(sort)
 
 
+def project_source_coordinates(project, *, account_code=None):
+    """Organization / PP / account / category of a project (§9).
+
+    A correction started from one transaction line has no table row to copy
+    the coordinates from, so they are resolved here from the project's own
+    mapped GL — the same source of truth every other reader uses.
+    """
+    account = mr.project_account_for(project)
+    return {
+        'org_id': (project.organization_unit_id
+                   or (project.pp.organization_unit_id if project.pp else '')
+                   or ''),
+        'pp': project.pp.pp_code if project.pp else '',
+        # The corrected row may be one account of the project; without one,
+        # fall back to the account its GL is keyed on.
+        'account': account_code or (account.account_code if account else ''),
+        'type': account.revenue_category.code if account and account.revenue_category else '',
+    }
+
+
 def _attach_manual_flags(rows, request=None):
     """Annotate project-grain rows with manual provenance for the row menu.
 
@@ -751,8 +772,11 @@ def project_recognitions(request, project_id):
         'is_adjustment': h.get('source_type') == 'ADJUSTMENT',
         'source_type': h.get('source_type', 'IMPORTED'),
         # Manual lines carry the entry they came from, which is what the
-        # per-transaction action menu acts on (imported GL has no such row).
+        # per-transaction action menu acts on. An imported GL line has no entry
+        # but does have the ledger it was read from, which is the source a
+        # correction started from this row must reference (§9, §12).
         'entry_id': h.get('entry_id'),
+        'ledger_id': h.get('ledger_id'),
     } for h in history]
     month_full = month_name(ctx.month)
     month_short = month_name(ctx.month)[:3] if ctx.month else ''
@@ -784,6 +808,9 @@ def project_recognitions(request, project_id):
         # page used, and the reported period's lock state.
         'perms': capabilities(request.user),
         'manual_period_closed': bool(ctx.period and ctx.period.is_closed),
+        # Same coordinates a table row exposes, so a correction started from a
+        # transaction line prefills its project without a second lookup (§9).
+        'coords': project_source_coordinates(project, account_code=acc_filter),
     }
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         from django.template.loader import render_to_string

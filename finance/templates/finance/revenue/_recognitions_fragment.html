@@ -7,7 +7,14 @@ Summary figures:
   Total Pendapatan          = lifetime recognised up to the period end
   Nilai Proyek              = project value (Project Master)
   Recognition               = Total / Nilai{% endcomment %}
-<div class="rev-rec-head" data-rm-recognitions="{{ project.pk }}">
+{% comment %}
+data-rm-* mirror the coordinates a table row carries: the per-transaction menu
+starts a correction from here, so the dialog can prefill the project's
+organization / PP / account without asking the operator again (§9).
+{% endcomment %}
+<div class="rev-rec-head" data-rm-recognitions="{{ project.pk }}"
+     data-rm-org="{{ coords.org_id }}" data-rm-pp="{{ coords.pp }}"
+     data-rm-account="{{ coords.account }}" data-rm-type="{{ coords.type }}">
     <div class="rev-rec-title">
         <span class="rev-rec-badge">RIWAYAT PENGAKUAN PENDAPATAN</span>
         <span class="rev-rec-sub">{{ project.project_number }} · {{ project.project_name }}{% if summary_disp.acc_name %} — {{ summary_disp.acc_code }} {{ summary_disp.acc_name }}{% endif %}</span>
@@ -51,13 +58,22 @@ Summary figures:
                 <td class="rev-acc-cell"><span class="mono">{{ h.account_code|default:'-' }}</span>{% if h.account_name and h.account_name != "" %} {{ h.account_name }}{% endif %}</td>
                 <td class="num tabular-nums">{{ h.amount }}</td>
                 <td class="rev-rec-act">
-                    {% if h.entry_id %}
+                    {% if h.entry_id or h.ledger_id %}
                     <span class="rm-rowmenu rm-rowmenu-inline" data-rm-rowmenu>
                         <button type="button" class="rm-rowmenu-btn" data-rm-rowmenu-toggle
                                 aria-haspopup="menu" aria-expanded="false" aria-label="Aksi transaksi">
                             <i class="bi bi-three-dots-vertical"></i>
                         </button>
                         <div class="rm-rowmenu-panel" role="menu" hidden>
+                            {% if h.ledger_id %}
+                            {# Imported GL line: it is never edited in place, it is corrected. #}
+                            {% if perms.adjustment %}
+                            <button type="button" role="menuitem" class="rm-rowmenu-item"
+                                    data-rm-adjust-ledger="{{ h.ledger_id }}">
+                                <i class="bi bi-sliders"></i> Koreksi / Adjustment
+                            </button>
+                            {% endif %}
+                            {% else %}
                             {% if perms.edit %}
                             <button type="button" role="menuitem" class="rm-rowmenu-item"
                                     data-rm-edit-entry-from-history="{{ h.entry_id }}">
@@ -75,6 +91,7 @@ Summary figures:
                                     data-rm-void-entry="{{ h.entry_id }}">
                                 <i class="bi bi-trash3"></i> Hapus
                             </button>
+                            {% endif %}
                             {% endif %}
                         </div>
                     </span>

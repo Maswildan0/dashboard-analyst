@@ -285,20 +285,109 @@
         }
     }
 
-    async function loadLedger(form) {
-        const pp = $('[data-rm-pp]', form);
-        const acc = $('[data-rm-account]', form);
-        const ledger = $('[data-rm-ledger]', form);
-        if (!ledger) return;
-        if (!pp || !pp.value || !acc || !acc.value) {
-            setOptions(ledger, [], '— Pilih PP & Akun dahulu —');
+    /* ------------------------------------------------------------------ *
+     * Source transaction picker (§3-#15)
+     *
+     * The source candidates are the transactions MAPPED to the selected
+     * project — never every transaction sharing its PP and account, because
+     * one PP carries several projects and they can share an account. The query
+     * is scoped on the server; this only renders and searches what comes back.
+     * ------------------------------------------------------------------ */
+    function ledgerPicker(form) {
+        return $('[data-rm-ledger-picker]', form) || null;
+    }
+
+    function setLedgerHint(form, text, isError) {
+        const hint = $('[data-rm-ledger-hint]', form);
+        if (!hint) return;
+        hint.textContent = text || '';
+        hint.classList.toggle('rm-hint-error', !!isError);
+    }
+
+    /** Write the chosen transaction back into the form + the visible label. */
+    function selectLedger(form, item) {
+        const input = $('[data-rm-ledger]', form);
+        const label = $('[data-rm-ledger-label]', form);
+        if (!input) return;
+        input.value = item ? item.value : '';
+        if (label) {
+            label.textContent = item
+                ? `${item.date_text} · ${item.label} · ${item.amount_text}`
+                : '';
+            label.hidden = !item;
+        }
+        const picker = ledgerPicker(form);
+        if (picker) {
+            picker.querySelectorAll('[data-rm-ledger-option]').forEach((el) => {
+                el.classList.toggle('is-selected', !!item && el.dataset.rmValue === String(item.value));
+            });
+        }
+    }
+
+    function renderLedgerOptions(form, items, emptyText) {
+        const picker = ledgerPicker(form);
+        const list = picker ? $('[data-rm-ledger-list]', picker) : null;
+        if (!list) return;
+        list.innerHTML = '';
+        if (!items.length) {
+            const empty = document.createElement('div');
+            empty.className = 'rm-empty';
+            empty.textContent = emptyText;
+            list.appendChild(empty);
             return;
         }
+        items.forEach((item) => {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'rm-src-row';
+            row.dataset.rmLedgerOption = '1';
+            row.dataset.rmValue = item.value;
+            row.innerHTML = `
+                <span class="rm-src-date"></span>
+                <span class="rm-src-id"></span>
+                <span class="rm-src-desc"></span>
+                <span class="rm-src-amount"></span>`;
+            row.querySelector('.rm-src-date').textContent = item.date_text;
+            row.querySelector('.rm-src-id').textContent = item.label;
+            row.querySelector('.rm-src-desc').textContent = item.description || '-';
+            row.querySelector('.rm-src-amount').textContent = item.amount_text;
+            row.addEventListener('click', () => selectLedger(form, item));
+            list.appendChild(row);
+        });
+    }
+
+    async function loadLedger(form, keepValue) {
+        const project = $('[data-rm-project]', form);
+        const input = $('[data-rm-ledger]', form);
+        const picker = ledgerPicker(form);
+        if (!input || !picker) return;
+        const projectId = project ? project.value : '';
+
+        // A different project invalidates the previous choice: its ledger is
+        // not mapped to the new project, so keeping it would let the operator
+        // submit a correction against the wrong object (§7).
+        if (!keepValue) selectLedger(form, null);
+
+        if (!projectId) {
+            renderLedgerOptions(form, [], 'Pilih project terlebih dahulu.');
+            setLedgerHint(form, 'Pilih project untuk memuat transaksi sumbernya.', false);
+            return;
+        }
+        const search = ($('[data-rm-ledger-search]', form) || {}).value || '';
         try {
-            const items = await getJSON(URLS.optLedger, { pp: pp.value, account: acc.value });
-            setOptions(ledger, items, '— Tanpa referensi —');
+            const items = await getJSON(URLS.optLedger, { project: projectId, q: search });
+            const empty = search
+                ? `Tidak ada transaksi sumber yang cocok dengan "${search}".`
+                : 'Belum ada transaksi sumber yang terpetakan ke proyek ini.';
+            renderLedgerOptions(form, items, empty);
+            setLedgerHint(form, search ? '' : 'Hanya transaksi yang terpetakan ke project ini.', false);
+            if (keepValue) {
+                const match = items.find((i) => String(i.value) === String(keepValue));
+                if (match) selectLedger(form, match);
+            }
         } catch (e) {
-            setOptions(ledger, [], '— Gagal memuat transaksi sumber —');
+            renderLedgerOptions(form, [], 'Gagal memuat transaksi sumber.');
+            setLedgerHint(form, 'Gagal memuat transaksi sumber.', true);
         }
     }
 
@@ -449,6 +538,44 @@
         return row ? row.dataset : null;
     }
 
+    /** The expanded detail panel that belongs to `row`. */
+    function detailPanelOf(row) {
+        if (!row) return null;
+        if (row.dataset.project) {
+            return document.querySelector(
+                `.rev-detail-panel[data-project-panel="${row.dataset.project}"]`);
+        }
+        const next = row.nextElementSibling;
+        return next && next.classList && next.classList.contains('rev-detail-panel')
+            ? next : null;
+    }
+
+    /** The expanded recognition panel providing context for `el` (§9).
+
+        A row menu is portaled to <body> while open, so the surrounding markup
+        is unreachable from its items. `openRowMenuPanel` recorded the host at
+        portal time; this reads it back, covering both a table row (whose panel
+        is its sibling) and a menu opened from inside a panel already. */
+    function detailPanelFor(el) {
+        const direct = el && el.closest('.rev-detail-panel');
+        if (direct) return direct;
+        const menu = el && el.closest('.rm-rowmenu-panel');
+        if (menu) return menu.__rmDetailPanel || detailPanelOf(menu.__rmOwner);
+        return detailPanelOf(el && el.closest('.rev-row-expand'));
+    }
+
+    /** The element carrying the coordinates for `el` (§9).
+
+        Returns the ELEMENT, not its dataset: every caller feeds the result to
+        `prefillFromRow`, which reads `.dataset` itself.
+    */
+    function recognitionSource(el) {
+        const direct = el && el.closest('[data-rm-recognitions]');
+        if (direct) return direct;
+        const panel = detailPanelFor(el);
+        return (panel && panel.querySelector('[data-rm-recognitions]')) || null;
+    }
+
     /* One click dispatcher for every action control. It runs BEFORE the row
        handler (capture phase) and stops propagation whenever the click landed
        inside a row menu, so working the menu never toggles the expand panel. */
@@ -497,6 +624,18 @@
             await openAdjustment(adjust.dataset.rmAdjustProject, rowOf(adjust));
             return;
         }
+        /* Correction started from ONE transaction of the expanded recognition
+           panel (§9): the project comes from the panel being expanded and the
+           source is that exact ledger, so the operator selects nothing twice.
+           The panel head carries the same coordinates a table row does. */
+        const adjustLedger = ev.target.closest('[data-rm-adjust-ledger]');
+        if (adjustLedger) {
+            if (CFG.closed) { toast('Periode sudah ditutup.', 'error'); return; }
+            const projectId = projectIdOf(adjustLedger);
+            const source = recognitionSource(adjustLedger);
+            await openAdjustment(projectId, source, adjustLedger.dataset.rmAdjustLedger);
+            return;
+        }
         const historyBtn = ev.target.closest('[data-rm-history-project]');
         if (historyBtn) {
             await openHistory(historyBtn.dataset.rmHistoryProject, false);
@@ -528,10 +667,15 @@
 
     /** Project id owning the fragment `el` sits in (the expanded panel). */
     function projectIdOf(el) {
-        const panel = el.closest('[data-project-panel]');
+        const panel = el && el.closest('[data-project-panel]');
         if (panel) return panel.dataset.projectPanel;
-        const head = el.closest('[data-rm-recognitions]');
-        return head ? head.dataset.rmRecognitions : null;
+        const head = el && el.closest('[data-rm-recognitions]');
+        if (head) return head.dataset.rmRecognitions;
+        // A menu item is portaled to <body>; its detail panel was recorded
+        // when the menu opened (see detailPanelFor).
+        const owner = detailPanelFor(el);
+        const ownerHead = owner && owner.querySelector('[data-rm-recognitions]');
+        return ownerHead ? ownerHead.dataset.rmRecognitions : null;
     }
 
     /** Load (once per project) the manual entries the row menus act on. */
@@ -616,6 +760,10 @@
     function openRowMenuPanel(panel, host) {
         panel.__rmHost = host;
         panel.__rmOwner = host.closest('.rev-row-expand');
+        // A row menu inside an expanded recognition panel has no owning table
+        // row; its context is that detail panel instead, which is what the
+        // per-transaction actions need once the menu is portaled (§9).
+        panel.__rmDetailPanel = host.closest('.rev-detail-panel');
         host.__rmPanel = panel;
         panel.hidden = false;
         panel.classList.add('rm-rowmenu-portal');
@@ -712,7 +860,7 @@
     const adjustModal = $('[data-rm-modal="adjustment"]');
     const adjustForm = adjustModal ? $('[data-rm-form="adjustment"]', adjustModal) : null;
 
-    async function openAdjustment(projectId, rowEl) {
+    async function openAdjustment(projectId, rowEl, ledgerId) {
         if (!adjustForm) return;
         resetForm(adjustForm);
         periodChoices(adjustForm);
@@ -721,16 +869,18 @@
         setOptions($('[data-rm-pp]', adjustForm), [], '— Pilih Organization dahulu —');
         setOptions($('[data-rm-account]', adjustForm), [], '— Pilih Jenis Revenue dahulu —');
         setOptions($('[data-rm-project]', adjustForm), [], '— Pilih PP & Akun dahulu —');
-        setOptions($('[data-rm-ledger]', adjustForm), [], '— Pilih PP & Akun dahulu —');
+        const searchInput = $('[data-rm-ledger-search]', adjustForm);
+        if (searchInput) searchInput.value = '';
+        selectLedger(adjustForm, null);
         const dateInput = $('[name=transaction_date]', adjustForm);
         if (dateInput) dateInput.value = todayISO();
         if (rowEl) await prefillFromRow(adjustForm, rowEl.dataset);
         // The adjusted object must stay selected even when the row carried no
         // account (an imported row without mapped GL has an empty code).
         if (projectId) await loadProjects(adjustForm, projectId);
-        // The imported source must be chosen from real ledger rows, so the
-        // reference list follows the PP + account of the row being corrected.
-        await loadLedger(adjustForm);
+        // The source candidates are the transactions mapped to THIS project, so
+        // the list can only be loaded once the project is resolved (§8, §9).
+        await loadLedger(adjustForm, ledgerId);
         recap(adjustForm, [
             ['Sumber', 'Data import (SIMKUG / NTF)'],
             ['Perlakuan', 'Dibuat baris koreksi baru'],
@@ -746,11 +896,33 @@
                 if (name === 'org') { await loadPps(adjustForm); }
                 if (name === 'type') { await loadAccounts(adjustForm); }
                 if (name === 'pp' || name === 'account' || name === 'type') {
+                    // Any parent change invalidates the project list and, with
+                    // it, the source transaction: both are reloaded from scratch.
                     await loadProjects(adjustForm);
                     await loadLedger(adjustForm);
                 }
             });
         });
+
+        /* Switching project clears the chosen source immediately and reloads
+           the candidates for the new object (§7). No transaction from the
+           previous project is ever kept or offered. */
+        const adjustProject = $('[data-rm-project]', adjustForm);
+        if (adjustProject) {
+            adjustProject.addEventListener('change', () => loadLedger(adjustForm));
+        }
+
+        /* Server-side search: the term is sent to the endpoint, which narrows
+           the query inside the project's own mapping, so a long history stays
+           reachable without loading it all (§5, §15). */
+        const ledgerSearch = $('[data-rm-ledger-search]', adjustForm);
+        if (ledgerSearch) {
+            let timer = null;
+            ledgerSearch.addEventListener('input', () => {
+                clearTimeout(timer);
+                timer = setTimeout(() => loadLedger(adjustForm, $('[data-rm-ledger]', adjustForm).value), 220);
+            });
+        }
         adjustForm.addEventListener('submit', async (ev) => {
             ev.preventDefault();
             const payload = Object.fromEntries(new FormData(adjustForm).entries());

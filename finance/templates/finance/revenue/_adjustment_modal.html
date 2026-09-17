@@ -63,13 +63,27 @@ Example: imported Rp500.000.000 + adjustment Rp25.000.000 -> Rp525.000.000.
                     </select>
                     <span class="rm-hint">Koreksi selalu ditujukan pada objek yang sudah ada.</span>
                 </label>
-                <label class="rm-field rm-field-wide">
+                <div class="rm-field rm-field-wide">
                     <span class="rm-label">Transaksi Sumber (import)</span>
-                    <select name="reference_ledger" class="rm-input" data-rm-ledger disabled>
-                        <option value="">— Pilih PP &amp; Akun dahulu —</option>
-                    </select>
-                    <span class="rm-hint">Referensi baris import yang dikoreksi (opsional).</span>
-                </label>
+                    {% comment %}
+                    The hidden field carries the ledger id the server validates;
+                    the picker only ever offers rows mapped to this project.
+                    {% endcomment %}
+                    <input type="hidden" name="reference_ledger" data-rm-ledger>
+                    <div class="rm-src" data-rm-ledger-picker>
+                        <div class="rm-src-search">
+                            <i class="bi bi-search"></i>
+                            <input type="text" class="rm-src-input" data-rm-ledger-search
+                                   placeholder="Cari No Bukti, dokumen, keterangan, nominal..."
+                                   autocomplete="off" aria-label="Cari transaksi sumber">
+                        </div>
+                        <div class="rm-src-selected" data-rm-ledger-label hidden></div>
+                        <div class="rm-src-list" data-rm-ledger-list role="listbox">
+                            <div class="rm-empty">Pilih project terlebih dahulu.</div>
+                        </div>
+                    </div>
+                    <span class="rm-hint" data-rm-ledger-hint></span>
+                </div>
             </div>
 
             <fieldset class="rm-fieldset">

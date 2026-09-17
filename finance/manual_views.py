@@ -10,6 +10,8 @@ Failure contract (all endpoints answer JSON):
     lock) or 403 (permission) so the client can surface a field-level error and
     keep the row it was working on (no optimistic removal, §52).
 """
+import calendar
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied
@@ -212,8 +214,11 @@ def adjustment(request):
             raise mr.ManualRevenueError(
                 'Alasan koreksi wajib diisi untuk pilihan Lainnya.', field='reason_other')
         reason = other
+    # The referenced source must belong to the project being corrected, not
+    # merely share its PP and account (§16, §17).
     reference = mr.resolve_reference_ledger(
-        request.POST.get('reference_ledger'), account=master['account'])
+        request.POST.get('reference_ledger'), account=master['account'],
+        project=master['project'])
     entry = mr.create_entry(
         period=period,
         category=master['category'],
@@ -315,19 +320,59 @@ def option_projects(request):
     } for p in projects], safe=False)
 
 
+# How many source transactions one response carries. The picker searches on the
+# server, so a project with a long history is never rendered in full (§15).
+SOURCE_TRANSACTION_LIMIT = 50
+
+
 def option_ledger(request):
-    """Imported GL rows an Adjustment may reference (§27) — read only."""
-    qs = mr.editable_ledger_rows(
-        account_code=(request.GET.get('account') or '').strip() or None,
-        pp_code=(request.GET.get('pp') or '').strip() or None,
-        project_id=_as_int(request.GET.get('project')),
-    )
-    return JsonResponse([{
-        'value': r.pk,
-        'label': f'{r.posting_date or r.period.period_start} · '
-                 f'{r.voucher_number or "-"} · {_rp(r.credit - r.debit)}',
-        'amount': str(r.credit - r.debit),
-    } for r in qs.select_related('period')[:100]], safe=False)
+    """Source transactions of ONE project for the Adjustment picker (§3, §15).
+
+    Scoped by `GLProjectMapping` alone: PP + account would also match a
+    neighbour project's rows, which is exactly what the picker must never offer
+    (§17). A search term narrows the query on the server so the operator can
+    reach a transaction in a long history, and each option carries the fields
+    the picker renders — never just a database id (§4).
+    """
+    project_id = _as_int(request.GET.get('project'))
+    if not project_id:
+        return JsonResponse([], safe=False)
+
+    period = _selected_period(request)
+    upto_date = _period_end(period) if period else None
+    qs = mr.source_ledger_rows(
+        project_id, upto_date=upto_date, q=(request.GET.get('q') or ''))
+
+    rows = list(qs[:SOURCE_TRANSACTION_LIMIT])
+    return JsonResponse([_source_transaction_option(r) for r in rows], safe=False)
+
+
+def _source_transaction_option(ledger):
+    """One picker option: the identifier, the money and the searchable text."""
+    amount = ledger.credit - ledger.debit
+    date = ledger.posting_date or (ledger.period.period_start if ledger.period else None)
+    return {
+        'value': ledger.pk,
+        'amount': str(amount),
+        'date': date.isoformat() if date else '',
+        'date_text': date.strftime('%d %b %Y') if date else '—',
+        'voucher': ledger.voucher_number or '',
+        'document': ledger.document_number or '',
+        'description': ledger.description_raw or ledger.description_normalized or '',
+        'amount_text': _rp(amount),
+        # The visible identifier line: evidence first, then document. Search
+        # runs on the server, so this only has to be readable.
+        'label': ' · '.join(part for part in (
+            ledger.voucher_number or '', ledger.document_number or '') if part) or f'#{ledger.pk}',
+    }
+
+
+def _period_end(period):
+    """Last day of the period — the cutoff for a source lookup (§13)."""
+    if period is None:
+        return None
+    return date(period.year, period.month,
+                calendar.monthrange(period.year, period.month)[1])
 
 
 def _as_int(value):

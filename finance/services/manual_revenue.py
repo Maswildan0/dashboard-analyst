@@ -30,7 +30,8 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import CharField, Q, Sum
+from django.db.models.functions import Cast
 from django.utils import timezone
 from django.utils.dateparse import parse_date as _parse_date
 
@@ -260,8 +261,37 @@ def assert_project_consistency(project, pp, account):
         raise ManualRevenueError(MISMATCH_MESSAGE, field='revenue_account')
 
 
-def resolve_reference_ledger(ledger_id, *, account=None):
-    """The imported GL row an adjustment corrects (read-only, §27-#28)."""
+SOURCE_NOT_MAPPED_MESSAGE = (
+    'Transaksi sumber tidak terdaftar pada proyek yang dipilih.')
+
+
+def assert_source_belongs_to_project(ledger, project):
+    """The referenced ledger must be MAPPED to the project (§16, §17).
+
+    The PP and the revenue account cannot answer this: one PP carries several
+    projects and they can share an account, so a neighbour project's
+    transaction would satisfy every check based on PP + account alone. Only the
+    explicit `GLProjectMapping` proves ownership, so an adjustment across
+    projects is rejected here even if the client sent a plausible ledger id.
+    """
+    if ledger is None:
+        return
+    if project is None:
+        raise ManualRevenueError(
+            'Transaksi sumber hanya dapat dikoreksi pada project yang terdaftar.',
+            field='reference')
+    mapped = GLProjectMapping.objects.filter(
+        project=project, ledger=ledger, match_status__in=_MATCH_OK).exists()
+    if not mapped:
+        raise ManualRevenueError(SOURCE_NOT_MAPPED_MESSAGE, field='reference')
+
+
+def resolve_reference_ledger(ledger_id, *, account=None, project=None):
+    """The imported GL row an adjustment corrects (read-only, §27-#28).
+
+    `project` scopes the lookup to that project's own mappings, so a ledger id
+    belonging to another project is refused rather than silently accepted.
+    """
     if not ledger_id:
         return None
     ledger = (RevenueLedger.objects
@@ -273,6 +303,8 @@ def resolve_reference_ledger(ledger_id, *, account=None):
         raise ManualRevenueError(
             'Transaksi sumber berada pada Revenue Account yang berbeda.',
             field='reference')
+    if project is not None:
+        assert_source_belongs_to_project(ledger, project)
     return ledger
 
 
@@ -842,20 +874,52 @@ def deleted_entries(*, category_codes=None):
     return qs.order_by('-voided_at', '-id')
 
 
-def editable_ledger_rows(*, account_code=None, pp_code=None, project_id=None):
-    """Imported GL rows an Adjustment may reference (source stays untouched).
+def source_ledger_rows(project_id, *, upto_date=None, q=''):
+    """Imported GL rows an Adjustment may reference for ONE project.
 
-    Returns an UNSLICED queryset so callers can narrow it further before the
-    limit is applied at the end of the option endpoint.
+    `GLProjectMapping` is the authority (§1, §3): a PP and a revenue account
+    can be shared by several projects (1 PP has many projects), so filtering by
+    PP + account would offer transactions belonging to a NEIGHBOUR project.
+    The explicit project->ledger mapping is the only rule that cannot do that.
+
+    Returns an UNSLICED queryset, newest first (§14); the caller applies the
+    display limit once it has also applied its search term.
+
+    Only mappings that make a ledger authoritative for the project are
+    considered (`_MATCH_OK`), matching every other reader in the app: an
+    UNMATCHED row never binds the project.
+
+    `upto_date` is the selected period's cutoff (§13): a project's whole
+    lifetime stays reachable, but nothing dated after the period being
+    reported is offered. A project with no mapping yields an EMPTY queryset —
+    never a fallback to the whole GL (§10).
     """
     qs = (RevenueLedger.objects
-          .filter(revenue_account__isnull=False)
+          .filter(revenue_account__isnull=False,
+                  project_mappings__project_id=project_id,
+                  project_mappings__match_status__in=_MATCH_OK)
           .select_related('period', 'revenue_account', 'pp', 'pp__organization_unit')
           .order_by('-posting_date', '-id'))
-    if account_code:
-        qs = qs.filter(revenue_account__account_code=account_code)
-    if pp_code:
-        qs = qs.filter(pp__pp_code=pp_code)
-    if project_id:
-        qs = qs.filter(project_mappings__project_id=project_id)
+    if upto_date is not None:
+        qs = qs.filter(posting_date__lte=upto_date)
+    if q:
+        # Case-insensitive across the columns the operator can see (§5):
+        # voucher, document, description and the posted amount. The amount is
+        # compared as TEXT so a partial figure matches the way it is shown
+        # ('913028047' finds '913028047.10'); Cast keeps this portable across
+        # SQLite and PostgreSQL.
+        needle = q.strip()
+        qs = qs.annotate(
+            credit_text=Cast('credit', output_field=CharField()),
+            debit_text=Cast('debit', output_field=CharField()),
+        ).filter(
+            Q(voucher_number__icontains=needle)
+            | Q(document_number__icontains=needle)
+            | Q(description_raw__icontains=needle)
+            | Q(description_normalized__icontains=needle)
+            | Q(source_transaction_id__icontains=needle)
+            | Q(account_code_raw__icontains=needle)
+            | Q(credit_text__icontains=needle)
+            | Q(debit_text__icontains=needle)
+        )
     return qs
