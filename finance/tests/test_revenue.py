@@ -36,7 +36,6 @@ from finance.models import (
     OrganizationUnit,
     PPMaster,
     Project,
-    ProjectAlias,
     ProjectMonthlySnapshot,
     RevenueAccount,
     RevenueBudget,
@@ -352,7 +351,7 @@ class TestTfAccountPpGrain(RevenueBase):
 # 22. Data TF = per program (TF- Project) per PP — never merged
 class TestTfProgramRows(RevenueBase):
     def test_program_rows_per_pp(self):
-        from finance.services import tf_program_rows, tf_account_pp_gl
+        from finance.services import tf_program_rows
         from finance.services.revenue_context import RevenueContext
         from finance.models import Project
         p = make_period(2026, 8)
@@ -389,7 +388,6 @@ class TestTfExpandMonthScope(RevenueBase):
     def test_tf_expand_only_selected_month(self):
         from finance.models import Project, GLProjectMapping
         from finance.services import recognition_history, project_summary
-        from finance.services.revenue_context import RevenueContext
         acc_reg = RevenueAccount.objects.create(
             account_code='4111101', account_name='Pend. Pendaftaran',
             revenue_category=self.cat_tf)
@@ -542,7 +540,6 @@ class TestDummyProjectValue(RevenueBase):
     def test_named_objects_contract_value_ge_lifetime(self):
         # Reuse the deterministic seed helper logic on a scratch project:
         # emulate _seed_named_objects contract = lifetime*(1.10..1.50) rounded up.
-        from finance.services.revenue_project_service import project_account_totals
         from finance.models import Project, GLProjectMapping
         from django.db.models import Sum
         org = OrganizationUnit.objects.create(code='DIR-LIT', name='DIREKTORAT LITBANG', campus=self.campus, unit_type='OTHER')

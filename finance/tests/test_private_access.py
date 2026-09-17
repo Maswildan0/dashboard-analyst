@@ -18,9 +18,8 @@ Coverage map (the brief's §18 list):
     I next parameter               -> original internal page after login
     J malicious external next      -> never redirected off-site
 """
-from django.contrib.auth.models import Permission, User
+from django.contrib.auth.models import User
 from django.test import TestCase
-from django.urls import reverse
 
 from finance.models import ManualRevenueEntry
 

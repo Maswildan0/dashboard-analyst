@@ -18,7 +18,6 @@ Guarantees
 Usage
     python manage.py import_revenue_dummy_sqlite [--source path.sqlite3] [--reset]
 """
-from collections import OrderedDict
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand, CommandError
@@ -242,7 +241,6 @@ class Command(BaseCommand):
         self._rc_ok = all_ok
 
     def _validate_financial_sums(self):
-        from django.db.models import Sum
         self.stdout.write('\n[2] Financial value SUM source vs target')
         # Source sums are computed in PYTHON Decimal from each row value
         # (SQLite SUM() runs in float64 and loses cents at trillions; Decimal
@@ -275,7 +273,6 @@ class Command(BaseCommand):
         self._fin_ok = all_ok
 
     def _validate_fk_integrity(self):
-        from django.db.models import Q
         self.stdout.write('\n[3] FK integrity (orphan scan on target)')
         checks = [
             (M.Project.objects.filter(pp_id__isnull=False).exclude(pp__isnull=False), 'project.pp'),
@@ -316,7 +313,6 @@ class Command(BaseCommand):
 
     def _validate_business_rules(self):
         self.stdout.write('\n[4] Business rules (dummy expectations)')
-        import sqlite3 as _s
         cur = self.src.cursor()
         # a) Pendaftaran account PERIOD_ONLY
         reg_src = cur.execute(

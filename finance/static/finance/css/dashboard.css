@@ -58,17 +58,6 @@ body {
     .sidebar.open { transform: translateX(0); }
     body.sidebar-active .main-area { margin-left: 250px; }
 }
-.sidebar-brand {
-    display: flex; align-items: center; gap: 10px;
-    padding: 18px 20px; border-bottom: 1px solid var(--border);
-}
-.brand-mark {
-    width: 38px; height: 38px; border-radius: 10px;
-    background: var(--primary); color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 20px;
-}
-.brand-text { font-weight: 700; font-size: 13px; line-height: 1.2; color: var(--dark); }
 .sidebar-menu { padding: 12px 12px 24px; }
 .menu-group-label {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -131,16 +120,6 @@ body {
 .section-title { font-size: 15px; font-weight: 700; color: var(--dark); margin-bottom: 14px; }
 
 /* ---------- Filter bar ---------- */
-.filter-bar { padding: 16px 20px; margin-bottom: 24px; }
-.filter-form { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
-.filter-group { display: flex; flex-direction: column; gap: 6px; }
-.filter-group label { font-size: 11px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: .04em; }
-.filter-row { display: flex; gap: 8px; }
-.filter-select {
-    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
-    font-size: 13px; font-weight: 500; background: var(--white); color: var(--dark);
-    min-width: 110px; font-family: inherit;
-}
 .btn-primary {
     background: var(--primary); color: #fff; border: 0; border-radius: 8px;
     padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -189,45 +168,13 @@ body {
 .ratio-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .ratio-value { font-size: 34px; font-weight: 800; color: var(--dark); margin: 10px 0 2px; display: flex; align-items: baseline; gap: 8px; }
 .ratio-label { font-size: 12px; font-weight: 600; color: var(--gray); }
-.ratio-badge-wrap { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; flex-wrap: wrap; }
 .badge-pill { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-.direction-badge { font-size: 11px; font-weight: 600; color: var(--gray); }
 .ratio-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .ratio-cell { background: var(--light-gray); border-radius: 10px; padding: 10px; text-align: center; }
 .ratio-cell-label { display: block; font-size: 10px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: .04em; }
 .ratio-cell-value { display: block; font-size: 18px; font-weight: 700; color: var(--dark); margin-top: 4px; }
 .ratio-formula { margin-top: 12px; font-size: 11px; color: #9CA3AF; display: flex; align-items: center; gap: 5px; }
 
-/* ---------- Composition ---------- */
-.composition-bar-card { margin-bottom: 18px; }
-.composition-bar { display: flex; height: 36px; border-radius: 10px; overflow: hidden; background: var(--light-gray); }
-.seg { height: 100%; transition: filter .2s; }
-.seg-tf { background: var(--primary); }
-.seg-ntfp { background: var(--gray); }
-.seg-ntfr { background: var(--primary-dark); }
-.composition-legend { display: flex; gap: 26px; margin-top: 14px; flex-wrap: wrap; }
-.legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--gray); white-space: nowrap; }
-.legend-item b { color: var(--dark); }
-.legend-label { font-weight: 600; color: #334155; }
-.legend-meta { color: var(--gray); }
-.legend-yoy { font-weight: 700; font-size: 11.5px; }
-.legend-yoy.pos { color: var(--success); }
-.legend-yoy.neg { color: var(--danger); }
-.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.dot-tf { background: var(--primary); }
-.dot-ntfp { background: var(--gray); }
-.dot-ntfr { background: var(--primary-dark); }
-.source-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.source-value { font-size: 24px; }
-.source-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
-.source-metric { background: var(--light-gray); border-radius: 9px; padding: 9px; text-align: center; }
-.source-metric-label { display: block; font-size: 10px; color: var(--gray); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
-.source-metric-value { display: block; font-size: 15px; font-weight: 700; color: var(--dark); margin-top: 3px; }
-.data-warning {
-    margin-top: 12px; padding: 10px 14px; border-radius: 10px;
-    background: rgba(245,158,11,.12); color: #B45309; font-size: 12px; font-weight: 600;
-    display: flex; align-items: center; gap: 8px;
-}
 
 /* ---------- Trend chart ---------- */
 .trend-chart { height: 320px; width: 100%; }
@@ -275,13 +222,11 @@ body {
 main.content .mt-6 { margin-top: 24px; }
 main.content .mb-6 { margin-bottom: 24px; }
 main.content .mt-2 { margin-top: 8px; }
-main.content .mt-3 { margin-top: 12px; }
 main.content .mt-4 { margin-top: 16px; }
 main.content .mt-5 { margin-top: 20px; }
 main.content .gap-4 { gap: 16px; }
 main.content .gap-5 { gap: 20px; }
 main.content .gap-6 { gap: 24px; }
-main.content .gap-3 { gap: 12px; }
 main.content .px-8 { padding-left: 16px; padding-right: 16px; }
 main.content .py-6 { padding-top: 24px; padding-bottom: 24px; }
 main.content .p-6 { padding: 24px; }
@@ -300,7 +245,6 @@ main.content .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
 main.content,
 main.content > div,
 .df-card,
-.revenue-table-card { width: 100%; max-width: 100%; min-width: 0; }
 
 /* ------------------------------------------------------------------
    Project revenue table reusable grid class.
@@ -341,8 +285,6 @@ main.content > div,
 /* One horizontal scroll container for header + body + total.
    The scroll wrapper never exceeds its parent; the 1560px minimum lives
    on the inner scroll content so the table scrolls inside this box only. */
-.revenue-table-card,
-main.content .rounded-xl { max-width: 100%; overflow: hidden; }
 .overflow-x-auto { max-width: 100%; }
 .project-table-scroll { min-width: 1560px; width: max-content; }
 /* Progress bar track in the Pendapatan Berjalan column. */
@@ -376,15 +318,12 @@ main.content .h-\[280px\] { height: 280px; }
    build, so re-declare the handful this table uses (same pattern as above). */
 main.content .text-\[13px\] { font-size: 13px; }
 main.content .py-2\.5 { padding-top: 10px; padding-bottom: 10px; }
-main.content .pl-3 { padding-left: 12px; }
-main.content .pr-3 { padding-right: 12px; }
 main.content .text-\[#334155\] { color: #334155; }
 main.content .text-\[#475569\] { color: #475569; }
 main.content .text-\[#EB3237\] { color: #EB3237; }
 main.content .text-\[#10B981\] { color: #10B981; }
 main.content .border-\[#E2E8F0\] { border-color: #E2E8F0; }
 main.content .border-\[#F1F5F9\] { border-color: #F1F5F9; }
-main.content .text-left { text-align: left; }
 main.content .text-right { text-align: right; }
 main.content .w-\[10px\] { width: 10px; }
 main.content .h-\[10px\] { height: 10px; }
@@ -410,13 +349,12 @@ main.content .text-\[#64748B\] { color: #64748B; }
 
 /* ---------- Responsive (#42) ---------- */
 @media (max-width: 1024px) {
-    .kpi-row, .source-row { grid-template-columns: repeat(2, 1fr); }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
     .ratio-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
-    .kpi-row, .source-row { grid-template-columns: 1fr; }
+    .kpi-row { grid-template-columns: 1fr; }
     .content { padding: 16px; }
-    .filter-form { flex-direction: column; align-items: stretch; }
     /* Pagination must wrap instead of overflowing the viewport. */
     main.content .flex.items-center.justify-between.mt-6 {
         flex-wrap: wrap; gap: 10px;
@@ -425,11 +363,7 @@ main.content .text-\[#64748B\] { color: #64748B; }
 }
 
 /* ---------- Revenue module (DB-driven) ---------- */
-.revenue-period-chip { margin-bottom: 18px; display: inline-flex; align-items: center; gap: 8px; }
 .rev-status { font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 2px 8px; border-radius: 999px; }
-.rev-open { background: rgba(22,163,74,.14); color: #15803D; }
-.rev-closed { background: rgba(107,114,128,.16); color: #4B5563; }
-.rev-last-sync { color: var(--gray); font-size: 12px; font-weight: 500; }
 .rev-table-wrap { overflow-x: auto; }
 .rev-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .rev-table th {
@@ -442,11 +376,9 @@ main.content .text-\[#64748B\] { color: #64748B; }
 .rev-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .rev-table td.pos { color: var(--success); font-weight: 600; }
 .rev-table td.neg { color: var(--danger); font-weight: 600; }
-.rev-table .rev-proj-name { font-weight: 600; }
 .rev-status-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
 .rev-status-badge.sb-on-progress { background: rgba(22,163,74,.12); color: var(--success); }
 .rev-status-badge.sb-no-revenue { background: rgba(107,114,128,.12); color: var(--gray); }
-.rev-status-badge.sb-fully { background: rgba(37,99,235,.12); color: #2563EB; }
 .rev-status-badge.sb-review { background: rgba(220,38,38,.12); color: var(--danger); }
 .rev-row-expand { cursor: pointer; }
 .rev-row-expand .rev-chev { transition: transform .18s; color: var(--gray); font-size: 11px; }
@@ -463,11 +395,9 @@ main.content .text-\[#64748B\] { color: #64748B; }
 .rev-history th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); padding: 7px 10px; background: var(--light-gray); }
 .rev-history td { padding: 7px 10px; border-top: 1px solid var(--border); }
 @media (max-width: 900px) {
-    .kpi-row.rev-kpi { grid-template-columns: 1fr !important; }
-}
+    }
 
 /* ---------- Revenue module layout (clean grid, no messy inline) ---------- */
-.rev-period-strip { margin-bottom: 18px; }
 .rev-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
 .rev-section { margin-top: 26px; }
 @media (max-width: 900px) {
@@ -475,14 +405,10 @@ main.content .text-\[#64748B\] { color: #64748B; }
 }
 
 /* Page heading row with back action */
-.rev-page-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
-@media (max-width: 640px) { .rev-page-head { flex-direction: column; align-items: flex-start; } }
-.rev-card-note { padding: 14px 20px 4px; color: var(--gray); font-size: 12.5px; }
 .rev-section .rev-table-wrap { padding: 8px 20px 20px; }
 .rev-section > .card { padding: 16px 0 0; }
 /* Card that holds a table: no body padding, note + table flow inside */
 .rev-table-card { padding: 0; overflow: hidden; }
-.rev-table-card .rev-card-note { padding: 16px 20px 0; color: var(--gray); font-size: 12.5px; margin: 0; }
 .rev-table-card .rev-table-wrap { padding: 8px 20px 16px; }
 .rev-section { margin-bottom: 26px; }
 .rev-section > .section-title { margin-bottom: 14px; }
@@ -512,7 +438,6 @@ main.content .text-\[#64748B\] { color: #64748B; }
     border-left: 3px solid rgba(200,16,46,.35);
     margin: 0 12px;
 }
-.rev-detail-panel.open .rev-loading { padding: 12px 0; }
 
 /* Recognition-history expand panel (realisasi-style, subtle gray) */
 .rev-rec-head {
@@ -565,15 +490,6 @@ main.content .text-\[#64748B\] { color: #64748B; }
 .rev-jenis-research{ color: #1D4ED8; background: #EFF6FF; border-color: #BFDBFE; }
 .rev-jenis-project { color: #047857; background: #ECFDF5; border-color: #A7F3D0; }
 
-/* TF / NTF Research list ONE shared grid, grain PP x Akun.
-   Columns: No, Organization, Kode PP, Kode Akun, Nama Akun,
-   Realisasi Bulan, Realisasi YTD, RKA YTD. Table uses available width. */
-.project-table-grid-gl {
-    grid-template-columns:
-        50px 230px 90px 110px minmax(260px, 1fr) 170px 170px 170px;
-}
-.project-table-scroll-gl { min-width: 1250px; width: max-content; }
-
 /* ---------- Revenue detail table layout refinements ---------- */
 /* Nama Proyek: high priority, allow up to 2 lines, no aggressive ellipsis. */
 .rev-name-cell {
@@ -588,26 +504,6 @@ main.content .text-\[#64748B\] { color: #64748B; }
 /* Grand total label spans across identity columns (col 7 for NTF: after 6 empties). */
 .rev-table-card-outer { margin-top: 4px; }
 .rev-acc-cell .mono { font-family: 'Cousine', monospace; font-size: 12px; color: #475569; }
-
-/* Revenue source category cards row (TF / NTF Project / NTF Research) */
-.rev-source-cards {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 18px;
-    margin: 26px 0 4px;
-}
-.rev-source-cards .source-card {
-    cursor: pointer;
-    transition: box-shadow .2s, transform .2s;
-    color: var(--dark);
-}
-.rev-source-cards .source-card:hover {
-    box-shadow: 0 6px 18px rgba(34,34,34,.10);
-    transform: translateY(-2px);
-}
-@media (max-width: 900px) {
-    .rev-source-cards { grid-template-columns: 1fr; }
-}
 
 /* ------------------------------------------------------------------ */
 /* Revenue Ranking by Organization (accordion: org -> PP/account)      */

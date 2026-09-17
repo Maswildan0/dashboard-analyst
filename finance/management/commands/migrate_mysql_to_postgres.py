@@ -24,7 +24,7 @@ engine is MySQL; otherwise explicit MYSQL_* env vars may be provided.
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import DEFAULT_DB_ALIAS, connection, connections, transaction
+from django.db import connection, connections, transaction
 
 from finance import models as M
 
@@ -118,9 +118,6 @@ class Command(BaseCommand):
         if cur == 'sqlite':
             pass  # fall through to dedicated alias via MYSQL_* env
         # Build a dedicated MySQL connection from env (only for reading).
-        from django.db import connections as _conns
-        from django.db.backends.mysql.base import DatabaseWrapper
-        from django.utils.connection import ConnectionProxy
         _mname = os.environ.get('MYSQL_DB', 'financial_dashboard')
         settings = {
             'ENGINE': 'dashboard.db_backends.mariadb',
@@ -235,7 +232,6 @@ class Command(BaseCommand):
                 table = model._meta.db_table
                 pk = model._meta.pk
                 max_id = model.objects.aggregate(m=Max('pk'))['m']
-                seq = connection.ops.pk_default_value if hasattr(connection.ops, 'pk_default_value') else None
                 # PostgreSQL sequence name: <table>_<pk>_seq
                 c.execute(
                     'SELECT setval(pg_get_serial_sequence(%s, %s), %s)',
@@ -252,7 +248,6 @@ class Command(BaseCommand):
         self._validate_sequences()
 
     def _validate_row_counts(self):
-        from django.db.models import Sum
         self.stdout.write('\n[1] Row-count MySQL vs PostgreSQL')
         ok = True
         for model in FINANCE_MODELS:
@@ -267,7 +262,6 @@ class Command(BaseCommand):
         self._rc_ok = ok
 
     def _validate_control_totals(self):
-        from django.db.models import Sum
         self.stdout.write('\n[2] Financial control totals (Decimal)')
         ok = True
         for table, fields in MONEY_FIELDS.items():

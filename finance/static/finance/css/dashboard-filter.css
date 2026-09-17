@@ -205,12 +205,7 @@
 .df-btn.is-loading .df-btn-text::after { content: "Memuat..."; }
 .df-btn.is-loading svg { display: none; }
 .df-btn.is-loading { pointer-events: none; opacity: .75; }
-.df-spinner {
-    width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.4);
-    border-top-color: #fff; border-radius: 50%; animation: df-spin .6s linear infinite;
-}
 .df-export-item.is-loading { pointer-events: none; opacity: .7; }
-@keyframes df-spin { to { transform: rotate(360deg); } }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1199px) {

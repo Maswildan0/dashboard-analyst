@@ -6,7 +6,9 @@ Aplikasi monitoring & analisis kinerja keuangan organisasi/universitas — Reven
 
 ## Teknologi
 
-- MariaDB/MySQL (XAMPP `financial_dashboard`, default) — SQLite hanya utk Vercel cold start
+- PostgreSQL / Neon (`DATABASE_URL`) untuk production dan pengembangan
+- MariaDB/MySQL XAMPP `financial_dashboard` sebagai default **lokal** (management
+  command saja); SQLite `/tmp` hanya untuk cold start Vercel tanpa DATABASE_URL
 - Apache ECharts (trend chart)
 - Bootstrap Icons + CSS kustom corporate
 
@@ -91,6 +93,16 @@ Model terdaftar di Django admin: Campus, OrganizationUnit, FinancialPeriod, Reve
 python manage.py test finance
 ```
 
-## Postgres production
+## Database
 
-Set env: `DB_ENGINE=postgres DB_NAME DB_USER DB_PASSWORD DB_HOST DB_PORT`.
+Prioritas pemilihan engine (lihat `dashboard/settings.py`):
+
+1. `DATABASE_URL` — PostgreSQL/Neon. **Wajib untuk deployment.**
+2. `DB_ENGINE=postgres` + `DB_*` — PostgreSQL via env terpisah.
+3. `VERCEL` tanpa `DATABASE_URL` — SQLite sementara di `/tmp`.
+4. Management command lokal (`runserver`/`migrate`/`test`) — MariaDB XAMPP
+   `financial_dashboard`.
+5. Selain itu — berhenti dengan error, tidak pernah diam-diam memakai MySQL.
+
+Legacy: `python manage.py migrate_mysql_to_postgres --check` untuk audit sumber
+MySQL lama (butuh `requirements-dev.txt`).

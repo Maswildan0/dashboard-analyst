@@ -11,14 +11,12 @@ Derived numbers (YTD, achievement, variance, YoY, composition) are computed
 here never stored as source-of-truth.
 """
 from decimal import Decimal
-from datetime import date
 
-from django.db.models import Q, Sum
+from django.db.models import Sum
 
 from finance.models import (
     FinancialPeriod,
     RevenueBudget,
-    RevenueBudgetMonthly,
     RevenueLedger,
     RevenueMonthlySnapshot,
 )
@@ -35,10 +33,6 @@ def _sign_convention(credit, debit):
     return credit - debit
 
 
-def ledger_revenue(ledger_row):
-    return _sign_convention(ledger_row.credit, ledger_row.debit)
-
-
 def _period_scope(ctx, *, closed):
     """FinancialPeriods for YTD reads: same-year <= ctx.month, optionally
     restricted to closed/open so live (open) and frozen (closed) sources never
@@ -48,19 +42,11 @@ def _period_scope(ctx, *, closed):
     )
 
 
-def _actual_for_period_qs(period, ctx=None, *, frozen_only=False):
-    """Queryset of frozen snapshot (closed) OR ledger rows for one period."""
-    base = RevenueLedger.objects.filter(period=period)
-    if ctx is not None:
-        base = ctx.filter_ledger(base)
-    return base
-
-
-def actual_amount(qs, *, net_field='credit'):
+def actual_amount(qs):
     """Sum net revenue over a queryset using the configured sign convention.
 
-    net_field unused placeholder; real impl sums credit/debit separately so
-    the convention applies per-row (a credit of 5 & debit of 2 -> 3, not 7).
+    Sums credit/debit separately so the convention applies per-row
+    (a credit of 5 and a debit of 2 gives 3, not 7).
     """
     total = ZERO
     for row in qs.only('credit', 'debit').iterator(chunk_size=1000):
@@ -226,13 +212,6 @@ def yoy_series(ctx):
             growth = ((m['actual'] - p) / p) * Decimal(100)
         out.append({**m, 'previous_year': p, 'yoy': growth})
     return out
-
-
-def _category_actual(ctx, category_code):
-    sub = RevenueContext(year=ctx.year, month=ctx.month, revenue_type=category_code,
-                         organization_id=ctx.organization.pk if ctx.organization else None,
-                         pp_code=ctx.pp.pp_code if ctx.pp else None)
-    return actual_ytd(sub) if False else _actual_period_total(sub)
 
 
 def _actual_period_total(ctx):

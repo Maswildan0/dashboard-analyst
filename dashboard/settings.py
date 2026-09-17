@@ -11,6 +11,8 @@ import os
 import sys
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 import dj_database_url  # noqa: E402 (parses DATABASE_URL -> Django settings)
@@ -93,13 +95,21 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dashboard.wsgi.application'
 
-# Database selection.
+# Database selection — the engine is never chosen SILENTLY (§10).
 #   1) DATABASE_URL set  -> use it (production: Neon PostgreSQL on Vercel;
 #                           local override when exported). No credentials are
 #                           hard-coded anywhere; read purely from env.
 #   2) DB_ENGINE=postgres -> PostgreSQL via discrete PG* env vars.
-#   3) otherwise          -> local MariaDB/MySQL (XAMPP financial_dashboard).
-#   VERCEL (no DATABASE_URL) falls back to /tmp SQLite so cold start works.
+#   3) VERCEL             -> scratch SQLite in /tmp so build/migrate can run
+#                            (a real deployment always sets DATABASE_URL).
+#   4) local management command -> MariaDB/MySQL (XAMPP financial_dashboard),
+#                            which is the development database this project
+#                            has always used. LOCAL ONLY.
+#   5) anything else      -> abort with an actionable error. A deployed server
+#                            that reached this point has no database
+#                            configured, and quietly connecting to a localhost
+#                            MySQL would either fail obscurely or read the
+#                            wrong database.
 _db_url = os.environ.get('DATABASE_URL')
 if not _db_url:
     # Vercel Neon integrations export DATABASE_POSTGRES_URL (pooled) and
@@ -142,9 +152,9 @@ elif os.environ.get('VERCEL'):
             'NAME': Path('/tmp/db.sqlite3'),
         }
     }
-else:
-    # Local default: MariaDB/MySQL (XAMPP). Backend shim relaxes Django 6's
-    # MariaDB >= 10.11 requirement and disables RETURNING below 10.5.
+elif len(sys.argv) > 1:
+    # The XAMPP MariaDB database is a LOCAL DEVELOPMENT default. A management
+    # command (runserver/migrate/test) authenticates it as a deliberate choice.
     DATABASES = {
         'default': {
             'ENGINE': 'dashboard.db_backends.mariadb',
@@ -156,6 +166,14 @@ else:
             'OPTIONS': {'charset': 'utf8mb4'},
         }
     }
+else:
+    # Reached only by a deployed server with no database configured. Failing
+    # loudly here beats a silent connection to a localhost MySQL that does not
+    # exist on the host (or, worse, exists and holds unrelated data).
+    raise ImproperlyConfigured(
+        'No database configured. Set DATABASE_URL (PostgreSQL/Neon) for a '
+        'deployment, or DB_ENGINE=postgres. The local MariaDB default is only '
+        'applied to management commands.')
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/ref/settings/#static-files

@@ -136,9 +136,7 @@
 }
 .rm-badge-manual { background: rgba(37,99,235,.12); color: #1D4ED8; }
 .rm-badge-adj { background: rgba(180,83,9,.14); color: #B45309; }
-.rm-badge-imported { background: #F1F5F9; color: #64748B; }
 .rm-badge-type { background: #F1F5F9; color: #334155; font-size: 10px; }
-.rm-prov { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
 
 /* Action column of the main grid: 40px, icon centred, never grows (§17). */
 .rm-rowmenu { position: relative; display: flex; justify-content: center; }

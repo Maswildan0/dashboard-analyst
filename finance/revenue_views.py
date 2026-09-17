@@ -3,7 +3,6 @@
 Routes mounted under /dashboard/revenue/. Every page uses the SAME
 RevenueContext so KPI / composition / series / performance agree.
 """
-import json
 from datetime import date
 from decimal import Decimal
 
@@ -17,10 +16,9 @@ from .manual_views import page_context as manual_page_context
 from .permissions import capabilities
 from .selectors import revenue_selectors as rsel
 from .services import manual_revenue as mr
-from .services import revenue_service as rs
 from .services import revenue_project_service as rps
 from .services.revenue_context import RevenueContext, month_name
-from .services.formatters import format_rupiah_compact, format_percent
+from .services.formatters import format_percent
 
 
 def _ctx_from_request(request):

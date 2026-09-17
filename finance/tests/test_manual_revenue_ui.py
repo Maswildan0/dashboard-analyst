@@ -23,9 +23,8 @@ from html.parser import HTMLParser
 from urllib.parse import quote
 
 from django.contrib.auth.models import Permission, User
-from django.test import TestCase, override_settings
+from django.test import override_settings
 
-from finance.services import manual_revenue as mr
 from finance.tests.test_manual_revenue import ManualRevenueBase
 
 # Every prefix that must never appear as literal page text.
