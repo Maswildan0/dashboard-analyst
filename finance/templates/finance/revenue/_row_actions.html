@@ -9,9 +9,15 @@ NTF source data is never offered. The menu only reflects what the server would
 allow anyway (§19); every action is re-authorized on submit.
 
 Expects: row (with project, manual_count, void_count, project_source) and the
-page context (perms, manual_period_closed).
+page context (perms, manual_period_closed). The row also carries
+data-rm-type / -org / -pp / -account (set by _attach_manual_flags), which is
+what the dialogs these items open prefill from.
+Never render a button that opens an empty menu (§10): an imported row always
+offers Lihat Detail; a manual row has items only when the user may actually
+perform one of them. A CLOSED period leaves only the audit history.
 {% endcomment %}
 {% if row.project %}
+{% if row.has_row_menu %}
 <div class="rm-rowmenu" data-rm-rowmenu>
     <button type="button" class="rm-rowmenu-btn" data-rm-rowmenu-toggle
             aria-haspopup="menu" aria-expanded="false" aria-label="Aksi baris">
@@ -57,4 +63,5 @@ page context (perms, manual_period_closed).
         {% endif %}
     </div>
 </div>
+{% endif %}
 {% endif %}

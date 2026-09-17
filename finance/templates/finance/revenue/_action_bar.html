@@ -7,6 +7,9 @@ revenue pages share this one markup:
     manual_period_closed  True when that period is CLOSED
     perms.create          show "+ Input Manual"
     perms.adjustment      show "Koreksi / Adjustment"
+    (perms.* is false for an anonymous visitor, so no gated control renders;
+    finance.permissions grants them to a signed-in operator until the first
+    manual permission is assigned — see that module's docstring.)
 
 A CLOSED period keeps the control visible but disabled (business rule: the
 server refuses the write either way, see finance.services.manual_revenue).
@@ -26,9 +29,6 @@ server refuses the write either way, see finance.services.manual_revenue).
         {% endif %}
     </div>
     <div class="rm-actionbar-right">
-        <button type="button" class="rm-btn rm-btn-ghost" data-rm-open="deleted">
-            <i class="bi bi-trash3"></i> Data Terhapus
-        </button>
         {% if perms.create %}
             {% if manual_period_closed %}
             <button type="button" class="rm-btn rm-btn-primary" disabled
@@ -47,5 +47,8 @@ server refuses the write either way, see finance.services.manual_revenue).
             <i class="bi bi-sliders"></i> Koreksi / Adjustment
         </button>
         {% endif %}
+        <button type="button" class="rm-btn rm-btn-outline" data-rm-open="deleted">
+            <i class="bi bi-trash3"></i> Data Terhapus
+        </button>
     </div>
 </div>

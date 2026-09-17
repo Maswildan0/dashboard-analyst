@@ -20,6 +20,15 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g(r9e+!%wd$#q+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 
+# Bootstrap fallback for the manual-revenue CRUD UI. Until an administrator
+# assigns one of the six manual permissions to a user or group, an all-false
+# capability set would hide every gated control and the feature would look
+# broken. While that holds, finance.permissions grants them to a SIGNED-IN
+# operator anyway; assigning the Revenue Operator group disables it at once.
+# Set REVENUE_PERMISSION_FALLBACK=false to exercise the strict path locally.
+REVENUE_PERMISSION_FALLBACK = (
+    os.environ.get('REVENUE_PERMISSION_FALLBACK', 'true').lower() in ('1', 'true', 'yes'))
+
 # Vercel sends the deployment host (e.g. dashboard-orpin-iota-64.vercel.app)
 # as HTTP_HOST; allow any host here the app serves public mock data only.
 ALLOWED_HOSTS = ['*']
@@ -133,6 +142,12 @@ else:
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/ref/settings/#static-files
+
+# Operator sign-in. Writes are still authorized server-side per request; these
+# only route an unauthenticated visitor to the login form instead of a 403.
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/dashboard/revenue/data/'
+LOGOUT_REDIRECT_URL = '/login/'
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [

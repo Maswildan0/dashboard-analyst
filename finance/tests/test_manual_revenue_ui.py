@@ -22,7 +22,7 @@ import re
 from html.parser import HTMLParser
 
 from django.contrib.auth.models import Permission, User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from finance.services import manual_revenue as mr
 from finance.tests.test_manual_revenue import ManualRevenueBase
@@ -183,6 +183,109 @@ class ManualRevenueUiRegressionTest(ManualRevenueBase):
             for cs in colspans:
                 self.assertEqual(int(cs), headers,
                                  'empty-state colspan must match the column count')
+
+    def test_controls_vanish_when_the_user_has_no_permission(self):
+        """An unpermitted session must not render the gated controls, and the
+        one ungated control must still render.
+
+        This is the defect reported in the field: with an all-false capability
+        set "+ Input Manual" and every gated row-menu entry are omitted,
+        leaving only "Data Terhapus" — which is ungated. The bootstrap below
+        covers that gap, so this test pins the STRICT path by disabling it."""
+        with override_settings(REVENUE_PERMISSION_FALLBACK=False):
+            self.client.force_login(
+                self.user('nobody', []))  # authenticated, zero permissions
+            html = self.client.get(PAGES['data']).content.decode()
+        self.assertNotIn('data-rm-open="create"', html)
+        self.assertIn('Data Terhapus', html)
+        self.assertIn('data-can-create="0"', html)
+        # The fixture's manual row offers nothing this user may do, so the
+        # toggle must be omitted rather than opening an empty panel (§10).
+        self.assertIn('rm-badge-manual', html)
+        self.assertNotIn('data-rm-rowmenu-toggle', html)
+
+    def test_imported_row_never_renders_an_empty_menu(self):
+        """§10: an imported row must always offer its three read/correct
+        actions, even for a user who may only read (no write permissions)."""
+        self.mapped_project('P-9130-950', self.acc_np)
+        self.client.force_login(self.user('reader', ['view_audit']))
+        html = self.client.get(PAGES['data']).content.decode()
+        # An imported row (GL-backed, not MANUAL) keeps its read/correct menu
+        # even for a user with no write permission.
+        self.assertIn('data-rm-detail', html)
+        self.assertIn('data-rm-history-project', html)
+        # and never an edit/delete on imported source
+        self.assertNotIn('data-rm-void-project', html)
+
+    def test_superuser_sees_every_gated_control(self):
+        from django.contrib.auth.models import User
+        boss = User.objects.create_superuser('boss', 'b@x.test', 'pw')
+        self.client.force_login(boss)
+        html = self.client.get(PAGES['data']).content.decode()
+        self.assertIn('data-rm-open="create"', html)
+        self.assertIn('data-can-create="1"', html)
+        self.assertIn('data-can-void="1"', html)
+        self.assertIn('data-can-adjust="1"', html)
+
+    def test_controls_appear_for_a_signed_in_operator_before_roles_exist(self):
+        """§4: while NO manual permission is assigned to anybody, a signed-in
+        operator still gets the gated controls, so the CRUD is usable before
+        roles are finalised. This is the field defect: without it the action
+        bar shows only "Data Terhapus"."""
+        self._unassign_every_manual_permission()
+        self.client.force_login(self.user('fresh', []))
+        html = self.client.get(PAGES['data']).content.decode()
+        self.assertIn('data-rm-open="create"', html)
+        self.assertIn('data-can-create="1"', html)
+        self.assertIn('data-can-edit="1"', html)
+
+    def test_bootstrap_never_applies_to_an_anonymous_visitor(self):
+        """Authentication is never part of the bootstrap: an anonymous request
+        must not see a single gated control."""
+        self._unassign_every_manual_permission()
+        html = self.client_class().get(PAGES['data']).content.decode()
+        self.assertNotIn('data-rm-open="create"', html)
+        self.assertIn('data-can-create="0"', html)
+
+    def test_bootstrap_switches_itself_off_once_permissions_are_assigned(self):
+        """Assigning the operator permissions ends the bootstrap for everyone,
+        which is what makes it temporary rather than a permanent bypass."""
+        from finance.permissions import ACTION_PERMS, in_bootstrap
+        self.assertFalse(in_bootstrap(), 'fixture already assigns permissions')
+        html = self.client.get(PAGES['data']).content.decode()
+        self.assertIn('data-rm-open="create"', html)  # editor holds create
+        self.assertTrue(all(v for v in ACTION_PERMS.values()))
+
+    def test_bootstrap_can_be_disabled_to_exercise_the_strict_path(self):
+        self._unassign_every_manual_permission()
+        with override_settings(REVENUE_PERMISSION_FALLBACK=False):
+            self.client.force_login(self.user('fresh2', []))
+            html = self.client.get(PAGES['data']).content.decode()
+        self.assertNotIn('data-rm-open="create"', html)
+        self.assertIn('data-can-create="0"', html)
+
+    def _unassign_every_manual_permission(self):
+        """Put the database back in the 'no roles configured yet' state."""
+        from django.contrib.auth.models import Group
+        from finance.permissions import ACTION_PERMS
+        codenames = [label.split('.', 1)[1] for label in ACTION_PERMS.values()]
+        perms = Permission.objects.filter(
+            content_type__app_label='finance', codename__in=codenames)
+        for user in User.objects.all():
+            user.user_permissions.remove(*perms)
+        for group in Group.objects.all():
+            group.permissions.remove(*perms)
+
+    def test_rows_carry_the_coordinates_the_dialogs_prefill_from(self):
+        """The row menus open a dialog on the row's own PP / account. Those
+        coordinates are emitted as data attributes; a row without them opens
+        the dialog with an empty cascade and the operator cannot save."""
+        project, _ = self.mapped_project('P-9130-960', self.acc_np)
+        html = self.client.get(PAGES['data']).content.decode()
+        self.assertIn('data-rm-type="NTF_PROJECT"', html)
+        self.assertIn(f'data-rm-org="{self.org.pk}"', html)
+        self.assertIn(f'data-rm-pp="{self.pp.pp_code}"', html)
+        self.assertIn(f'data-rm-account="{self.acc_np.account_code}"', html)
 
     def test_transaction_action_menu_is_permission_gated(self):
         project, _ = self.mapped_project('P-9130-902', self.acc_np)

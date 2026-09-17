@@ -39,8 +39,8 @@
     transition: background .15s, border-color .15s, color .15s, opacity .15s;
 }
 .rm-btn i { font-size: 13px; }
-.rm-btn-primary { background: #2563EB; border-color: #2563EB; color: #fff; }
-.rm-btn-primary:hover:not(:disabled) { background: #1D4ED8; border-color: #1D4ED8; }
+.rm-btn-primary { background: var(--primary,#C8102E); border-color: var(--primary,#C8102E); color: #fff; }
+.rm-btn-primary:hover:not(:disabled) { background: var(--primary-dark,#8B0D24); border-color: var(--primary-dark,#8B0D24); }
 .rm-btn-outline { border-color: var(--border,#E2E8F0); color: #334155; }
 .rm-btn-outline:hover:not(:disabled) { border-color: #94A3B8; background: #F8FAFC; }
 .rm-btn-ghost { border-color: transparent; color: #475569; }
@@ -142,8 +142,14 @@
 
 /* Action column of the main grid: 40px, icon centred, never grows (§17). */
 .rm-rowmenu { position: relative; display: flex; justify-content: center; }
+/* While open the panel is moved to <body> (see revenue-manual.js) so the
+   table's scroll port cannot clip it; it is then positioned fixed against the
+   button. z-index sits above the sticky topbar (50) but below the modals. */
+.rm-rowmenu-panel.rm-rowmenu-portal {
+    position: fixed; top: 0; left: 0; right: auto; z-index: 1100;
+}
 .rm-rowmenu-inline { justify-content: flex-end; }
-.rm-rowmenu-inline .rm-rowmenu-panel { top: 26px; }
+.rm-rowmenu-inline .rm-rowmenu-panel:not(.rm-rowmenu-portal) { top: 26px; }
 /* Per-transaction action header/cell of the expanded recognition table. */
 .rev-rec-act { width: 44px; text-align: right; padding-right: 10px; }
 .rev-rec-act .rm-rowmenu-btn { width: 24px; height: 24px; font-size: 13px; }

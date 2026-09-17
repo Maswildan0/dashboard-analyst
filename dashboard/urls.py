@@ -52,6 +52,9 @@ urlpatterns = [
     path('dashboard/data/export', views.export, name='realisasi-export'),
     # Revenue module (database-driven; replaces mock on /dashboard/ stepwise).
     path('dashboard/revenue/', include('finance.urls_revenue')),
+    # Operator sign-in/out. Django's own views; the template lives in
+    # templates/registration/login.html.
+    path('', include('django.contrib.auth.urls')),
     path('admin/', admin.site.urls),
     re_path(r'^build/(?P<path>.*)$', _build_file, name='build-assets'),
     re_path(r'^static/(?P<path>.*)$', _static_file, name='static-fallback'),

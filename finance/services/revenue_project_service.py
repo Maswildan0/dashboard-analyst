@@ -431,7 +431,7 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
     qs = _scope_projects(qs, ctx, prefixes=('P-',), categories=('NTF_PROJECT',))
     projects = list(qs.distinct().order_by('pp__pp_code', 'project_number'))
     unit_map = _bulk_unit_map(projects)
-    jenis_map = _jenis_map(projects)
+    projects_jenis = _jenis_map(projects)
     period_end = _date(ctx.year, ctx.month, _cal.monthrange(ctx.year, ctx.month)[1])
     per_proj_acc, acc_names, acc_modes = _project_data_bulk(projects, ctx)
 
@@ -471,7 +471,8 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
             rows.append({
                 'project': project,
                 'mode': 'tf_program',
-                'jenis': jenis_map.get(project.pk, 'NTF_PROJECT'),
+                'jenis': projects_jenis.get(project.pk, 'NTF_PROJECT'),
+                'jenis_code': projects_jenis.get(project.pk, 'NTF_PROJECT'),
                 'tahun': ctx.year,
                 'bulan': ctx.month,
                 'month': ctx.month,
@@ -970,7 +971,7 @@ def program_rows(ctx, *, prefixes=('TF-',), categories=(), search='', sort='',
     for pid, per_acc in per_proj_acc.items():
         for code in per_acc:
             seen_acc[pid].add(code)
-    jenis_map = _jenis_map(projects)
+    projects_jenis = _jenis_map(projects)
 
     q = (search or '').strip().lower()
     rows = []
@@ -1005,7 +1006,8 @@ def program_rows(ctx, *, prefixes=('TF-',), categories=(), search='', sort='',
             rows.append({
                 'project': project,
                 'mode': 'tf_program',
-                'jenis': jenis_map.get(project.pk, 'NTF_PROJECT'),
+                'jenis': projects_jenis.get(project.pk, 'NTF_PROJECT'),
+                'jenis_code': projects_jenis.get(project.pk, 'NTF_PROJECT'),
                 'tahun': ctx.year,
                 'bulan': ctx.month,
                 'month': ctx.month,

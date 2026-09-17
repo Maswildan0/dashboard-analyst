@@ -422,17 +422,26 @@
     });
 
     /* Prefill the form from a table row so "Tambah Pengakuan" and
-       "Koreksi / Adjustment" start on the right object (§8, §27). */
-    function prefillFromRow(form, dataset) {
-        if (!dataset) return;
+       "Koreksi / Adjustment" start on the right object (§8, §27).
+
+       Ordering is what makes this work: PP options only exist once the
+       Organization is applied and account options only once the Revenue Type
+       is, so each level is set and its children reloaded before the next is
+       written. Setting everything first would leave the deeper selects empty
+       (their previous options are wiped by the reload). */
+    async function prefillFromRow(form, dataset) {
+        if (!form || !dataset) return;
         const set = (name, value) => {
             const el = form.querySelector(`[name="${name}"]`);
             if (el && value !== undefined && value !== null && value !== '') el.value = value;
         };
         set('revenue_type', dataset.rmType);
+        if (dataset.rmType) await loadAccounts(form);
         set('organization', dataset.rmOrg);
+        if (dataset.rmOrg) await loadPps(form);
         set('pp', dataset.rmPp);
         set('revenue_account', dataset.rmAccount);
+        if (dataset.rmPp && dataset.rmAccount) await loadProjects(form);
     }
 
     function rowDataset(el) {
@@ -454,8 +463,7 @@
         if (opener) {
             if (CFG.closed) { toast('Periode sudah ditutup.', 'error'); return; }
             prepareCreate();
-            prefillFromRow(createForm, rowDataset(opener));
-            await refreshCascade(createForm);
+            await prefillFromRow(createForm, rowDataset(opener));
             openModal('create');
             return;
         }
@@ -471,9 +479,8 @@
             prepareCreate();
             setMode('existing');
             const pid = addRec.dataset.rmAddRecognition;
-            const row = addRec.closest('.rev-row-expand');
-            await refreshCascade(createForm);
-            if (row) prefillFromRow(createForm, row.dataset);
+            const row = rowOf(addRec);
+            if (row) await prefillFromRow(createForm, row.dataset);
             await loadProjects(createForm, pid);
             openModal('create');
             return;
@@ -487,7 +494,7 @@
         const adjust = ev.target.closest('[data-rm-adjust-project]');
         if (adjust) {
             if (CFG.closed) { toast('Periode sudah ditutup.', 'error'); return; }
-            await openAdjustment(adjust.dataset.rmAdjustProject, adjust.closest('.rev-row-expand'));
+            await openAdjustment(adjust.dataset.rmAdjustProject, rowOf(adjust));
             return;
         }
         const historyBtn = ev.target.closest('[data-rm-history-project]');
@@ -513,7 +520,7 @@
         }
         const detail = ev.target.closest('[data-rm-detail]');
         if (detail) {
-            const row = detail.closest('.rev-row-expand');
+            const row = rowOf(detail);
             if (row) row.click();
             return;
         }
@@ -570,29 +577,91 @@
         }
     }
 
+    /* Only one menu is ever open, tracked here so close is a no-op otherwise. */
+    let openRowMenu = null;
+
+    /** The expandable row a menu item belongs to.
+
+        While a menu is open its panel lives on <body> (see
+        openRowMenuPanel), so `closest('.rev-row-expand')` from an item would
+        return null and the dialog that item opens would lose the row's PP /
+        account / organization. The owner row is captured when the panel is
+        portaled and read back from here. */
+    function rowOf(el) {
+        if (!el) return null;
+        const direct = el.closest('.rev-row-expand');
+        if (direct) return direct;
+        const panel = el.closest('.rm-rowmenu-panel');
+        return (panel && panel.__rmOwner) || null;
+    }
+
     function handleRowMenu(ev) {
         const toggle = ev.target.closest('[data-rm-rowmenu-toggle]');
-        const mine = toggle ? toggle.closest('[data-rm-rowmenu]') : null;
-        $$('.rm-rowmenu-panel').forEach((panel) => {
-            if (panel.closest('[data-rm-rowmenu]') !== mine) panel.hidden = true;
-        });
-        if (!toggle) return;
-        const panel = $('.rm-rowmenu-panel', mine);
+        const host = toggle ? toggle.closest('[data-rm-rowmenu]') : null;
+        if (!host) { closeRowMenus(); return; }
+        // While open the panel lives on <body>, so resolve it via the host.
+        const panel = host.__rmPanel || $('.rm-rowmenu-panel', host);
         if (!panel) return;
-        panel.hidden = !panel.hidden;
-        toggle.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+        if (openRowMenu === panel) { closeRowMenus(); return; }
+        closeRowMenus();
+        openRowMenuPanel(panel, host);
+    }
+
+    /** Show `panel` as a fixed overlay so no clipping ancestor can cut it.
+
+        The table's scroll port is narrower than the grid it holds, so a panel
+        anchored inside the last column is clipped by `overflow` and its lower
+        items cannot be clicked (§12). Moving the panel to <body> for the
+        lifetime of the open state sidesteps every ancestor's clip. */
+    function openRowMenuPanel(panel, host) {
+        panel.__rmHost = host;
+        panel.__rmOwner = host.closest('.rev-row-expand');
+        host.__rmPanel = panel;
+        panel.hidden = false;
+        panel.classList.add('rm-rowmenu-portal');
+        document.body.appendChild(panel);
+        positionRowMenuPanel(panel, host);
+        const toggle = $('[data-rm-rowmenu-toggle]', host);
+        if (toggle) toggle.setAttribute('aria-expanded', 'true');
+        openRowMenu = panel;
+    }
+
+    /** Park the menu against its button, flipping/clamping to stay on screen. */
+    function positionRowMenuPanel(panel, host) {
+        const anchor = host.getBoundingClientRect();
+        const w = panel.offsetWidth;
+        const h = panel.offsetHeight;
+        const gap = 6;
+        let left = anchor.right - w;
+        left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+        let top = anchor.bottom + gap;
+        if (top + h > window.innerHeight - 8) {
+            const above = anchor.top - gap - h;
+            top = above >= 8 ? above : Math.max(8, window.innerHeight - h - 8);
+        }
+        panel.style.top = Math.round(top) + 'px';
+        panel.style.left = Math.round(left) + 'px';
     }
 
     function closeRowMenus() {
-        $$('.rm-rowmenu-panel').forEach((panel) => { panel.hidden = true; });
+        if (!openRowMenu) return;
+        const panel = openRowMenu;
+        const host = panel.__rmHost;
+        openRowMenu = null;
+        panel.hidden = true;
+        panel.classList.remove('rm-rowmenu-portal');
+        panel.style.top = '';
+        panel.style.left = '';
+        if (host) {
+            const toggle = $('[data-rm-rowmenu-toggle]', host);
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+            host.appendChild(panel);
+        }
     }
 
-    async function refreshCascade(form) {
-        const type = $('[data-rm-type]', form);
-        const org = $('[data-rm-org]', form);
-        if (type && type.value) await loadAccounts(form);
-        if (org && org.value) await loadPps(form);
-    }
+    // A fixed panel would drift away from its button, so dismiss instead.
+    window.addEventListener('scroll', closeRowMenus, true);
+    window.addEventListener('resize', closeRowMenus);
 
     if (createForm) {
         const org = $('[data-rm-org]', createForm);
@@ -655,8 +724,9 @@
         setOptions($('[data-rm-ledger]', adjustForm), [], '— Pilih PP & Akun dahulu —');
         const dateInput = $('[name=transaction_date]', adjustForm);
         if (dateInput) dateInput.value = todayISO();
-        if (rowEl) prefillFromRow(adjustForm, rowEl.dataset);
-        await refreshCascade(adjustForm);
+        if (rowEl) await prefillFromRow(adjustForm, rowEl.dataset);
+        // The adjusted object must stay selected even when the row carried no
+        // account (an imported row without mapped GL has an empty code).
         if (projectId) await loadProjects(adjustForm, projectId);
         // The imported source must be chosen from real ledger rows, so the
         // reference list follows the PP + account of the row being corrected.
@@ -885,6 +955,10 @@
             form.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
                 const payload = Object.fromEntries(new FormData(form).entries());
+                // The endpoint resolves the period to enforce the OPEN lock,
+                // and this form holds only master fields, so carry the page's
+                // period explicitly (it would otherwise 400 on every save).
+                if (!payload.period) payload.period = CFG.period;
                 busy(form, true, 'Menyimpan…');
                 try {
                     const res = await post(URLS.projectEdit(project.id), payload);

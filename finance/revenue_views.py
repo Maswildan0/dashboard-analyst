@@ -257,7 +257,7 @@ def _gl_list(request, revenue_type):
     pages = max(1, -(-total // per_page))
     page = min(page, pages)
     start = (page - 1) * per_page
-    rows = _attach_manual_flags(all_rows[start:start + per_page])
+    rows = _attach_manual_flags(all_rows[start:start + per_page], request)
 
     for r in rows:
         if r.get('mode') == 'tf_program':
@@ -475,7 +475,7 @@ def ntf_project_list(request):
     pages = max(1, -(-total // per_page))
     page = min(page, pages)
     start = (page - 1) * per_page
-    rows = _attach_manual_flags(all_rows[start:start + per_page])
+    rows = _attach_manual_flags(all_rows[start:start + per_page], request)
     for r in rows:
         r['bulan'] = month_name(r['bulan'])
         # text cells: empty -> dash
@@ -612,7 +612,7 @@ def _row_sort_key(sort):
     }.get(sort)
 
 
-def _attach_manual_flags(rows):
+def _attach_manual_flags(rows, request=None):
     """Annotate project-grain rows with manual provenance for the row menu.
 
     One query for the whole page: which projects carry manual entries (and how
@@ -633,17 +633,54 @@ def _attach_manual_flags(rows):
         voided = Counter(ManualRevenueEntry.objects
                          .filter(project_id__in=pids, status='VOID')
                          .values_list('project_id', flat=True))
+    caps = capabilities(request.user) if request is not None else {}
+    try:
+        period = _selected_period(request) if request is not None else None
+    except Exception:
+        period = None
+    writable = not (period and period.is_closed)
     for r in rows:
         project = r.get('project')
         if project is None:
             r['manual_count'] = 0
             r['void_count'] = 0
             r['project_source'] = ''
+            r['has_row_menu'] = False
             continue
         r['manual_count'] = counts.get(project.pk, 0)
         r['void_count'] = voided.get(project.pk, 0)
         r['project_source'] = project.source_type
+        r['has_row_menu'] = _row_menu_visible(r, caps, writable)
+        # Master coordinates the row menus hand to the dialogs, so "Tambah
+        # Pengakuan" / "Koreksi / Adjustment" open on THIS object's PP,
+        # account and organization instead of an empty cascade (§8, §27).
+        # `jenis_code` is the category code the endpoints expect (Data Revenue
+        # keeps a display label in `jenis`); `akun` may be a composite
+        # 'CODE Nama' label, so only its first token is handed over.
+        r['manual_type'] = r.get('jenis_code') or r.get('jenis') or ''
+        r['manual_pp'] = project.pp.pp_code if project.pp else ''
+        r['manual_org_id'] = (project.organization_unit_id
+                              or (project.pp.organization_unit_id if project.pp else '')
+                              or '')
+        r['manual_account'] = (r.get('akun') or '').split(' ')[0]
+        r['manual_project_id'] = project.pk
     return rows
+
+
+def _row_menu_visible(row, caps, writable):
+    """Whether this row's ⋮ menu would hold at least one item.
+
+    A menu button that opens an empty panel is never rendered (§10). An
+    imported row always offers "Lihat Detail"; a manual row only has items when
+    the user may edit/add/delete (period permitting) or read the audit trail.
+    """
+    if row.get('project') is None:
+        return False
+    if not row.get('manual_count'):
+        return True
+    return bool(caps.get('view_audit')
+                or (writable and (caps.get('edit') or caps.get('create')
+                                  or caps.get('void'))))
 
 
 def _progress_color(pct):
@@ -855,7 +892,7 @@ def data_revenue_list(request):
     pages = max(1, -(-total // per_page))
     page = min(page, pages)
     start = (page - 1) * per_page
-    rows = _attach_manual_flags(_finalize_tf_rows(all_rows[start:start + per_page]))
+    rows = _attach_manual_flags(_finalize_tf_rows(all_rows[start:start + per_page]), request)
 
     # Grand totals (distinct Nilai per project; Total/Diakui = sum rows)
     _seen = set()
