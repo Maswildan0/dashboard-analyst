@@ -1,8 +1,14 @@
 """
 Rule-based financial analyst insights (#21, #35).
 
-Generates 3-5 deterministic insights from computed metrics. No AI API pure
-business rules comparing the selected month vs the same month last year.
+Generates 3-5 deterministic insights from computed metrics. No AI API — pure
+business rules; the YoY values it reports follow the caller's window (the
+Financial Performance Overview compares YTD with the same YTD window of the
+previous year).
+
+NOTE: the insight section is currently commented out in
+finance/templates/finance/dashboard.html, so this module is not rendered on
+the page.
 """
 
 from decimal import Decimal
@@ -32,13 +38,13 @@ def generate_financial_insights(metrics):
             insights.append({
                 'icon': 'trending-up',
                 'tone': 'up',
-                'text': f'Revenue increased {yoy_label(rev_yoy)} compared with the same month in {prev_year}.',
+                'text': f'Revenue increased {yoy_label(rev_yoy)} compared with the same period in {prev_year}.',
             })
         else:
             insights.append({
                 'icon': 'trending-down',
                 'tone': 'down',
-                'text': f'Revenue declined {yoy_label(rev_yoy)} compared with the same month in {prev_year}.',
+                'text': f'Revenue declined {yoy_label(rev_yoy)} compared with the same period in {prev_year}.',
             })
 
     if exp_yoy is not None and rev_yoy is not None:

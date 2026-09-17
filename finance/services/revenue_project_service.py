@@ -5,6 +5,7 @@ Per-project figures are derived from mapped GL only (finance_glprojectmapping
 authoritative. One main-table row = ONE project; termin rows only appear in
 the expanded detail panel.
 """
+import datetime
 import re
 
 from decimal import Decimal
@@ -19,7 +20,11 @@ from finance.models import (
     ProjectAlias,
 )
 
+from . import manual_revenue as mr
+
 ZERO = Decimal('0')
+# Sort floor for a history row whose source carries no date of its own.
+_EPOCH = datetime.date.min
 
 _MATCH_OK = ['AUTO_MATCHED', 'VERIFIED', 'NEEDS_REVIEW']
 
@@ -46,25 +51,29 @@ def _sum_mapped(qs):
 
 
 def project_lifetime(project):
-    """Lifetime recognized = ALL mapped GL revenue (any period)."""
-    return _sum_mapped(_mapped(project))
+    """Lifetime recognized = mapped GL + POSTED manual recognition."""
+    manual = mr.total_for_projects([project.pk]).get(project.pk, ZERO)
+    return _sum_mapped(_mapped(project)) + manual
 
 
 def project_month(project, period):
     if period is None:
         return ZERO
-    return _sum_mapped(_mapped(project, ledger__period=period))
+    manual = mr.total_for_projects([project.pk], periods=[period]).get(project.pk, ZERO)
+    return _sum_mapped(_mapped(project, ledger__period=period)) + manual
 
 
 def project_ytd(project, year, month):
-    """YTD = mapped GL Jan..selected month of the selected year."""
+    """YTD = mapped GL + manual Jan..selected month of the selected year."""
+    manual = mr.total_for_projects([project.pk], year=year, month_lte=month).get(
+        project.pk, ZERO)
     return _sum_mapped(_mapped(
         project, ledger__period__year=year, ledger__period__month__lte=month
-    ))
+    )) + manual
 
 
 def project_accounts(project):
-    """Distinct revenue accounts of a project's mapped GL (authoritative)."""
+    """Distinct revenue accounts of a project: mapped GL + manual entries."""
     rows = (GLProjectMapping.objects
             .filter(project=project, match_status__in=_MATCH_OK,
                     ledger__revenue_account__isnull=False)
@@ -73,10 +82,23 @@ def project_accounts(project):
                     'ledger__revenue_account__detail_history_mode')
             .distinct()
             .order_by('ledger__revenue_account__account_code'))
-    return [{'code': r['ledger__revenue_account__account_code'],
-             'name': r['ledger__revenue_account__account_name'],
-             'mode': r['ledger__revenue_account__detail_history_mode'] or 'HISTORICAL'}
-            for r in rows]
+    out = {r['ledger__revenue_account__account_code']: {
+        'code': r['ledger__revenue_account__account_code'],
+        'name': r['ledger__revenue_account__account_name'],
+        'mode': r['ledger__revenue_account__detail_history_mode'] or 'HISTORICAL',
+    } for r in rows}
+    # A MANUAL-only project has no mapping yet: its accounts come from the
+    # entries themselves so the expand panel can still be scoped per account.
+    for e in (mr.entries_for_scope(project=project)
+              .values('revenue_account__account_code',
+                      'revenue_account__account_name',
+                      'revenue_account__detail_history_mode').distinct()):
+        out.setdefault(e['revenue_account__account_code'], {
+            'code': e['revenue_account__account_code'],
+            'name': e['revenue_account__account_name'],
+            'mode': e['revenue_account__detail_history_mode'] or 'HISTORICAL',
+        })
+    return [out[code] for code in sorted(out)]
 
 
 def project_account_totals(project, year, month):
@@ -107,6 +129,16 @@ def project_account_totals(project, year, month):
                 d['ytd'] += amt
                 if led.period.month == month:
                     d['month'] += amt
+    # POSTED manual recognitions follow the same date-scoped rules as GL so
+    # the expand panel header reconciles with the row it was opened from.
+    for e in mr.entries_for_scope(project=project, date_lte=end):
+        code = e.revenue_account.account_code
+        d = out.setdefault(code, {'lifetime': ZERO, 'ytd': ZERO, 'month': ZERO})
+        d['lifetime'] += e.amount
+        if e.period.year == year:
+            d['ytd'] += e.amount
+            if e.period.month == month:
+                d['month'] += e.amount
     return out
 
 
@@ -144,11 +176,74 @@ def project_account_label(project):
 ''
 
 
-def _project_unit(project):
+def _project_unit(project, unit_map=None):
     """Unit metadata from the latest NTF report snapshot (raw, non-authoritative
-    financials used only for the Unit display column)."""
+    financials used only for the Unit display column).
+
+    Pass a prebuilt {project_pk: unit} map (see _bulk_unit_map) to avoid one
+    query per project on remote databases."""
+    if unit_map is not None:
+        return unit_map.get(project.pk, '')
     snap = NtfReportSnapshot.objects.filter(project=project).order_by('-period__year', '-period__month', '-loaded_at').first()
     return snap.unit_raw if snap and snap.unit_raw else ''
+
+
+def _jenis_map(projects):
+    """{project_id: category_code} for the given projects, in one query each.
+
+    Imported projects carry a deterministic number prefix (TF- = Tuition Fee,
+    RS- = NTF Research objek, P-/SRV- = NTF Project). A MANUAL project has no
+    such prefix ('M-'), so its category comes from the revenue account its
+    entries were keyed under — the same source of truth page membership uses.
+    """
+    pids = [p.pk for p in projects]
+    out = {}
+    if not pids:
+        return out
+    for pid, code in (GLProjectMapping.objects
+                      .filter(project_id__in=pids, match_status__in=_MATCH_OK,
+                              ledger__revenue_account__isnull=False)
+                      .values_list('project_id',
+                                   'ledger__revenue_account__revenue_category__code')):
+        out.setdefault(pid, code)
+    from finance.models import ManualRevenueEntry as _MRE
+    for pid, code in (_MRE.objects
+                      .filter(project_id__in=pids, revenue_account__isnull=False)
+                      .values_list('project_id',
+                                   'revenue_account__revenue_category__code')):
+        out.setdefault(pid, code)
+    for project in projects:
+        number = project.project_number or ''
+        if number.startswith('TF-'):
+            out[project.pk] = 'TF'
+        elif number.startswith('RS-'):
+            out[project.pk] = 'NTF_RESEARCH'
+        elif number.startswith(('P-', 'SRV-')):
+            out[project.pk] = 'NTF_PROJECT'
+        else:
+            out.setdefault(project.pk, 'NTF_PROJECT')
+    return out
+
+
+def _bulk_unit_map(projects):
+    """One query: latest NTF snapshot unit per project for the given list."""
+    pids = [p.pk for p in projects]
+    if not pids:
+        return {}
+    # latest snapshot per project by (year, month, loaded_at)
+    from django.db.models import Max
+    latest = (NtfReportSnapshot.objects.filter(project_id__in=pids)
+              .values('project_id')
+              .annotate(mkey=Max('period__year') * 10000 + Max('period__month') * 100)
+              .values_list('project_id', flat=True))
+    # simpler: pick max id group per project (loaded_at monotonic in seed)
+    from finance.models import NtfReportSnapshot as _N
+    sub = (_N.objects.filter(project_id__in=pids)
+           .values('project_id')
+           .annotate(mid=Max('id'))
+           .values('mid'))
+    snaps = _N.objects.filter(id__in=sub).values('project_id', 'unit_raw')
+    return {s['project_id']: (s['unit_raw'] or '') for s in snaps}
 
 
 def project_account_mode(project):
@@ -161,7 +256,14 @@ def project_account_mode(project):
                    ledger__revenue_account__isnull=False)
            .values_list('ledger__revenue_account__detail_history_mode', flat=True)
            .first())
-    return acc or 'HISTORICAL'
+    if acc:
+        return acc
+    # MANUAL-only project: the mode follows the account the entries were keyed
+    # under, so Pendaftaran (PERIOD_ONLY) keeps its month-scoped detail.
+    manual = (mr.entries_for_scope(project=project)
+              .values_list('revenue_account__detail_history_mode', flat=True)
+              .first())
+    return manual or 'HISTORICAL'
 
 
 def project_summary(project, year, month):
@@ -188,6 +290,128 @@ def project_summary(project, year, month):
     }
 
 
+def _manual_project_ids(codes):
+    """MANUAL projects with a POSTED entry under one of `codes`.
+
+    Imported projects are selected by their deterministic number prefix, so
+    this clause is deliberately restricted to manual provenance. That is what
+    keeps the four page scopes pairwise disjoint: a project reaches a page
+    through its prefix OR through being manual, never through both, so the
+    unified Data Revenue table can concatenate every builder without ever
+    counting one project twice (§16, §39-#41).
+
+    Only POSTED rows grant membership: a project whose every entry was voided
+    drops out of the normal tables exactly like any other deleted data (§38)
+    and remains visible in Data Terhapus.
+    """
+    from finance.models import ManualRevenueEntry as _MRE
+    return set(_MRE.objects
+               .filter(status='POSTED', revenue_account__revenue_category__code__in=codes)
+               .values_list('project_id', flat=True))
+
+
+def _scope_projects(qs, ctx, *, prefixes=None, categories=None,
+                    exclude_prefixes=None):
+    """Restrict a Project queryset to one revenue page's membership.
+
+    A project is in scope when its number carries one of `prefixes` (imported
+    rows, which may still have no mapped account) OR when it is a MANUAL
+    project keyed under one of `categories`. Imported rows are never claimed
+    by the category clause, so the per-page scopes stay disjoint and the
+    unified Data Revenue table can concatenate every builder once (§16).
+    """
+    from django.db.models import Q as _Q
+    if exclude_prefixes:
+        for pfx in exclude_prefixes:
+            qs = qs.exclude(project_number__startswith=pfx)
+    if prefixes or categories:
+        clause = _Q(pk__in=_manual_project_ids(categories)) if categories \
+            else _Q(pk__in=[])
+        for pfx in prefixes:
+            clause |= _Q(project_number__startswith=pfx)
+        qs = qs.filter(clause)
+    # Multi-select: every selected parent applies via __in; an explicitly
+    # requested value that resolves to nothing yields an empty list (never
+    # silently ignored). Empty list = dimension not constrained.
+    if ctx.organizations:
+        qs = qs.filter(pp__organization_unit__in=ctx.organizations)
+    elif ctx.org_values:
+        qs = qs.none()
+    if ctx.pps:
+        qs = qs.filter(pp__in=ctx.pps)
+    elif ctx.pp_values:
+        qs = qs.none()
+    if ctx.accounts:
+        # A mapped GL account OR a manual entry's account may satisfy this.
+        qs = qs.filter(
+            _Q(gl_mappings__ledger__revenue_account__in=ctx.accounts)
+            | _Q(manual_entries__revenue_account__in=ctx.accounts)
+        ).distinct()
+    elif ctx.account_values:
+        qs = qs.none()
+    return qs
+
+
+def _merge_manual(per_proj_acc, acc_names, acc_modes, project_ids, period_end):
+    """Add POSTED manual recognitions to the per-project-per-account buckets.
+
+    A manual row is bucketed by its TRANSACTION DATE, exactly like a mapped GL
+    line, so the existing lifetime / YTD / month / PERIOD_ONLY arithmetic below
+    needs no special case and manual revenue lands in the correct period. The
+    account label comes from RevenueAccount (an imported account) so the row
+    merges into the same bucket rather than creating a parallel one.
+    """
+    rows = mr.posting_rows(project_ids)
+    if not rows:
+        return
+    from finance.models import RevenueAccount as _RA
+    accounts = dict(_RA.objects.filter(
+        pk__in={r[2] for r in rows}).values_list('pk', 'account_name'))
+    for project_id, code, account_id, tx_date, amount in rows:
+        per_proj_acc[project_id][code].append(
+            (tx_date or period_end, amount or ZERO))
+        acc_names[project_id].setdefault(code, accounts.get(account_id, '') or '')
+        # A manual account never overrides an existing mapped account's mode:
+        # PERIOD_ONLY stays period-scoped, unknown defaults to HISTORICAL.
+        acc_modes[project_id].setdefault(code, 'HISTORICAL')
+
+
+def _project_data_bulk(projects, ctx):
+    """Fetch ALL mapped GL for `projects` in one query and group in memory.
+
+    Returns (per_proj_acc, acc_names, acc_modes) where per_proj_acc is
+    project_id -> account_code -> [(posting_date, amount)] sorted ascending.
+    Used by list builders to avoid N+1 queries (important on remote PG).
+    """
+    from collections import defaultdict as _dd
+    from datetime import date as _date
+    import calendar as _cal
+    pids = [p.pk for p in projects]
+    if not pids:
+        return _dd(lambda: _dd(list)), _dd(dict), _dd(dict)
+    period_end = _date(ctx.year, ctx.month, _cal.monthrange(ctx.year, ctx.month)[1])
+    from finance.models import GLProjectMapping as _GPM
+    maps = (_GPM.objects
+            .filter(project_id__in=pids, match_status__in=_MATCH_OK)
+            .select_related('ledger', 'ledger__period', 'ledger__revenue_account')
+            .order_by('project_id', 'ledger__posting_date', 'ledger__id'))
+    per_proj_acc = _dd(lambda: _dd(list))
+    acc_names = _dd(dict)
+    acc_modes = _dd(dict)
+    for m in maps:
+        led = m.ledger
+        acc = led.revenue_account
+        code = acc.account_code if acc else (led.account_code_raw or '')
+        name = acc.account_name if acc else (led.account_name_raw or '')
+        mode = getattr(acc, 'detail_history_mode', 'HISTORICAL') or 'HISTORICAL'
+        post = led.posting_date or (led.period.period_start if led.period else period_end)
+        per_proj_acc[m.project_id][code].append((post, m.allocated_amount or ZERO))
+        acc_names[m.project_id].setdefault(code, name or '')
+        acc_modes[m.project_id].setdefault(code, mode)
+    _merge_manual(per_proj_acc, acc_names, acc_modes, pids, period_end)
+    return per_proj_acc, acc_names, acc_modes
+
+
 def project_rows(ctx, *, search='', sort='', direction='asc'):
     """NTF PROJECT list rows one row per project.
 
@@ -197,48 +421,58 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
       total pendapatan (lifetime), pendapatan berjalan (YTD).
     NO 'tipe' column (page is fixed NTF Project). NO analytical columns.
     """
+    from datetime import date as _date
+    import calendar as _cal
     qs = Project.objects.filter(is_active=True).exclude(
         project_number__startswith='TF-').select_related(
         'pp__organization_unit', 'organization_unit'
     )
-    if ctx.organization is not None:
-        qs = qs.filter(pp__organization_unit=ctx.organization)
-    if ctx.pp is not None:
-        qs = qs.filter(pp=ctx.pp)
-    if ctx.revenue_account is not None:
-        qs = qs.filter(
-            gl_mappings__ledger__revenue_account=ctx.revenue_account
-        ).distinct()
+    # Contract projects (P-) plus MANUAL projects keyed under NTF Project.
+    qs = _scope_projects(qs, ctx, prefixes=('P-',), categories=('NTF_PROJECT',))
+    projects = list(qs.distinct().order_by('pp__pp_code', 'project_number'))
+    unit_map = _bulk_unit_map(projects)
+    projects_jenis = _jenis_map(projects)
+    period_end = _date(ctx.year, ctx.month, _cal.monthrange(ctx.year, ctx.month)[1])
+    per_proj_acc, acc_names, acc_modes = _project_data_bulk(projects, ctx)
 
     q = (search or '').strip().lower()
     rows = []
-    for project in qs.distinct().order_by('pp__pp_code', 'project_number'):
+    for project in projects:
         pp_label = project.pp.pp_code if project.pp else ''
         org_name = (project.organization_unit.name if project.organization_unit
                     else (project.pp.organization_unit.name if project.pp and project.pp.organization_unit else ''))
-        unit = _project_unit(project) or org_name
-        accounts = project_accounts(project)
-        if not accounts:
+        unit = _project_unit(project, unit_map) or org_name
+        codes = sorted(per_proj_acc[project.pk]) or []
+        if not codes:
             if (project.project_value or 0) <= 0:
                 continue
-            accounts = [{'code': '', 'name': project.project_name, 'mode': 'HISTORICAL'}]
-        per_acc = project_account_totals(project, ctx.year, ctx.month)
-        # Project-level revenue up to the selected period (ALL accounts of the
-        # project): drives the progress bar so multi-account rows share ONE
-        # project progress (spec: progress = project total revenue / value).
-        proj_total = sum((t.get('lifetime') or ZERO) for t in per_acc.values())
-        for acc in accounts:
-            code, name, mode = acc['code'], acc['name'], acc['mode']
+            codes = ['']
+        proj_total = ZERO
+        acc_totals = {}
+        for code in codes:
+            life = sum(a for d, a in per_proj_acc[project.pk][code]
+                       if d <= period_end)
+            ytd = sum(a for d, a in per_proj_acc[project.pk][code]
+                      if d.year == ctx.year and d.month <= ctx.month and d <= period_end)
+            mon = sum(a for d, a in per_proj_acc[project.pk][code]
+                      if d.year == ctx.year and d.month == ctx.month)
+            acc_totals[code] = {'lifetime': life, 'ytd': ytd, 'month': mon}
+            proj_total += life
+        for code in codes:
+            name = acc_names[project.pk].get(code, '') or (project.project_name if code == '' else '')
+            mode = acc_modes[project.pk].get(code, 'HISTORICAL')
             if q and q not in (project.project_number or '').lower() \
                     and q not in (project.project_name or '').lower() \
                     and q not in (pp_label or '').lower() \
                     and q not in (org_name or '').lower() \
                     and q not in (code or '').lower():
                 continue
-            totals = per_acc.get(code, {'lifetime': ZERO, 'ytd': ZERO, 'month': ZERO})
+            totals = acc_totals[code]
             rows.append({
                 'project': project,
                 'mode': 'tf_program',
+                'jenis': projects_jenis.get(project.pk, 'NTF_PROJECT'),
+                'jenis_code': projects_jenis.get(project.pk, 'NTF_PROJECT'),
                 'tahun': ctx.year,
                 'bulan': ctx.month,
                 'month': ctx.month,
@@ -264,13 +498,14 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
     col_map = {
         'tahun': lambda r: r['tahun'],
         'bulan': lambda r: r['bulan'],
-        'unit': lambda r: r['unit'].lower(),
+        'unit': lambda r: (r['unit'] or '').lower(),
         'no_proyek': lambda r: r['no_proyek'],
         'kode_pp': lambda r: r['pp_code'],
-        'organization': lambda r: r['organization'].lower(),
-        'nama': lambda r: r['nama'].lower(),
-        'akun': lambda r: r['akun'].lower(),
-        'nilai': lambda r: r['nilai'],
+        'organization': lambda r: (r['organization'] or '').lower(),
+        'nama': lambda r: (r['nama'] or '').lower(),
+        'nama_proyek': lambda r: (r['nama_proyek'] or '').lower(),
+        'akun': lambda r: r['akun'],
+        'nilai': lambda r: r['nilai'] or ZERO,
         'total_pendapatan': lambda r: r['total_pendapatan'],
         'pendapatan_berjalan': lambda r: r['pendapatan_berjalan'],
     }
@@ -278,12 +513,11 @@ def project_rows(ctx, *, search='', sort='', direction='asc'):
     if key is not None:
         rows.sort(key=key, reverse=(direction == 'desc'))
     else:
-        rows.sort(key=lambda r: r['total_pendapatan'], reverse=True)
+        rows.sort(key=lambda r: r['no_proyek'])
     return rows
 
-
 def recognition_history(project, year=None, month=None, month_lte=None, upto_date=None, account_code=None):
-    """Mapped GL rows = revenue recognition history (never cash assumption).
+    """Recognition history = mapped GL rows + POSTED manual recognitions.
 
     Scope filters (combined):
       year         -> only that calendar year
@@ -291,7 +525,12 @@ def recognition_history(project, year=None, month=None, month_lte=None, upto_dat
       month_lte    -> months <= value (within the given year)
       upto_date    -> posting_date <= date (historical up to the selected
                       period end; earlier years of the same object stay)
-      account_code -> only GL of that revenue account (per-account rows)
+      account_code -> only that revenue account (per-account rows)
+
+    Manual rows are interleaved by their transaction date so a keyed
+    recognition appears exactly where a GL line would, carrying its own
+    provenance (MANUAL / ADJ) and its evidence number. No GL voucher is ever
+    fabricated for them (§44).
     """
     qs = _mapped(project).select_related(
         'ledger', 'ledger__period', 'ledger__revenue_account'
@@ -306,7 +545,7 @@ def recognition_history(project, year=None, month=None, month_lte=None, upto_dat
             qs = qs.filter(ledger__period__month=month)
         elif month_lte:
             qs = qs.filter(ledger__period__month__lte=month_lte)
-    return [{
+    history = [{
         'date': m.ledger.posting_date,
         'year': m.ledger.period.year,
         'month': m.ledger.period.month,
@@ -316,7 +555,43 @@ def recognition_history(project, year=None, month=None, month_lte=None, upto_dat
         'account_code': m.ledger.revenue_account.account_code if m.ledger.revenue_account else (m.ledger.account_code_raw or ''),
         'account_name': m.ledger.revenue_account.account_name if m.ledger.revenue_account else (m.ledger.account_name_raw or ''),
         'amount': _net(m.ledger),
+        'source_type': 'IMPORTED',
+        'entry_id': None,
+        # The imported row this line came from. An adjustment started from this
+        # transaction must reference exactly this ledger (§9, §12), which the
+        # per-transaction menu hands over as its selected source.
+        'ledger_id': m.ledger_id,
     } for m in qs]
+
+    for e in mr.entries_for_scope(project=project):
+        if account_code and e.revenue_account.account_code != account_code:
+            continue
+        if upto_date is not None:
+            if e.transaction_date is None or e.transaction_date > upto_date:
+                continue
+        elif year:
+            if e.period.year != year:
+                continue
+            if month and e.period.month != month:
+                continue
+            if not month and month_lte and e.period.month > month_lte:
+                continue
+        history.append({
+            'date': e.transaction_date,
+            'year': e.period.year,
+            'month': e.period.month,
+            'voucher': e.evidence_number,
+            'document': e.document_number,
+            'description': e.description,
+            'account_code': e.revenue_account.account_code,
+            'account_name': e.revenue_account.account_name,
+            'amount': e.amount,
+            'source_type': e.source_type,
+            'entry_id': e.pk,
+        })
+    # Interleave by date (manual rows carry the date they were keyed on).
+    history.sort(key=lambda h: (h['date'] is None, h['date'] or _EPOCH), reverse=True)
+    return history
 
 
 def gl_grain_rows(ctx, *, search='', sort='', direction='asc'):
@@ -613,22 +888,31 @@ def tf_account_pp_rows(ctx, *, search='', sort='', direction='asc'):
 
 
 def tf_program_rows(ctx, *, search='', sort='', direction='asc'):
-    return program_rows(ctx, prefixes=('TF-',), search=search, sort=sort, direction=direction)
+    """Data TF: TF- programs plus MANUAL objects keyed under TF."""
+    return program_rows(ctx, prefixes=('TF-',), categories=('TF',),
+                        search=search, sort=sort, direction=direction)
 
 
 def research_object_rows(ctx, *, search='', sort='', direction='asc'):
-    """NTF Research main rows: ONE row per research/hibah objek (Project
-    prefix RS-) per PP. Figures from mapped GL like TF programs."""
-    return program_rows(ctx, prefixes=('RS-',), search=search, sort=sort, direction=direction)
+    """NTF Research main rows: research/hibah objek (RS-) plus MANUAL objects
+    keyed under NTF Research, per PP. Figures from mapped GL like TF."""
+    return program_rows(ctx, prefixes=('RS-',), categories=('NTF_RESEARCH',),
+                        search=search, sort=sort, direction=direction)
 
 
 def service_object_rows(ctx, *, search='', sort='', direction='asc'):
-    """NTF Project service/layanan objek (prefix SRV-) rows, merged below
-    with contract projects by project_rows when needed."""
-    return program_rows(ctx, prefixes=('SRV-',), search=search, sort=sort, direction=direction)
+    """NTF Project service/layanan objek (prefix SRV-).
+
+    MANUAL projects keyed under NTF Project are owned by `project_rows` alone:
+    both builders feed the same Data NTF Project (and Data Revenue) table, so
+    claiming the manual set in two places would list one project twice (§16).
+    """
+    return program_rows(ctx, prefixes=('SRV-',), search=search, sort=sort,
+                        direction=direction)
 
 
-def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc'):
+def program_rows(ctx, *, prefixes=('TF-',), categories=(), search='', sort='',
+                 direction='asc'):
     """Generic objek rows: ONE row per Project whose number starts with one
     of `prefixes` (TF- / RS- / SRV-), per PP.
 
@@ -636,52 +920,98 @@ def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc')
     Figures:
       nilai (Nilai Proyek)    = project.project_value (RKA allocation)
       total_pendapatan        = mapped GL lifetime up to ctx period
-      pendapatan_berjalan     = mapped GL YTD (Jan..selected month)
+      pendapatan_berjalan     = mapped GL of the selected month
+      realisasi_ytd           = mapped GL YTD (Jan..selected month)
     Different PPs/objects are NEVER merged.
+
+    Query strategy: ALL mapped GL rows for the filtered projects are fetched
+    in ONE query and grouped in memory (project x account x period buckets).
+    This keeps results byte-identical to per-project queries while avoiding
+    N+1 round-trips (critical on remote PostgreSQL/Neon where latency makes
+    hundreds of tiny queries unusably slow).
     """
     from django.db.models import Q as _Q
-    if prefixes:
-        q = _Q(project_number__startswith=prefixes[0])
-        for pfx in prefixes[1:]:
-            q |= _Q(project_number__startswith=pfx)
-        qs = Project.objects.filter(is_active=True).filter(q)
-    else:
-        qs = Project.objects.filter(is_active=True)
-    qs = qs.select_related('pp__organization_unit', 'organization_unit')
-    if ctx.organization is not None:
-        qs = qs.filter(pp__organization_unit=ctx.organization)
-    if ctx.pp is not None:
-        qs = qs.filter(pp=ctx.pp)
-    if ctx.revenue_account is not None:
-        qs = qs.filter(
-            gl_mappings__ledger__revenue_account=ctx.revenue_account
-        ).distinct()
+    from datetime import date as _date
+    import calendar as _cal
+    from collections import defaultdict as _dd
+    # Selection (prefix OR manual-project category) is applied ONCE, inside
+    # _scope_projects: a prefix pre-filter here would silently drop MANUAL
+    # projects, whose numbers carry the 'M-' prefix instead.
+    qs = Project.objects.filter(is_active=True).select_related(
+        'pp__organization_unit', 'organization_unit')
+    qs = _scope_projects(qs, ctx, prefixes=prefixes, categories=categories)
+    projects = list(qs.distinct().order_by('pp__pp_code', 'project_number'))
+    pids = [p.pk for p in projects]
+    unit_map = _bulk_unit_map(projects)
+    period_end = _date(ctx.year, ctx.month, _cal.monthrange(ctx.year, ctx.month)[1])
+
+    # ---- ONE bulk fetch of all mappings + ledgers for these projects ----
+    from finance.models import GLProjectMapping as _GPM
+    maps = (_GPM.objects
+            .filter(project_id__in=pids, match_status__in=_MATCH_OK)
+            .select_related('ledger', 'ledger__period', 'ledger__revenue_account')
+            .order_by('project_id'))
+    # buckets: project_id -> account_code -> list of (posting_date, amount)
+    per_proj_acc = _dd(lambda: _dd(list))
+    acc_names = _dd(dict)      # project -> account -> name
+    acc_modes = _dd(dict)      # project -> account -> detail_history_mode
+    # account list per project (distinct accounts seen in its GL)
+    seen_acc = _dd(set)
+    for m in maps:
+        led = m.ledger
+        acc = led.revenue_account
+        code = acc.account_code if acc else (led.account_code_raw or '')
+        name = acc.account_name if acc else (led.account_name_raw or '')
+        mode = getattr(acc, 'detail_history_mode', 'HISTORICAL') or 'HISTORICAL'
+        post = led.posting_date or (led.period.period_start if led.period else period_end)
+        amt = m.allocated_amount or ZERO
+        per_proj_acc[m.project_id][code].append((post, amt))
+        seen_acc[m.project_id].add(code)
+        if code not in acc_names[m.project_id]:
+            acc_names[m.project_id][code] = name
+        if code not in acc_modes[m.project_id]:
+            acc_modes[m.project_id][code] = mode
+    _merge_manual(per_proj_acc, acc_names, acc_modes, pids, period_end)
+    for pid, per_acc in per_proj_acc.items():
+        for code in per_acc:
+            seen_acc[pid].add(code)
+    projects_jenis = _jenis_map(projects)
 
     q = (search or '').strip().lower()
     rows = []
-    for project in qs.distinct().order_by('pp__pp_code', 'project_number'):
+    for project in projects:
         pp_label = project.pp.pp_code if project.pp else ''
         org_name = (project.pp.organization_unit.name
                     if project.pp and project.pp.organization_unit else '')
-        accounts = project_accounts(project)
-        if not accounts:
+        codes = sorted(seen_acc[project.pk]) if seen_acc[project.pk] else []
+        if not codes:
             # placeholder project with no GL account: hide unless it has value
             if (project.project_value or 0) <= 0:
                 continue
-            accounts = [{'code': '', 'name': project.project_name, 'mode': 'HISTORICAL'}]
-        per_acc = project_account_totals(project, ctx.year, ctx.month)
-        # Project-level revenue up to the selected period (ALL accounts of the
-        # project): drives the progress bar so multi-account rows share ONE
-        # project progress (spec: progress = project total revenue / value).
-        proj_total = sum((t.get('lifetime') or ZERO) for t in per_acc.values())
-        for acc in accounts:
-            code, name, mode = acc['code'], acc['name'], acc['mode']
+            codes = ['']
+        # project-level total = sum of ALL account lifetimes (for progress)
+        proj_total = ZERO
+        acc_totals = {}
+        for code in codes:
+            life = sum(a for d, a in per_proj_acc[project.pk][code]
+                       if d <= period_end)
+            ytd = sum(a for d, a in per_proj_acc[project.pk][code]
+                      if d.year == ctx.year and d.month <= ctx.month and d <= period_end)
+            mon = sum(a for d, a in per_proj_acc[project.pk][code]
+                      if d.year == ctx.year and d.month == ctx.month)
+            acc_totals[code] = {'lifetime': life, 'ytd': ytd, 'month': mon}
+            proj_total += life
+        for code in codes:
+            name = acc_names[project.pk].get(code, '') or (project.project_name if code == '' else '')
+            mode = acc_modes[project.pk].get(code, 'HISTORICAL')
             if q and q not in (project.project_name or '').lower()                 and q not in (pp_label or '').lower()                 and q not in (org_name or '').lower()                 and q not in (code or '').lower()                 and q not in (name or '').lower():
                 continue
-            totals = per_acc.get(code, {'lifetime': ZERO, 'ytd': ZERO, 'month': ZERO})
+            totals = acc_totals[code]
             rows.append({
                 'project': project,
                 'mode': 'tf_program',
+                'jenis': projects_jenis.get(project.pk, 'NTF_PROJECT'),
+                'jenis_code': projects_jenis.get(project.pk, 'NTF_PROJECT'),
                 'tahun': ctx.year,
                 'bulan': ctx.month,
                 'month': ctx.month,
@@ -694,10 +1024,6 @@ def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc')
                 'akun': code,
                 'akun_nama': name or '',
                 'nilai': project.project_value,
-                # Column semantics (per spec):
-                #   Pendapatan Diakui = selected MONTH revenue only
-                #   Total Pendapatan  = lifetime recognized up to period end
-                #   (YTD kept in realisasi_ytd for reference/tooltips)
                 'total_pendapatan': totals['lifetime'],
                 'pendapatan_berjalan': totals['month'],
                 'realisasi_bulan': totals['month'],
@@ -728,15 +1054,6 @@ def program_rows(ctx, *, prefixes=('TF-',), search='', sort='', direction='asc')
         rows.sort(key=lambda r: r['no_proyek'])
     return rows
 
-
-# --------------------------------------------------------------------------
-# TF / NTF Research presented with the SAME table shape as NTF Project.
-# These categories have no Project Master, so each row stays at the
-# (PP x Revenue Account) grain and the "project" columns are adapted:
-#   Nama Proyek  = nama akun pendapatan (label disesuaikan)
-#   No Proyek    = ''   Unit = ''   Nilai Proyek = ''
-# Expand shows the underlying GL transactions for the PP x Account.
-# --------------------------------------------------------------------------
 def account_category_rows(ctx, category_code, *, search='', sort='', direction='asc'):
     from django.db.models import Q as _Q, Sum as _Sum
     from finance.models import RevenueLedger as _RL

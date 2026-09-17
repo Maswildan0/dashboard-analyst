@@ -1,0 +1,35 @@
+{% comment %}
+Single hand-off point between Django and the shared manual-revenue JS: the
+page mode, the revenue types it may key, the reported period, its lock state,
+the user's rights and every endpoint the JS calls.
+
+Rendered OUTSIDE the table (never inside tbody/tr/td) and kept hidden: it
+carries no visible markup, only data attributes plus the CSRF token the JS
+echoes on POST. The JS re-authorizes nothing — the server re-checks every
+request, so these attributes are a UI contract, not a security boundary.
+{% endcomment %}
+<div class="rm-root" id="rm-root"
+     data-page-mode="{{ page_mode }}"
+     data-allowed-types="{{ manual_allowed_types }}"
+     data-locked-type="{{ locked_revenue_type }}"
+     data-page-key="{{ manual_page_key }}"
+     data-period="{{ manual_period|default:'' }}"
+     data-period-closed="{% if manual_period_closed %}1{% else %}0{% endif %}"
+     data-can-create="{% if perms.create %}1{% else %}0{% endif %}"
+     data-can-edit="{% if perms.edit %}1{% else %}0{% endif %}"
+     data-can-void="{% if perms.void %}1{% else %}0{% endif %}"
+     data-can-restore="{% if perms.restore %}1{% else %}0{% endif %}"
+     data-can-adjust="{% if perms.adjustment %}1{% else %}0{% endif %}"
+     data-can-audit="{% if perms.view_audit %}1{% else %}0{% endif %}"
+     data-url-create="{% url 'revenue:manual-create' %}"
+     data-url-adjust="{% url 'revenue:manual-adjustment' %}"
+     data-url-entries="{% url 'revenue:manual-entries' %}"
+     data-url-history="{% url 'revenue:manual-history' %}"
+     data-url-deleted="{% url 'revenue:manual-deleted' %}"
+     data-url-opt-pps="{% url 'revenue:manual-options-pps' %}"
+     data-url-opt-accounts="{% url 'revenue:manual-options-accounts' %}"
+     data-url-opt-projects="{% url 'revenue:manual-options-projects' %}"
+     data-url-opt-ledger="{% url 'revenue:manual-options-ledger' %}"
+     hidden>
+    {% csrf_token %}
+</div>

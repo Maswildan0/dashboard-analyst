@@ -1,0 +1,54 @@
+{% comment %}
+Action bar for the manual-revenue CRUD controls, rendered ABOVE the table and
+OUTSIDE it. Context comes from finance.manual_views.page_context, so all four
+revenue pages share this one markup:
+
+    manual_period         the period the page reports
+    manual_period_closed  True when that period is CLOSED
+    perms.create          show "+ Input Manual"
+    perms.adjustment      show "Koreksi / Adjustment"
+    (perms.* is false for an anonymous visitor, so no gated control renders;
+    finance.permissions grants them to a signed-in operator until the first
+    manual permission is assigned — see that module's docstring.)
+
+A CLOSED period keeps the control visible but disabled (business rule: the
+server refuses the write either way, see finance.services.manual_revenue).
+{% endcomment %}
+<div class="rm-actionbar">
+    <div class="rm-actionbar-left">
+        {% if manual_period %}
+            {% if manual_period_closed %}
+            <span class="rm-period-chip rm-period-locked" title="Periode sudah ditutup.">
+                <i class="bi bi-lock-fill"></i> Periode {{ manual_period }} CLOSED
+            </span>
+            {% else %}
+            <span class="rm-period-chip rm-period-open" title="Periode masih terbuka.">
+                <i class="bi bi-unlock-fill"></i> Periode {{ manual_period }} OPEN
+            </span>
+            {% endif %}
+        {% endif %}
+    </div>
+    <div class="rm-actionbar-right">
+        {% if perms.create %}
+            {% if manual_period_closed %}
+            <button type="button" class="rm-btn rm-btn-primary" disabled
+                    title="Periode sudah ditutup.">
+                <i class="bi bi-plus-lg"></i> Input Manual
+            </button>
+            {% else %}
+            <button type="button" class="rm-btn rm-btn-primary" data-rm-open="create">
+                <i class="bi bi-plus-lg"></i> Input Manual
+            </button>
+            {% endif %}
+        {% endif %}
+        {% if perms.adjustment %}
+        <button type="button" class="rm-btn rm-btn-outline" data-rm-open="adjustment"
+                {% if manual_period_closed %}disabled title="Periode sudah ditutup."{% endif %}>
+            <i class="bi bi-sliders"></i> Koreksi / Adjustment
+        </button>
+        {% endif %}
+        <button type="button" class="rm-btn rm-btn-outline" data-rm-open="deleted">
+            <i class="bi bi-trash3"></i> Data Terhapus
+        </button>
+    </div>
+</div>

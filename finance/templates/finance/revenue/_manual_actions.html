@@ -1,0 +1,21 @@
+{% comment %}
+Composition point for the shared manual-revenue UI. Included once per page,
+AFTER the filter card and OUTSIDE the table:
+
+    _action_bar.html        the visible "+ Input Manual" / "Data Terhapus" row
+    _manual_root.html       hidden JS contract (page mode, perms, endpoints)
+    _*_modal.html           dialogs, all rendered outside the table markup
+
+Each partial owns one responsibility; nothing here injects markup into the
+table body, and no explanatory comment reaches the DOM (see AGENTS.md: the
+include parser does not strip multi-line {# #} comments).
+{% endcomment %}
+{% include 'finance/revenue/_action_bar.html' %}
+{% include 'finance/revenue/_manual_root.html' %}
+
+{% include 'finance/revenue/_manual_entry_modal.html' %}
+{% include 'finance/revenue/_manual_manage_modal.html' %}
+{% include 'finance/revenue/_void_modal.html' %}
+{% include 'finance/revenue/_adjustment_modal.html' %}
+{% include 'finance/revenue/_deleted_data_modal.html' %}
+{% include 'finance/revenue/_audit_history_modal.html' %}

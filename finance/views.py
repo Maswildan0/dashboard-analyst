@@ -1,230 +1,94 @@
 """
-Dashboard view: builds the full financial performance overview context.
+Dashboard view: Financial Performance Overview.
 
-Fetches base data via selectors (aggregated queries), computes all KPIs in
-the service layer, formats for display, and assembles insight texts. No
-business math in templates (#70).
+Every figure on the page comes from the canonical service
+(finance.services.financial_overview), which reads the database (GL /
+frozen revenue snapshots + RKA + KPI targets). This layer only resolves the
+filters, translates the service payload into the template/card display shape,
+and serializes the monthly trend series for the chart. No business math and
+no data literals live here (brief #31, #32, #41).
 """
 
-from decimal import Decimal
+import json
 
 from django.shortcuts import render
 
 from dashboard.views import _assets_head, _fonts_head
 
 from .selectors import financial_selectors as sel
-from .services import (
-    calculate_composition,
-    calculate_revenue_composition,
-    calculate_expense_utilization,
-    calculate_operating_ratio,
-    calculate_operating_ratio_achievement,
-    calculate_revenue_achievement,
-    calculate_shu_achievement,
-    calculate_shu_margin,
-    calculate_shu_margin_achievement,
-    calculate_yoy_growth,
-    format_percent,
-    format_rupiah_compact,
-    format_signed_percent,
-    generate_financial_insights,
-    operating_ratio_status,
-    validate_revenue_composition,
+from .services import achievement_status, generate_financial_insights, operating_ratio_status
+from .services.financial_overview import (
+    MONTH_NAMES,
+    build_financial_overview,
+    display_amount,
+    display_percent,
+    display_signed,
 )
 
-MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+# The chart plots Rp Miliar (see finance/static/finance/js/dashboard.js).
+BILLION = 1_000_000_000
+
+
+def _int_param(request, key):
+    try:
+        return int(request.GET.get(key))
+    except (TypeError, ValueError):
+        return None
 
 
 def _default_filters(request):
-    """Resolve period/campus/unit from GET, falling back to latest period."""
+    """Resolve period/campus/organization from GET against the master data."""
     latest = sel.get_latest_period()
-    has_filter = 'year' in request.GET or 'month' in request.GET
-    if has_filter:
-        try:
-            year = int(request.GET.get('year'))
-            month = int(request.GET.get('month'))
-        except (TypeError, ValueError):
-            year = latest.year if latest else 2026
-            month = latest.month if latest else 8
-        period = sel.get_period(year, month)
+    if latest is None:
+        # No period on file at all: the page renders its empty state, which is
+        # the same filter shape with no period attached. There is nothing to
+        # default the year/month from, so both stay None.
+        return _resolve_scope(request, None, None, None)
+
+    # An explicitly requested year/month is honoured literally: when no
+    # FinancialPeriod matches, the page reports "no data" instead of silently
+    # showing a different period's numbers (brief #34, #38).
+    requested_year = _int_param(request, 'year')
+    requested_month = _int_param(request, 'month')
+    if requested_year is not None:
+        year = requested_year
+        if requested_month is not None:
+            month = requested_month
+        else:
+            # Year only: use that year's latest month, or January when the
+            # year is not on file at all (-> empty state).
+            latest_of_year = sel.get_latest_period_of_year(year)
+            month = latest_of_year.month if latest_of_year else 1
     else:
-        year = latest.year if latest else 2026
-        month = latest.month if latest else 8
-        period = latest
+        year, month = latest.year, requested_month or latest.month
+
+    period = sel.get_period(year, month)
+    return _resolve_scope(request, period, year, month)
+
+
+def _resolve_scope(request, period, year, month):
+    """Filter dict shared by the populated and the empty-state render."""
 
     campus_code = request.GET.get('campus') or 'all'
     campus = sel.get_campus(campus_code)
-    # Default to the first campus when "All Campus" is selected so the
-    # landing page has real data to show (#5).
-    if campus is None:
-        campuses = sel.list_campuses()
-        if campuses:
-            campus = campuses[0]
-        else:
-            campus = None
-    unit = request.GET.get('unit') or 'all'
-    org_unit = None
-    if unit != 'all':
-        org_unit = sel.list_org_units(campus).__class__ and None  # resolved below
-    # resolve org unit by id
-    from finance.models import OrganizationUnit
-    if unit not in ('all', '') and unit.isdigit():
-        org_unit = OrganizationUnit.objects.filter(id=int(unit)).first()
+
+    unit_code = request.GET.get('unit') or 'all'
+    # Cascade (brief #26): an organization that is not a member of the
+    # selected campus must not survive, otherwise the page would silently
+    # report data from another campus.
+    organization = sel.get_org_unit(unit_code, campus)
+    if organization is None:
+        unit_code = 'all'
 
     return {
         'year': year,
         'month': month,
         'period': period,
-        'campus': campus,
         'campus_code': campus_code,
-        'org_unit': org_unit,
-        'unit': unit,
+        'campus': campus,
+        'unit': unit_code,
+        'organization': organization,
     }
-
-
-def _build_metrics(filters):
-    period = filters['period']
-    campus = filters['campus']
-    org_unit = filters['org_unit']
-    if period is None or campus is None:
-        return None
-
-    prev_period = sel.get_previous_year_period(period)
-    summary = sel.get_financial_summary(period, campus, org_unit)
-    prev_summary = sel.get_previous_summary(prev_period, campus, org_unit)
-    rev_rows = sel.get_revenue_by_category(period, campus, org_unit)
-    prev_rev_rows = sel.get_previous_revenue_by_category(prev_period, campus, org_unit)
-
-    rev = summary.revenue_actual if summary else Decimal('0')
-    exp = summary.expense_actual if summary else Decimal('0')
-    shu = summary.shu_actual if summary else Decimal('0')
-    rev_target = summary.revenue_target if summary else Decimal('0')
-    exp_budget = summary.expense_budget if summary else Decimal('0')
-    shu_target = summary.shu_target if summary else Decimal('0')
-
-    prev_rev = prev_summary.revenue_actual if prev_summary else None
-    prev_exp = prev_summary.expense_actual if prev_summary else None
-    prev_shu = prev_summary.shu_actual if prev_summary else None
-
-    tf = rev_rows.get('TF', {}).get('actual', Decimal('0'))
-    ntf_p = rev_rows.get('NTF_PROJECT', {}).get('actual', Decimal('0'))
-    ntf_r = rev_rows.get('NTF_RESEARCH', {}).get('actual', Decimal('0'))
-    tf_target = rev_rows.get('TF', {}).get('target', Decimal('0'))
-    ntf_p_target = rev_rows.get('NTF_PROJECT', {}).get('target', Decimal('0'))
-    ntf_r_target = rev_rows.get('NTF_RESEARCH', {}).get('target', Decimal('0'))
-    prev_tf = prev_rev_rows.get('TF', {}).get('actual')
-    prev_ntf_p = prev_rev_rows.get('NTF_PROJECT', {}).get('actual')
-    prev_ntf_r = prev_rev_rows.get('NTF_RESEARCH', {}).get('actual')
-
-    or_actual = calculate_operating_ratio(rev, exp)
-    or_target = sel.get_kpi_target(period.year, 'OPERATING_RATIO', campus)
-    or_achievement = calculate_operating_ratio_achievement(or_target, or_actual) if or_target is not None else None
-
-    margin_actual = calculate_shu_margin(shu, rev)
-    margin_target = sel.get_kpi_target(period.year, 'SHU_MARGIN', campus)
-    margin_achievement = calculate_shu_margin_achievement(margin_actual, margin_target) if margin_target is not None else None
-
-    composition = calculate_revenue_composition(tf, ntf_p, ntf_r)
-    composition_ok = validate_revenue_composition(tf, ntf_p, ntf_r, rev)
-
-    metrics = {
-        'year': period.year,
-        'month': period.month,
-        'month_name': MONTH_NAMES[period.month - 1],
-        'summary': summary,
-        'revenue': rev, 'expense': exp, 'shu': shu,
-        'revenue_target': rev_target, 'expense_budget': exp_budget, 'shu_target': shu_target,
-        'revenue_achievement': calculate_revenue_achievement(rev, rev_target),
-        'expense_utilization': calculate_expense_utilization(exp, exp_budget),
-        'shu_achievement': calculate_shu_achievement(shu, shu_target),
-        'revenue_yoy': calculate_yoy_growth(rev, prev_rev),
-        'expense_yoy': calculate_yoy_growth(exp, prev_exp),
-        'shu_yoy': calculate_yoy_growth(shu, prev_shu),
-        'or_actual': or_actual,
-        'or_target': or_target,
-        'or_achievement': or_achievement,
-        'margin_actual': margin_actual,
-        'margin_target': margin_target,
-        'margin_achievement': margin_achievement,
-        'tf': tf, 'ntf_project': ntf_p, 'ntf_research': ntf_r,
-        'tf_target': tf_target, 'ntf_project_target': ntf_p_target, 'ntf_research_target': ntf_r_target,
-        'tf_achievement': calculate_revenue_achievement(tf, tf_target) if tf_target else None,
-        'ntf_project_achievement': calculate_revenue_achievement(ntf_p, ntf_p_target) if ntf_p_target else None,
-        'ntf_research_achievement': calculate_revenue_achievement(ntf_r, ntf_r_target) if ntf_r_target else None,
-        'tf_yoy': calculate_yoy_growth(tf, prev_tf),
-        'ntf_project_yoy': calculate_yoy_growth(ntf_p, prev_ntf_p),
-        'ntf_research_yoy': calculate_yoy_growth(ntf_r, prev_ntf_r),
-        'composition': composition,
-        'composition_ok': composition_ok,
-    }
-    metrics['or_status'] = operating_ratio_status(or_actual, or_target)
-    metrics['margin_status'] = _margin_status(margin_actual, margin_target)
-    metrics['insights'] = generate_financial_insights(metrics)
-
-    # Display helpers (status classes / progress widths).
-    from .services import achievement_status as _astat
-    metrics['revenue_status'] = _astat(metrics['revenue_achievement'])
-    metrics['expense_status'] = _astat(metrics['expense_utilization'])
-    metrics['shu_status'] = _astat(metrics['shu_achievement'])
-    metrics['revenue_yoy_class'] = 'pos' if (metrics['revenue_yoy'] or 0) >= 0 else 'neg'
-    metrics['expense_yoy_class'] = 'neg' if (metrics['expense_yoy'] or 0) > 0 else 'pos'
-    metrics['shu_yoy_class'] = 'pos' if (metrics['shu_yoy'] or 0) >= 0 else 'neg'
-    # progress width: cap achievement/utilization display at 120%.
-    metrics['progress_width'] = _cap_pct(metrics['revenue_achievement'])
-    metrics['progress_class'] = metrics['revenue_status']['key'].lower()
-    metrics['expense_progress_width'] = _cap_pct(metrics['expense_utilization'])
-    metrics['expense_progress_class'] = metrics['expense_status']['key'].lower()
-    # Pre-formatted display strings (templates render these, no function calls).
-    metrics['disp'] = _display_strings(metrics)
-    return metrics
-
-
-def _display_strings(m):
-    f = format_rupiah_compact
-    p = format_percent
-    sgn = format_signed_percent
-    comp = m['composition']
-    return {
-        'revenue': f(m['revenue']),
-        'expense': f(m['expense']),
-        'shu': f(m['shu']),
-        'revenue_achievement': p(m['revenue_achievement']),
-        'expense_utilization': p(m['expense_utilization']),
-        'shu_achievement': p(m['shu_achievement']),
-        'revenue_yoy': sgn(m['revenue_yoy']),
-        'expense_yoy': sgn(m['expense_yoy']),
-        'shu_yoy': sgn(m['shu_yoy']),
-        'or_actual': p(m['or_actual']),
-        'or_target': p(m['or_target']),
-        'or_achievement': p(m['or_achievement']),
-        'margin_actual': p(m['margin_actual']),
-        'margin_target': p(m['margin_target']),
-        'margin_achievement': p(m['margin_achievement']),
-        'tf': f(m['tf']),
-        'ntf_project': f(m['ntf_project']),
-        'ntf_research': f(m['ntf_research']),
-        'tf_achievement': p(m['tf_achievement']),
-        'ntf_project_achievement': p(m['ntf_project_achievement']),
-        'ntf_research_achievement': p(m['ntf_research_achievement']),
-        'tf_yoy': sgn(m['tf_yoy']),
-        'ntf_project_yoy': sgn(m['ntf_project_yoy']),
-        'ntf_research_yoy': sgn(m['ntf_research_yoy']),
-        'comp_tf': p(comp['TF']),
-        'comp_ntfp': p(comp['NTF_PROJECT']),
-        'comp_ntfr': p(comp['NTF_RESEARCH']),
-        'comp_tf_raw': comp['TF'],
-        'comp_ntfp_raw': comp['NTF_PROJECT'],
-        'comp_ntfr_raw': comp['NTF_RESEARCH'],
-    }
-
-
-def _margin_status(actual_margin, target_margin):
-    from .services import calculate_shu_margin_achievement
-    if actual_margin is None or target_margin is None:
-        return {'key': 'NA', 'label': 'N/A', 'color': '#6B7280'}
-    ach = calculate_shu_margin_achievement(actual_margin, target_margin)
-    from .services import achievement_status as _astat
-    return _astat(ach)
 
 
 def _cap_pct(value):
@@ -233,55 +97,140 @@ def _cap_pct(value):
     return min(float(value), 120.0)
 
 
+def _status(value):
+    return achievement_status(value) if value is not None else {'key': 'NA', 'label': 'N/A', 'color': '#6B7280'}
+
+
+def _metrics(overview):
+    """Template display shape built strictly from the service payload."""
+    revenue = overview['revenue']
+    expense = overview['expense']
+    shu = overview['shu']
+    or_ = overview['operating_ratio']
+    margin = overview['shu_margin']
+
+    revenue_status = _status(revenue['achievement'])
+    expense_status = _status(expense['utilization'])
+    shu_status = _status(shu['achievement'])
+
+    m = {
+        'year': overview['period']['year'],
+        'month': overview['period']['month'],
+        'month_name': overview['period']['month_name'],
+        'period': overview,
+        'revenue': revenue['actual_ytd'],
+        'expense': expense['actual_ytd'],
+        'shu': shu['actual_ytd'],
+        'revenue_target': revenue['rka_ytd'],
+        'expense_budget': expense['budget_ytd'],
+        'shu_target': shu['target_ytd'],
+        'revenue_achievement': revenue['achievement'],
+        'expense_utilization': expense['utilization'],
+        'shu_achievement': shu['achievement'],
+        'revenue_yoy': revenue['yoy'],
+        'expense_yoy': expense['yoy'],
+        'shu_yoy': shu['yoy'],
+        'or_actual': or_['actual'],
+        'or_target': or_['target'],
+        'or_achievement': or_['achievement'],
+        'margin_actual': margin['actual'],
+        'margin_target': margin['target'],
+        'margin_achievement': margin['achievement'],
+        'revenue_status': revenue_status,
+        'expense_status': expense_status,
+        'shu_status': shu_status,
+        'or_status': operating_ratio_status(or_['actual'], or_['target']),
+        'margin_status': _status(margin['achievement']),
+        'revenue_available': revenue['available'],
+        'expense_available': expense['available'],
+        'shu_available': shu['available'],
+        'warnings': overview['warnings'],
+    }
+    # The insight section is commented out in dashboard.html but its
+    # {% include %} still executes, so keep the list populated.
+    m['insights'] = generate_financial_insights(m)
+
+    # YoY colour: revenue/SHU rising is good, expense rising is not.
+    m['revenue_yoy_class'] = 'neg' if (revenue['yoy'] is not None and revenue['yoy'] < 0) else 'pos'
+    m['expense_yoy_class'] = 'neg' if (expense['yoy'] is not None and expense['yoy'] > 0) else 'pos'
+    m['shu_yoy_class'] = 'neg' if (shu['yoy'] is not None and shu['yoy'] < 0) else 'pos'
+
+    # Progress bars: achievement/utilization capped at 120% for display.
+    m['progress_width'] = _cap_pct(revenue['achievement'])
+    m['progress_class'] = revenue_status['key'].lower()
+    m['expense_progress_width'] = _cap_pct(expense['utilization'])
+    m['expense_progress_class'] = expense_status['key'].lower()
+    m['shu_progress_width'] = _cap_pct(shu['achievement'])
+    m['shu_progress_class'] = shu_status['key'].lower()
+
+    m['disp'] = {
+        'revenue': display_amount(revenue['actual_ytd']),
+        'expense': display_amount(expense['actual_ytd']),
+        'shu': display_amount(shu['actual_ytd']),
+        'revenue_target': display_amount(revenue['rka_ytd']),
+        'expense_budget': display_amount(expense['budget_ytd']),
+        'shu_target': display_amount(shu['target_ytd']),
+        'revenue_achievement': display_percent(revenue['achievement']),
+        'expense_utilization': display_percent(expense['utilization']),
+        'shu_achievement': display_percent(shu['achievement']),
+        'revenue_yoy': display_signed(revenue['yoy']),
+        'expense_yoy': display_signed(expense['yoy']),
+        'shu_yoy': display_signed(shu['yoy']),
+        'or_actual': display_percent(or_['actual']),
+        'or_target': display_percent(or_['target']),
+        'or_achievement': display_percent(or_['achievement']),
+        'margin_actual': display_percent(margin['actual']),
+        'margin_target': display_percent(margin['target']),
+        'margin_achievement': display_percent(margin['achievement']),
+    }
+    return m
+
+
+def _trend_json(overview):
+    """Monthly ACTUAL series (not cumulative) for the chart, in Rp Miliar."""
+    trend = overview['trend']
+
+    def to_billions(values):
+        if values is None:
+            return None
+        return [float(v / BILLION) for v in values]
+
+    return json.dumps({
+        'months': trend['labels'],
+        'revenue': to_billions(trend['revenue']),
+        'expense': to_billions(trend['expense']),
+        'shu': to_billions(trend['shu']),
+    })
+
+
 def financial_dashboard(request):
     filters = _default_filters(request)
-    metrics = _build_metrics(filters)
-    if metrics is None:
-        # Empty state (#45): no data available for selection.
-        return render(request, 'finance/dashboard.html', {
-            'filters': filters,
-            'empty': True,
-            'active_tab': 'overview',
-            'assets_head': _assets_head(),
-            'fonts_head': _fonts_head(),
-            'campuses': sel.list_campuses(),
-            'units': sel.list_org_units(filters['campus']),
-            'months': MONTH_NAMES,
-            'years': [2025, 2026],
-        })
+    period = filters['period']
 
-    ctx = {
+    context = {
         'filters': filters,
-        'empty': False,
         'active_tab': 'overview',
         'assets_head': _assets_head(),
         'fonts_head': _fonts_head(),
         'campuses': sel.list_campuses(),
-        'units': sel.list_org_units(filters['campus']),
+        # Every active organization is rendered with its campus so the client
+        # can cascade the list when Campus changes; the submitted value is
+        # validated server-side (see _default_filters).
+        'units': sel.list_org_units(),
         'months': MONTH_NAMES,
-        'years': [2025, 2026],
-        'm': metrics,
-        'fmt': {
-            'rupiah': format_rupiah_compact,
-            'pct': format_percent,
-            'signed': format_signed_percent,
-        },
-        'trend': _trend_for(filters),
+        'years': sel.list_years(),
     }
-    ctx['trend_json'] = __import__('json').dumps(ctx['trend'])
-    return render(request, 'finance/dashboard.html', ctx)
 
+    if period is None:
+        # No period on file for the selection: real empty state (brief #38).
+        context['empty'] = True
+        return render(request, 'finance/dashboard.html', context)
 
-def _trend_for(filters):
-    """Monthly Revenue/Expense/SHU series for the selected year (#20)."""
-    campus = filters['campus']
-    org_unit = filters['org_unit']
-    if campus is None:
-        campus = sel.list_campuses()[0]
-    rows = sel.get_trend(filters['year'], campus, org_unit)
-    return {
-        'months': ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
-        'revenue': [float(r['revenue'] / 1_000_000_000) for r in rows],   # -> Rp Miliar
-        'expense': [float(r['expense'] / 1_000_000_000) for r in rows],
-        'shu': [float(r['shu'] / 1_000_000_000) for r in rows],
-    }
+    overview = build_financial_overview(
+        period.year, period.month, filters['campus'], filters['organization'])
+    context.update({
+        'empty': False,
+        'm': _metrics(overview),
+        'trend_json': _trend_json(overview),
+    })
+    return render(request, 'finance/dashboard.html', context)

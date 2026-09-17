@@ -21,15 +21,15 @@
 
     <div class="kpi-sub">
         {% if kpi == 'revenue' %}
-            Achievement <span class="kpi-badge badge-{{ card.revenue_status.key|lower }}" data-tip="Revenue Achievement = Actual / Target x 100">{{ card.disp.revenue_achievement }}</span>
+            Achievement <span class="kpi-badge badge-{{ card.revenue_status.key|lower }}" data-tip="Revenue Achievement = Revenue Actual YTD / RKA YTD x 100">{{ card.disp.revenue_achievement }}</span>
         {% elif kpi == 'expense' %}
-            Budget Utilization <span class="kpi-badge badge-{{ card.expense_status.key|lower }}" data-tip="Budget Utilization = Actual Expense / Budget x 100">{{ card.disp.expense_utilization }}</span>
+            Budget Utilization <span class="kpi-badge badge-{{ card.expense_status.key|lower }}" data-tip="Budget Utilization = Expense Actual YTD / Expense Budget YTD x 100">{{ card.disp.expense_utilization }}</span>
         {% else %}
-            Achievement <span class="kpi-badge badge-{{ card.shu_status.key|lower }}" data-tip="SHU Achievement = Actual / Target x 100">{{ card.disp.shu_achievement }}</span>
+            Achievement <span class="kpi-badge badge-{{ card.shu_status.key|lower }}" data-tip="SHU Achievement = SHU Actual YTD / SHU Target YTD x 100">{{ card.disp.shu_achievement }}</span>
         {% endif %}
     </div>
 
-    <div class="kpi-yoy" data-tip="Compared with the same month in the previous year.">
+    <div class="kpi-yoy" data-tip="Year to date compared with the same period (January to the selected month) of the previous year.">
         {% if kpi == 'revenue' %}
             YoY Growth <span class="yoy {{ card.revenue_yoy_class }}">{{ card.disp.revenue_yoy }}</span>
         {% elif kpi == 'expense' %}
@@ -42,6 +42,8 @@
     <div class="progress-track">
         {% if kpi == 'expense' %}
         <div class="progress-fill fill-{{ card.expense_progress_class }}" style="width: {{ card.expense_progress_width }}%;"></div>
+        {% elif kpi == 'shu' %}
+        <div class="progress-fill fill-{{ card.shu_progress_class }}" style="width: {{ card.shu_progress_width }}%;"></div>
         {% else %}
         <div class="progress-fill fill-{{ card.progress_class }}" style="width: {{ card.progress_width }}%;"></div>
         {% endif %}

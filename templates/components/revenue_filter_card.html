@@ -1,6 +1,20 @@
-{# Revenue Overview filter card; single-select (Tipe/Direktorat/Kode PP/Tahun). #}
+{% comment %}Revenue Overview filter card; single-select (Tipe/Direktorat/Kode PP/Tahun).
 
-<div class="df-card" id="revenue-filter-card">
+Each select also carries the revenue-table contract used by the card links and
+the chart drill-down (both built by app.js's revenueFilterQuery):
+`data-revenue-param` is the query param it feeds, `data-revenue-period="year"`
+marks the one param that falls back to the active period year, and every option
+carries its validated `data-revenue` value(s) — comma separated when one option
+covers several categories, empty when the finance master data has no match
+(see revenue_value_maps).
+{% endcomment %}
+{% load dashboard_filters %}
+
+<div class="df-card" id="revenue-filter-card"
+     data-period-year="{{ revenue_period.year }}"
+     data-period-month="{{ revenue_period.month }}"
+     data-revenue-month-param="bulan[]"
+     data-revenue-account-param="account[]">
     {# Header #}
     <div class="df-card-head">
         <div class="df-head-left">
@@ -22,37 +36,37 @@
     <form id="revenue-filter-form" class="df-form df-form-revenue">
         <div class="df-field">
             <label class="df-label" for="rv-tipe">Tipe</label>
-            <select id="rv-tipe" data-filter="tipe" class="df-select df-native-select">
+            <select id="rv-tipe" data-filter="tipe" data-revenue-param="jenis[]" class="df-select df-native-select">
                 {% for v in options.tipe %}
-                    <option value="{{ v }}"{% if filters.tipe == v %} selected{% endif %}>{{ v }}</option>
+                    <option value="{{ v }}" data-revenue="{{ revenue_filter_values.tipe|dict_get:v|default_if_none:''|join:',' }}"{% if filters.tipe == v %} selected{% endif %}>{{ v }}</option>
                 {% endfor %}
             </select>
         </div>
 
         <div class="df-field">
             <label class="df-label" for="rv-dir">Direktorat</label>
-            <select id="rv-dir" data-filter="direktorat" class="df-select df-native-select">
+            <select id="rv-dir" data-filter="direktorat" data-revenue-param="org[]" class="df-select df-native-select">
                 {% for v in options.direktorat %}
-                    <option value="{{ v }}"{% if filters.direktorat == v %} selected{% endif %}>{{ v }}</option>
+                    <option value="{{ v }}" data-revenue="{{ revenue_filter_values.direktorat|dict_get:v|default_if_none:''|join:',' }}"{% if filters.direktorat == v %} selected{% endif %}>{{ v }}</option>
                 {% endfor %}
             </select>
         </div>
 
         <div class="df-field">
             <label class="df-label" for="rv-kpp">Kode PP</label>
-            <select id="rv-kpp" data-filter="kode_pp" class="df-select df-native-select">
+            <select id="rv-kpp" data-filter="kode_pp" data-revenue-param="pp[]" class="df-select df-native-select">
                 {% for v in options.kodePP %}
-                    <option value="{{ v }}"{% if filters.kodePP == v %} selected{% endif %}>{{ v }}</option>
+                    <option value="{{ v }}" data-revenue="{{ revenue_filter_values.kodePP|dict_get:v|default_if_none:''|join:',' }}"{% if filters.kodePP == v %} selected{% endif %}>{{ v }}</option>
                 {% endfor %}
             </select>
         </div>
 
         <div class="df-field">
             <label class="df-label" for="rv-tahun">Tahun</label>
-            <select id="rv-tahun" data-filter="tahun" class="df-select df-native-select">
+            <select id="rv-tahun" data-filter="tahun" data-revenue-param="tahun[]" data-revenue-period="year" class="df-select df-native-select">
                 <option value="Semua"{% if filters.tahun == 'Semua' %} selected{% endif %}>Semua tahun</option>
                 {% for v in options.tahun %}
-                    <option value="{{ v }}"{% if filters.tahun == v %} selected{% endif %}>{{ v }}</option>
+                    <option value="{{ v }}" data-revenue="{{ revenue_filter_values.tahun|dict_get:v|default_if_none:'' }}"{% if filters.tahun == v %} selected{% endif %}>{{ v }}</option>
                 {% endfor %}
             </select>
         </div>

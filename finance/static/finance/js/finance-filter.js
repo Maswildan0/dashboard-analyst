@@ -37,7 +37,9 @@
             const n = parseInt(value, 10);
             return (MONTH_NAMES[n - 1] || value);
         }
-        return value;
+        // Campus/Organisasi chips show the option label, not the raw code/id.
+        const opt = selects[key].options[selects[key].selectedIndex];
+        return (opt && opt.textContent.trim()) || value;
     }
 
     function isActive(key, value) {
@@ -86,6 +88,23 @@
         form.submit();
     });
 
-    // Selecting values never auto-submits; Terapkan / chip-x / Reset do.
-    updateChips();
+    // Cascading Campus -> Organisasi (brief #26): the organization list is
+    // narrowed to the selected campus, and a selection that is not a member
+    // of the campus is cleared instead of being submitted for foreign data.
+    function cascadeUnits() {
+        const campus = selects.campus.value;
+        let kept = false;
+        Array.prototype.forEach.call(selects.unit.options, (opt) => {
+            const owner = opt.dataset.campus;
+            const visible = campus === 'all' || owner === 'all' || owner === campus;
+            opt.hidden = !visible;
+            opt.disabled = !visible;
+            if (!visible && opt.selected) kept = true;
+        });
+        if (kept) selects.unit.value = 'all';
+        updateChips();
+    }
+
+    selects.campus.addEventListener('change', cascadeUnits);
+    cascadeUnits();
 })();

@@ -23,6 +23,7 @@ from finance.models import (
     RevenueMonthlySnapshot,
 )
 
+from . import manual_revenue as mr
 from .revenue_context import RevenueContext, month_name
 
 ZERO = Decimal('0')
@@ -72,7 +73,15 @@ def actual_amount(qs, *, net_field='credit'):
 # live ledger for the (open) selected month.
 # --------------------------------------------------------------------------
 def actual_ytd(ctx):
-    """Actual revenue Jan..selected month under ctx filters."""
+    """Actual revenue Jan..selected month under ctx filters.
+
+    Canonical actual = imported GL (frozen snapshot for CLOSED months, live GL
+    for OPEN months) + POSTED manual recognitions/adjustments. Manual rows are
+    added for every period in scope, including closed months, because a frozen
+    snapshot holds imported GL only and is never rewritten (§46). A manual row
+    can only be created in an OPEN period (§25), so it contributes exactly
+    once: live or as part of the additive manual layer, never both.
+    """
     # Apply ctx filters WITHOUT the single-period restriction (a loop helper).
     def scoped(qs):
         if ctx.category is not None:
@@ -91,7 +100,29 @@ def actual_ytd(ctx):
         total += snaps.aggregate(s=Sum('actual_amount'))['s'] or ZERO
     for period in _period_scope(ctx, closed=False):
         total += actual_amount(scoped(RevenueLedger.objects.filter(period=period)))
+    total += _manual_ytd(ctx)
     return total
+
+
+def _manual_ytd(ctx):
+    """POSTED manual total for a context's YTD window under its filters.
+
+    Filters go through the ENTRY's own pp/account relations (never through a
+    GL mapping), so a manual entry keyed on a brand-new MANUAL project is
+    counted exactly once, on every page that reads actual revenue.
+    """
+    qs = mr.posted_entries().filter(
+        period__year=ctx.year, period__month__lte=ctx.month,
+        pp__isnull=False, revenue_account__isnull=False)
+    if ctx.category is not None:
+        qs = qs.filter(revenue_account__revenue_category=ctx.category)
+    elif ctx.revenue_account is not None:
+        qs = qs.filter(revenue_account=ctx.revenue_account)
+    if ctx.organization is not None:
+        qs = qs.filter(pp__organization_unit=ctx.organization)
+    if ctx.pp is not None:
+        qs = qs.filter(pp=ctx.pp)
+    return qs.aggregate(s=Sum('amount'))['s'] or ZERO
 
 
 def rka_ytd(ctx):
@@ -144,6 +175,11 @@ def monthly_series(ctx, months=None):
                 actual = snaps.aggregate(s=Sum('actual_amount'))['s'] or ZERO
             else:
                 actual = actual_amount(ctx.filter_ledger(RevenueLedger.objects.filter(period=period)))
+            # Manual POSTED rows of this month: an ADDITIVE layer on top of
+            # the frozen GL snapshot / live GL, for closed months too. Frozen
+            # snapshots stay imported-GL only (§46: never rewritten), so
+            # reading manual separately here is what prevents double counting.
+            actual += _manual_month(ctx, month)
         out.append({
             'month': month,
             'month_name': month_name(month),
@@ -151,6 +187,22 @@ def monthly_series(ctx, months=None):
             'rka': budget_by_month.get(month, ZERO),
         })
     return out
+
+
+def _manual_month(ctx, month):
+    """POSTED manual total of one month under the context filters."""
+    qs = mr.posted_entries().filter(
+        period__year=ctx.year, period__month=month,
+        pp__isnull=False, revenue_account__isnull=False)
+    if ctx.category is not None:
+        qs = qs.filter(revenue_account__revenue_category=ctx.category)
+    elif ctx.revenue_account is not None:
+        qs = qs.filter(revenue_account=ctx.revenue_account)
+    if ctx.organization is not None:
+        qs = qs.filter(pp__organization_unit=ctx.organization)
+    if ctx.pp is not None:
+        qs = qs.filter(pp=ctx.pp)
+    return qs.aggregate(s=Sum('amount'))['s'] or ZERO
 
 
 # --------------------------------------------------------------------------
@@ -184,7 +236,7 @@ def _category_actual(ctx, category_code):
 
 
 def _actual_period_total(ctx):
-    """Actual for the selected month only."""
+    """Actual for the selected month only (imported + POSTED manual)."""
     if ctx.period is None:
         return ZERO
     if ctx.period.is_closed:
@@ -197,8 +249,10 @@ def _actual_period_total(ctx):
             snaps = snaps.filter(pp__organization_unit=ctx.organization)
         if ctx.pp is not None:
             snaps = snaps.filter(pp=ctx.pp)
-        return snaps.aggregate(s=Sum('actual_amount'))['s'] or ZERO
-    return actual_amount(ctx.filter_ledger(RevenueLedger.objects.filter(period=ctx.period)))
+        return (snaps.aggregate(s=Sum('actual_amount'))['s'] or ZERO) \
+            + _manual_month(ctx, ctx.month)
+    return actual_amount(ctx.filter_ledger(RevenueLedger.objects.filter(period=ctx.period))) \
+        + _manual_month(ctx, ctx.month)
 
 
 def composition(ctx):

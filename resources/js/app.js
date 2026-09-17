@@ -26,7 +26,9 @@ const baseOptions = (max, unit) => ({
                     if (unit === 'Jt') return `${ctx.dataset.label}: Rp ${(v * 1_000_000).toLocaleString('id-ID')}`;
                     return `${ctx.dataset.label}: ${v}${unit}`;
                 },
+                footer: SLICER_HINT_FOOTER,
             },
+            ...SLICER_HINT_STYLE,
         },
     },
     scales: {
@@ -93,9 +95,69 @@ const barPopPlugin = {
 };
 
 Chart.register(barPopPlugin);
-Chart.register(ChartDataLabels);
 
-const MONTHS_FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+// ChartDataLabels is registered under ITS OWN id ('datalabels') but with every
+// hook guarded. The plugin reads `chart.$datalabels._labels` in
+// afterDatasetsDraw, and that expando is only populated by beforeUpdate /
+// afterUpdate. A draw that runs first (the responsive attach/resize path
+// renders before its debounced update lands) therefore dereferenced undefined
+// and threw `Cannot read properties of undefined (reading 'length')` inside
+// afterDatasetsDraw which aborted the whole chart render.
+//
+// The guard keeps the plugin's behaviour identical whenever the layout exists,
+// and makes it a no-op instead of a crash when it does not (a decorative
+// plugin must never take the chart down).
+const safeDataLabels = {
+    ...ChartDataLabels,
+    id: 'datalabels',
+    afterDatasetsDraw(chart, args, opts) {
+        const expando = chart.$datalabels;
+        if (!expando || !Array.isArray(expando._labels)) return;
+        return ChartDataLabels.afterDatasetsDraw.call(this, chart, args, opts);
+    },
+    afterUpdate(chart, args, opts) {
+        const expando = chart.$datalabels;
+        if (!expando || !Array.isArray(expando._datasets)) return;
+        return ChartDataLabels.afterUpdate.call(this, chart, args, opts);
+    },
+    afterDatasetUpdate(chart, args, opts) {
+        const expando = chart.$datalabels;
+        if (!expando || !Array.isArray(expando._datasets)) return;
+        return ChartDataLabels.afterDatasetUpdate.call(this, chart, args, opts);
+    },
+    beforeEvent(chart, args, opts) {
+        const expando = chart.$datalabels;
+        if (!expando || !Array.isArray(expando._labels)) return;
+        return ChartDataLabels.beforeEvent.call(this, chart, args, opts);
+    },
+};
+
+Chart.register(safeDataLabels);
+
+// Chart labels -> month NUMBER. The revenue tables filter by number, never by
+// month name, so every slicer resolves the clicked month here. Accepts the
+// chart's short labels ('Agt', 'Okt') and full names, and falls back to the
+// clicked data-point index when a label is unexpected.
+const MONTH_NUMBERS = {
+    jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, jun: 6,
+    jul: 7, agt: 8, agu: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12,
+};
+
+function monthNumber(label, index) {
+    const key = String(label === null || label === undefined ? '' : label).trim().toLowerCase().slice(0, 3);
+    if (MONTH_NUMBERS[key]) return MONTH_NUMBERS[key];
+    const i = Number(index);
+    return Number.isInteger(i) && i >= 0 && i <= 11 ? i + 1 : null;
+}
+
+// Slicer affordance: every clickable chart says so in its tooltip. Only adds a
+// footer; the existing value callbacks are untouched. The callback belongs in
+// `callbacks`, the styling on the tooltip itself.
+const SLICER_HINT_FOOTER = () => 'Klik untuk lihat Data Revenue';
+const SLICER_HINT_STYLE = {
+    footerColor: '#CBD5E1',
+    footerFont: { size: 10, weight: 'normal' },
+};
 
 const charts = {};
 
@@ -135,8 +197,45 @@ function validData(v) {
     return Array.isArray(v) ? v.filter(function (n) { return typeof n === 'number' && Number.isFinite(n); }) : [];
 }
 
+// Chart.js labels: always an array. Anything else (undefined/null) would make
+// the plugins that walk `chart.data.labels` throw.
+function labelsArr(v) {
+    return Array.isArray(v) ? v : [];
+}
+
+function canvasFor(key) {
+    return document.getElementById('chart' + key);
+}
+
+// Destroy whatever Chart.js instance owns this canvas, then clear our own
+// reference. `Chart.getChart(canvas)` is the authoritative registry lookup: if
+// a previous `new Chart(...)` registered an instance but the assignment to
+// `charts[key]` never ran (the constructor threw), the map still looks empty
+// while the canvas is in fact occupied — which is exactly what produced
+// "Canvas is already in use. Chart with ID '0' must be destroyed before the
+// canvas with ID 'chartA' can be reused."
 function destroyChart(key) {
-    if (charts[key]) { charts[key].destroy(); charts[key] = null; }
+    const canvas = canvasFor(key);
+    // 'B' is a container div in bars mode, and Chart.getChart() only resolves
+    // real canvases — guard so the lookup can never be handed a div.
+    if (canvas && canvas.tagName === 'CANVAS') {
+        const registered = Chart.getChart(canvas);
+        if (registered) registered.destroy();
+    }
+    if (charts[key]) {
+        charts[key].destroy();
+        charts[key] = null;
+    }
+}
+
+// The ONE way a chart is created on a reusable canvas: never construct a
+// second Chart.js instance on a canvas that already has one.
+function recreateChart(key, config) {
+    destroyChart(key);
+    const canvas = canvasFor(key);
+    if (!canvas) return null;
+    charts[key] = new Chart(canvas, config);
+    return charts[key];
 }
 
 function setChartVisible(id, visible) {
@@ -187,22 +286,28 @@ function renderDashboard(payload, animateKpis) {
         var ca = payload.chartA;
         if (ca && Array.isArray(ca.bulan) && Array.isArray(ca.rka) && Array.isArray(ca.realisasi)) {
             var aMax = autoMax(ca.rka.concat(ca.realisasi));
+            // Normalise before handing anything to Chart.js: labels stay
+            // strings (validData only keeps finite numbers), series are
+            // number arrays, so the plugin layer never sees undefined.
+            var aLabels = labelsArr(ca.bulan);
+            var aRka = validData(ca.rka);
+            var aRealisasi = validData(ca.realisasi);
             if (!charts.A) {
-                charts.A = new Chart(document.getElementById('chartA'), {
+                recreateChart('A', {
                     type: 'bar',
                     data: {
-                        labels: ca.bulan,
+                        labels: aLabels,
                         datasets: [
-                            barDataset(ca.rka, GRAY, 'RKA'),
-                            barDataset(ca.realisasi, RED, 'Realisasi')
+                            barDataset(aRka, GRAY, 'RKA'),
+                            barDataset(aRealisasi, RED, 'Realisasi')
                         ]
                     },
                     options: baseOptions(aMax, 'Jt')
                 });
             } else {
-                charts.A.data.labels = ca.bulan;
-                charts.A.data.datasets[0].data = validData(ca.rka);
-                charts.A.data.datasets[1].data = validData(ca.realisasi);
+                charts.A.data.labels = aLabels;
+                charts.A.data.datasets[0].data = aRka;
+                charts.A.data.datasets[1].data = aRealisasi;
                 charts.A.options.scales.y.max = aMax;
                 charts.A.options.scales.y.ticks.stepSize = aMax / 5;
                 charts.A.update();
@@ -221,15 +326,19 @@ function renderDashboard(payload, animateKpis) {
         var cd = payload.chartD;
         if (cd && Array.isArray(cd.bulan) && Array.isArray(cd.tahunLalu) && Array.isArray(cd.tahunSekarang) && Array.isArray(cd.capaian)) {
             var dMax = autoMax(cd.tahunLalu.concat(cd.tahunSekarang));
+            var dLabels = labelsArr(cd.bulan);
+            var dNow = validData(cd.tahunSekarang);
+            var dPrev = validData(cd.tahunLalu);
+            var dCapaian = validData(cd.capaian);
             if (!charts.D) {
-                charts.D = new Chart(document.getElementById('chartD'), {
+                recreateChart('D', {
                     type: 'line',
                     data: {
-                        labels: cd.bulan,
+                        labels: dLabels,
                         datasets: [
-                            { label: 'Tahun Ini', data: cd.tahunSekarang, borderColor: RED, backgroundColor: RED, pointBackgroundColor: RED, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
-                            { label: 'Tahun Sebelum', data: cd.tahunLalu, borderColor: GRAY, backgroundColor: GRAY, pointBackgroundColor: GRAY, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
-                            { label: 'Capaian', data: cd.capaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y1' }
+                            { label: 'Tahun Ini', data: dNow, borderColor: RED, backgroundColor: RED, pointBackgroundColor: RED, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
+                            { label: 'Tahun Sebelum', data: dPrev, borderColor: GRAY, backgroundColor: GRAY, pointBackgroundColor: GRAY, pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y' },
+                            { label: 'Capaian', data: dCapaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0.35, yAxisID: 'y1' }
                         ]
                     },
                     options: {
@@ -246,8 +355,10 @@ function renderDashboard(payload, animateKpis) {
                                         var v = ctx.parsed.y;
                                         if (ctx.dataset.label === 'Capaian') return ctx.dataset.label + ': ' + v + '%';
                                         return ctx.dataset.label + ': Rp ' + (v * 1000000).toLocaleString('id-ID');
-                                    }
+                                    },
+                                    footer: SLICER_HINT_FOOTER,
                                 },
+                                ...SLICER_HINT_STYLE,
                             },
                         },
                         scales: {
@@ -258,24 +369,24 @@ function renderDashboard(payload, animateKpis) {
                     },
                 });
             } else {
-                charts.D.data.labels = cd.bulan;
-                charts.D.data.datasets[0].data = validData(cd.tahunSekarang);
-                charts.D.data.datasets[1].data = validData(cd.tahunLalu);
-                charts.D.data.datasets[2].data = validData(cd.capaian);
+                charts.D.data.labels = dLabels;
+                charts.D.data.datasets[0].data = dNow;
+                charts.D.data.datasets[1].data = dPrev;
+                charts.D.data.datasets[2].data = dCapaian;
                 charts.D.options.scales.y.max = dMax;
                 charts.D.options.scales.y.ticks.stepSize = dMax / 5;
                 charts.D.update();
             }
             setChartVisible('chartD', true);
             if (!charts.E) {
-                charts.E = new Chart(document.getElementById('chartE'), {
+                recreateChart('E', {
                     type: 'bar',
                     data: {
-                        labels: cd.bulan,
+                        labels: dLabels,
                         datasets: [
-                            barDataset(cd.tahunLalu, GRAY, 'Tahun Sebelum'),
-                            barDataset(cd.tahunSekarang, RED, 'Tahun Ini'),
-                            { label: 'Capaian', type: 'line', data: cd.capaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0, yAxisID: 'y1' }
+                            barDataset(dPrev, GRAY, 'Tahun Sebelum'),
+                            barDataset(dNow, RED, 'Tahun Ini'),
+                            { label: 'Capaian', type: 'line', data: dCapaian, borderColor: '#3B82F6', pointBackgroundColor: '#3B82F6', pointRadius: 3, borderWidth: 2, tension: 0, yAxisID: 'y1' }
                         ]
                     },
                     options: {
@@ -292,8 +403,10 @@ function renderDashboard(payload, animateKpis) {
                                         var v = ctx.parsed.y;
                                         if (ctx.dataset.label === 'Capaian') return ctx.dataset.label + ': ' + v + '%';
                                         return ctx.dataset.label + ': Rp ' + (v * 1000000).toLocaleString('id-ID');
-                                    }
+                                    },
+                                    footer: SLICER_HINT_FOOTER,
                                 },
+                                ...SLICER_HINT_STYLE,
                             },
                         },
                         scales: {
@@ -304,10 +417,10 @@ function renderDashboard(payload, animateKpis) {
                     },
                 });
             } else {
-                charts.E.data.labels = cd.bulan;
-                charts.E.data.datasets[0].data = validData(cd.tahunLalu);
-                charts.E.data.datasets[1].data = validData(cd.tahunSekarang);
-                charts.E.data.datasets[2].data = validData(cd.capaian);
+                charts.E.data.labels = dLabels;
+                charts.E.data.datasets[0].data = dPrev;
+                charts.E.data.datasets[1].data = dNow;
+                charts.E.data.datasets[2].data = dCapaian;
                 charts.E.options.scales.y.max = dMax;
                 charts.E.options.scales.y.ticks.stepSize = dMax / 5;
                 charts.E.update();
@@ -375,6 +488,10 @@ function renderChartB(items) {
 function renderChartBPie(slices) {
     const holder = document.getElementById('chartB');
     if (!holder) return;
+    // Normalise before Chart.js: labels/data/colors must all be arrays of the
+    // same length, never undefined.
+    const rows = Array.isArray(slices) ? slices.filter(function (s) { return s && typeof s === 'object'; }) : [];
+    if (!rows.length) { showChartBEmpty(); return; }
     holder.innerHTML = '';
     const wrapEl = document.createElement('div');
     wrapEl.className = 'relative flex-1 flex items-center justify-center min-h-[310px]';
@@ -386,14 +503,16 @@ function renderChartBPie(slices) {
     const card = holder.closest('.rounded-2xl');
     const h2 = card ? card.querySelector('h2') : null;
     if (h2) h2.textContent = 'Komposisi Realisasi TF & NTF';
-    if (charts.B) { charts.B.destroy(); charts.B = null; }
+    // Same destroy-before-create contract as every other canvas (the holder was
+    // just emptied, so the lookup is the safety net for a zombie instance).
+    destroyChart('B');
     charts.B = new Chart(canvas, {
         type: 'doughnut',
         data: {
-            labels: slices.map((s) => s.label),
+            labels: rows.map((s) => s.label),
             datasets: [{
-                data: slices.map((s) => s.value),
-                backgroundColor: slices.map((s) => s.color),
+                data: rows.map((s) => s.value),
+                backgroundColor: rows.map((s) => s.color),
                 borderWidth: 2,
                 borderColor: '#ffffff',
                 // Slice "explodes" away from center when hovered (pop).
@@ -548,25 +667,116 @@ async function refresh() {
 
 window.__refreshDashboard = refresh;
 
-function currentGlobalFilters() {
-    const f = {};
-    document.querySelectorAll('select[data-filter]').forEach((sel) => {
-        f[sel.dataset.filter] = sel.value;
-    });
-    return f;
+/* ---------------------------------------------------------------------------
+   Revenue slicer navigation (charts + cards).
+
+   ONE builder turns the active Revenue Overview filters into Data Revenue
+   query params, so every visual (chart bars/points/slices, triwulan bars,
+   cards) drills down through the same contract.
+
+   Param names and per-option values come from the server contract on
+   #revenue-filter-card (`data-revenue-param`, `data-revenue`, `data-period-*`),
+   which already validated each overview filter value against the finance
+   master data — so a slicer can never open an empty page, and nothing here
+   duplicates the mapping.
+--------------------------------------------------------------------------- */
+const REVENUE_DIMENSIONS = [
+    // slicer dimension -> overview filter, canonical param, period fallback
+    { dim: 'year', filter: 'tahun', param: 'tahun[]', period: true },
+    { dim: 'month', filter: null, param: 'bulan[]' },
+    { dim: 'unit', filter: 'direktorat', param: 'org[]' },
+    { dim: 'pp', filter: 'kode_pp', param: 'pp[]' },
+    { dim: 'account', filter: null, param: 'account[]' },
+    { dim: 'revenueType', filter: 'tipe', param: 'jenis[]' },
+];
+
+function revenueFilterCard() {
+    return document.getElementById('revenue-filter-card');
 }
 
-function drillThrough(extra) {
-    const f = currentGlobalFilters();
-    const params = new URLSearchParams();
-    for (const k of ['tipe', 'direktorat', 'kode_pp', 'tahun']) {
-        if (f[k]) params.set(k, f[k]);
-    }
-    for (const [k, v] of Object.entries(extra)) {
-        if (v !== null && v !== undefined) params.set(k, v);
-    }
-    window.location.href = window.__DETAIL_URL__ + '?' + params.toString();
+// The Tipe option contract for one value (a slice may cover several types).
+function revenueTypesFor(tipeValue) {
+    const card = revenueFilterCard();
+    const sel = card && card.querySelector('select[data-filter="tipe"]');
+    const opt = sel && [...sel.options].find((o) => o.value === tipeValue);
+    const values = String((opt && opt.dataset.revenue) || '')
+        .split(',').map((v) => v.trim()).filter(Boolean);
+    return values.length ? values : null;
 }
+
+function revenueDimensions() {
+    const card = revenueFilterCard();
+    const periodYear = card ? (card.dataset.periodYear || '') : '';
+    const out = {};
+    REVENUE_DIMENSIONS.forEach((spec) => {
+        const sel = (spec.filter && card)
+            ? card.querySelector('select[data-filter="' + spec.filter + '"]')
+            : null;
+        let param = spec.param;
+        if (spec.dim === 'month' && card && card.dataset.revenueMonthParam) param = card.dataset.revenueMonthParam;
+        if (spec.dim === 'account' && card && card.dataset.revenueAccountParam) param = card.dataset.revenueAccountParam;
+        if (sel && sel.dataset.revenueParam) param = sel.dataset.revenueParam;
+        let values = [];
+        if (sel) {
+            const opt = sel.options[sel.selectedIndex];
+            // One overview option may map to several revenue values ('NTF').
+            values = String((opt && opt.dataset.revenue) || '')
+                .split(',').map((v) => v.trim()).filter(Boolean);
+            // No usable year on the filter? Fall back to the active period.
+            if (spec.period && !values.length && periodYear) values = [periodYear];
+        }
+        out[spec.dim] = { param, values };
+    });
+    return out;
+}
+
+// Year the "current" series belongs to: the selected year, else the period.
+function revenueBaseYear() {
+    const y = parseInt(revenueDimensions().year.values[0] || '', 10);
+    return Number.isFinite(y) ? y : null;
+}
+
+// Active filters + click overrides -> Data Revenue query string.
+// overrides: { year, month, unit, pp, account, revenueType }; a click wins for
+// the dimension it sets. Months are NUMBERS (see monthNumber).
+function revenueFilterQuery(overrides) {
+    const o = overrides || {};
+    const dims = revenueDimensions();
+    const params = new URLSearchParams();
+    REVENUE_DIMENSIONS.forEach((spec) => {
+        let values = dims[spec.dim].values;
+        if (Object.prototype.hasOwnProperty.call(o, spec.dim)) {
+            const raw = o[spec.dim];
+            values = (Array.isArray(raw) ? raw : [raw])
+                .filter((v) => v !== null && v !== undefined && v !== '');
+        }
+        if (spec.dim === 'year') {
+            values = values
+                .map((v) => (Number.isFinite(Number(v)) ? String(Number(v)) : null))
+                .filter(Boolean);
+        }
+        values.forEach((v) => params.append(dims[spec.dim].param, String(v)));
+    });
+    return params;
+}
+
+function revenueDataUrl(overrides) {
+    const base = window.__REVENUE_DATA_URL__ || '/dashboard/revenue/data/';
+    const qs = revenueFilterQuery(overrides).toString();
+    return qs ? base + '?' + qs : base;
+}
+
+// The reusable slicer entry point used by every chart and horizontal card link.
+function navigateToRevenueData(overrides) {
+    window.location.href = revenueDataUrl(overrides);
+}
+
+// Shared with revenue-filter.js so the card hrefs and the chart drill-down are
+// built by the very same code.
+window.revenueFilterQuery = revenueFilterQuery;
+window.revenueBaseYear = revenueBaseYear;
+window.revenueDataUrl = revenueDataUrl;
+window.navigateToRevenueData = navigateToRevenueData;
 
 function initDashboardDrill() {
     const wireCursor = (chart, intersect = true) => {
@@ -585,105 +795,64 @@ function initDashboardDrill() {
         canvas.addEventListener('mouseleave', onLeave);
     };
 
+    // Chart A (Realisasi vs RKA per Bulan): every month bar is a slicer —
+    // clicked month (as a NUMBER) + the filters active on this page.
     if (charts.A) {
         charts.A.options.onClick = (evt, elements) => {
             if (!elements.length) return;
-            const month = MONTHS_FULL[elements[0].index];
-            if (month) drillThrough({ bulan: month });
+            const el = elements[0];
+            navigateToRevenueData({ month: monthNumber(charts.A.data.labels[el.index], el.index) });
         };
         wireCursor(charts.A);
     }
 
-    if (charts.D) {
-        charts.D.options.onClick = (evt) => {
-            const els = charts.D.getElementsAtEventForMode(evt, 'nearest', { intersect: false }, true);
+    /* Charts D (line) and E (bar) share the YoY series, so they share ONE click
+       contract: 'Tahun Sebelum' -> previous year, 'Tahun Ini' / 'Capaian' ->
+       the year currently active on the page. */
+    const wireYoySlicer = (chart, intersect) => {
+        if (!chart) return;
+        chart.options.onClick = (evt, elements) => {
+            const els = (elements && elements.length)
+                ? elements
+                : chart.getElementsAtEventForMode(evt, 'nearest', { intersect }, true);
             if (!els.length) return;
             const el = els[0];
-            const month = MONTHS_FULL[el.index];
-            if (!month) return;
-            const label = charts.D.data.datasets[el.datasetIndex].label;
-            if (label === 'Tahun Sebelum') {
-                const tahun = currentGlobalFilters().tahun;
-                if (tahun === 'Semua') {
-                    drillThrough({ bulan: month, tahun: 'Semua' });
-                } else {
-                    const n = parseInt(tahun, 10);
-                    const years = [...document.querySelectorAll('select[data-filter="tahun"] option')]
-                        .map((o) => parseInt(o.value, 10))
-                        .filter((v) => Number.isFinite(v));
-                    const min = Math.min(...years);
-                    const prev = Number.isFinite(n) ? Math.max(min, n - 1) : n;
-                    drillThrough({ bulan: month, tahun: prev });
-                }
-            } else {
-                drillThrough({ bulan: month });
-            }
+            const label = chart.data.datasets[el.datasetIndex].label;
+            const overrides = { month: monthNumber(chart.data.labels[el.index], el.index) };
+            const base = revenueBaseYear();
+            if (label === 'Tahun Sebelum' && base !== null) overrides.year = base - 1;
+            navigateToRevenueData(overrides);
         };
-        wireCursor(charts.D, false);
-    }
+        wireCursor(chart, intersect);
+    };
+    wireYoySlicer(charts.D, false);
+    wireYoySlicer(charts.E, true);
 
-    if (charts.E) {
-        charts.E.options.onClick = (evt, elements) => {
-            if (!elements.length) return;
-            const el = elements[0];
-            const month = MONTHS_FULL[el.index];
-            if (!month) return;
-            const label = charts.E.data.datasets[el.datasetIndex].label;
-            if (label === 'Tahun Sebelum') {
-                const tahun = currentGlobalFilters().tahun;
-                if (tahun === 'Semua') {
-                    drillThrough({ bulan: month, tahun: 'Semua' });
-                } else {
-                    const n = parseInt(tahun, 10);
-                    const years = [...document.querySelectorAll('select[data-filter="tahun"] option')]
-                        .map((o) => parseInt(o.value, 10))
-                        .filter((v) => Number.isFinite(v));
-                    const min = Math.min(...years);
-                    const prev = Number.isFinite(n) ? Math.max(min, n - 1) : n;
-                    drillThrough({ bulan: month, tahun: prev });
-                }
-            } else {
-                drillThrough({ bulan: month });
-            }
-        };
-        wireCursor(charts.E);
-    }
-
-    // Pie (Komposisi per Tipe): clicking a slice drills into Data Realisasi
-    // filtered by that tipe (NTF/TF), keeping the other global filters.
+    // Pie (Komposisi per Tipe): a slice maps to the same Tipe option the filter
+    // card offers, so its revenue type(s) come from that option's contract
+    // ('NTF' covers both NTF categories, 'TF' just TF).
     if (charts.B) {
         charts.B.options.onClick = (evt, elements) => {
             if (!elements.length) return;
-            const idx = elements[0].index;
-            const label = charts.B.data.labels[idx];
-            if (label === 'NTF' || label === 'TF') {
-                drillThrough({ tipe: label });
-            }
+            const types = revenueTypesFor(charts.B.data.labels[elements[0].index]);
+            if (types) navigateToRevenueData({ revenueType: types });
         };
         wireCursor(charts.B);
     }
 
-    document.querySelectorAll('[data-kpi]').forEach((card) => {
-        const period = card.dataset.period;
-        if (!period) return;
-        card.style.cursor = 'pointer';
-        card.onclick = () => {
-            if (period === 'agustus') {
-                drillThrough({ bulan: 'Agustus' });
-            } else {
-                drillThrough({});
-            }
-        };
-    });
-
+    // Triwulan bars: a quarter expands to its three months — the tables accept
+    // several month values, so the whole quarter is filtered in one click.
     const chartB = document.getElementById('chartB');
     if (chartB) {
         chartB.onclick = (e) => {
             const wrap = e.target.closest('[data-triwulan]');
-            if (wrap) drillThrough({ triwulan: wrap.dataset.triwulan });
+            if (!wrap) return;
+            const q = parseInt(wrap.dataset.triwulan, 10);
+            if (!(q >= 1 && q <= 4)) return;
+            const first = (q - 1) * 3 + 1;
+            navigateToRevenueData({ month: [first, first + 1, first + 2] });
         };
     }
-    // (Chart B pie slice drill is skipped when the element is absent.)
 }
 
 // ---------------------------------------------------------------------------
@@ -843,6 +1012,10 @@ function toggleChartFullscreen(canvas, card) {
     const existing = document.querySelector('.chart-fullscreen');
     if (existing) {
         document.exitFullscreen && document.exitFullscreen();
+        // The fullscreen copy owns a Chart instance over its own canvas; it
+        // must be destroyed with it, otherwise every open/close leaks a chart
+        // and its ResizeObserver.
+        if (existing.__fsTeardown) existing.__fsTeardown();
         existing.remove();
         return;
     }
@@ -903,12 +1076,26 @@ function toggleChartFullscreen(canvas, card) {
         }
     });
     ro.observe(body);
+    // One teardown path for every way the overlay can close (Tutup button, the
+    // toolbar toggle, or the fullscreen API itself).
+    fs.__fsTeardown = () => {
+        ro.disconnect();
+        fsCharts.forEach((c) => c.destroy());
+        fsCharts.length = 0;
+    };
     // fullscreen API on the container
     if (fs.requestFullscreen) fs.requestFullscreen();
     fs.querySelector('[data-close]').addEventListener('click', () => {
         if (document.fullscreenElement) document.exitFullscreen();
+        fs.__fsTeardown();
         fs.remove();
     });
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && fs.isConnected) {
+            fs.__fsTeardown();
+            fs.remove();
+        }
+    }, { once: true });
     fs.querySelectorAll('[data-dl]').forEach((b) => {
         b.addEventListener('click', () => downloadChart(clone, b.dataset.dl));
     });

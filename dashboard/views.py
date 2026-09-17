@@ -12,6 +12,7 @@ import json
 import re
 import zlib
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from django.http import HttpResponse, JsonResponse
@@ -40,8 +41,8 @@ _FONT_FACE_TEMPLATE = """@font-face {{
 # Stable hashed filenames from the committed Vite build (public/build). Kept
 # hardcoded so the asset tags render even when the manifest file is not on
 # the Lambda filesystem (Vercel serves public/** as CDN static files).
-_CSS_FILE = 'assets/styles-C5UTFmiW.css'
-_JS_FILE = 'assets/app-COUFk9KT.js'
+_CSS_FILE = 'assets/styles-Fi6iS1TL.css'
+_JS_FILE = 'assets/app-CnarlR9g.js'
 
 
 def _asset_url(name):
@@ -250,8 +251,10 @@ def _build_payload(tipe: str, direktorat: str, kode_pp: str, tahun):
 
     return {
         'kpis': [
-            {'title': 'Realisasi Bulan Berjalan', 'value': realisasi_bulan, 'icon': 'wallet', 'accent': '#EB3237', 'iconBg': '#ECFDF5', 'iconColor': '#EB3237', 'capaian': [f'{capaian_bulan}% Capaian', _capaian_color(capaian_bulan)], 'period': 'agustus'},
-            {'title': 'RKA Bulan Berjalan', 'value': target_rka_bulan, 'icon': 'folder', 'accent': '#5F5F60', 'iconBg': '#EFF6FF', 'iconColor': '#5F5F60', 'capaian': None, 'period': 'tahun'},
+            # 'link' names the destination key in revenue_links (set by
+            # _revenue_navigation); absent = summary only, not a navigation card.
+            {'title': 'Realisasi Bulan Berjalan', 'value': realisasi_bulan, 'icon': 'wallet', 'accent': '#EB3237', 'iconBg': '#ECFDF5', 'iconColor': '#EB3237', 'capaian': [f'{capaian_bulan}% Capaian', _capaian_color(capaian_bulan)], 'link': 'data'},
+            {'title': 'RKA Bulan Berjalan', 'value': target_rka_bulan, 'icon': 'folder', 'accent': '#5F5F60', 'iconBg': '#EFF6FF', 'iconColor': '#5F5F60', 'capaian': None},
         ],
         'chartA': {'bulan': bulan, 'rka': rka, 'realisasi': realisasi},
         'chartB': {
@@ -272,10 +275,46 @@ def _build_payload(tipe: str, direktorat: str, kode_pp: str, tahun):
     }
 
 
+def _revenue_navigation(filters, composition):
+    """Deep links from the Revenue Overview cards into the revenue tables.
+
+    The cards ARE the slicer: one click opens the matching table carrying the
+    filters active on this page. Values are validated against the finance
+    master data (see finance.services.revenue_context) so a card can never
+    open an empty page, and the same value maps are handed to the template so
+    the client can rebuild the links after an in-place filter apply.
+    """
+    from finance.services.revenue_context import (
+        build_revenue_detail_url, revenue_detail_params, revenue_value_maps,
+    )
+    value_maps = revenue_value_maps(
+        years=OPTIONS['tahun'],
+        direktorat=OPTIONS['direktorat'],
+        pp_codes=OPTIONS['kodePP'],
+        tipe_values=OPTIONS['tipe'],
+    )
+    period = None
+    if composition and composition.get('period_year'):
+        period = (composition['period_year'], composition['period_month'])
+    params = revenue_detail_params(filters, period, value_maps)
+    return {
+        'revenue_period': {'year': period[0], 'month': period[1]} if period else None,
+        'revenue_links': {
+            'data': build_revenue_detail_url('revenue:data', params),
+            'tf': build_revenue_detail_url('revenue:tf', params),
+            'ntf_research': build_revenue_detail_url('revenue:ntf-research', params),
+            'ntf_project': build_revenue_detail_url('revenue:ntf-project', params),
+        },
+        'revenue_filter_values': value_maps,
+    }
+
+
 def index(request):
     f = _dashboard_filters(request)
-    pp_perf = _revenue_pp_performance(f.get('tahun'))
-    tahun_label = pp_perf[0]['tahun_label'] if pp_perf else str(f.get('tahun'))
+    ranking = _revenue_ranking(f.get('tahun'))
+    # Header label: the period actually reported, else whatever year was asked.
+    tahun_label = (ranking['tahun_label'] if ranking else str(f.get('tahun')))
+    composition = _revenue_composition()
     return render(request, 'dashboard.html', {
         'options': OPTIONS,
         'filters': f,
@@ -285,9 +324,10 @@ def index(request):
         'assets_head': _assets_head(),
         'active': 'dashboard',
         'active_tab': 'revenue_overview',
-        'composition': _revenue_composition(),
-        'pp_perf': pp_perf,
+        'composition': composition,
+        'ranking': ranking,
         'ctx_tahun_label': tahun_label,
+        **_revenue_navigation(f, composition),
     })
 
 
@@ -356,6 +396,10 @@ def _revenue_composition():
             'total': float(comp['total']),
             'valid': validate_revenue_composition(tf, ntf_p, ntf_r, tf + ntf_p + ntf_r),
             'period': f"{period.month:02d}/{period.year}",
+            # The real (year, month) behind 'period', used to carry the active
+            # period into the revenue table links.
+            'period_year': period.year,
+            'period_month': period.month,
             # Finance-page-compatible presentation structures.
             'prev_comp': prev_comp,
             'card': {
@@ -674,96 +718,145 @@ def export(request):
     return response
 
 
-def _revenue_pp_performance(tahun):
-    """Actual & RKA YTD per PP (+ org) from the revenue database, up to the
-    latest period of the selected year. Table: Organization/PP/RKA YTD/
-    Actual YTD/Variance/Achievement shown at the bottom of /dashboard/."""
-    try:
-        from decimal import Decimal as _D
-        from finance.models import (
-            FinancialPeriod, PPMaster, RevenueBudget,
-            RevenueBudgetMonthly, RevenueLedger,
-        )
-        if isinstance(tahun, str) and tahun != 'Semua':
-            try:
-                tahun = int(tahun)
-            except ValueError:
-                tahun = 'Semua'
-        if not isinstance(tahun, int):
-            # 'Semua' (no year filter): report the most recent year on file.
-            tahun = FinancialPeriod.objects.order_by('-year').values_list('year', flat=True).first()
-        period = FinancialPeriod.objects.filter(year=tahun).order_by('-month').first()
-        if period is None:
-            # Explicit year selected but not on file: no data to report.
-            return []
-        month = period.month
-        year = period.year
-
-        # Actual YTD per PP (Jan..month, mapped accounts only)
-        actual = {}
-        rows = (RevenueLedger.objects
-                .filter(period__year=year, period__month__lte=month,
-                        pp__isnull=False, revenue_account__isnull=False)
-                .values('pp_id')
-                .annotate(credit=__import__('django.db.models', fromlist=['Sum']).Sum('credit'),
-                          debit=__import__('django.db.models', fromlist=['Sum']).Sum('debit')))
-        for r in rows:
-            actual[r['pp_id']] = (r['credit'] or 0) - (r['debit'] or 0)
-
-        # RKA YTD per PP (annual phased)
-        rka = {}
-        budgets = (RevenueBudget.objects
-                   .filter(year=year, rka_version__is_active=True)
-                   .prefetch_related('monthly_rows'))
-        for b in budgets:
-            phased = [m.budget_amount for m in b.monthly_rows.filter(month__lte=month)]
-            amt = sum(phased, _D('0')) if phased else b.annual_budget * _D(month) / _D(12)
-            rka[b.pp_id] = rka.get(b.pp_id, _D('0')) + amt
-
-        pps = (PPMaster.objects.filter(is_active=True)
-               .select_related('organization_unit').order_by('pp_code'))
-        out = []
-        for pp in pps:
-            a = actual.get(pp.pk, _D('0'))
-            r = rka.get(pp.pk, _D('0'))
-            if a == 0 and r == 0:
-                continue
-            ach = (a / r * _D('100')) if r else None
-            out.append({
-                'tahun_label': str(year),
-                'org': pp.organization_unit.name if pp.organization_unit else '-',
-                'pp': pp.pp_code,
-                'actual': a, 'rka': r,
-                'actual_disp': _rupiah_id2(a),
-                'rka_disp': _rupiah_id2(r),
-                'variance': a - r,
-                'variance_disp': ('+' if a - r >= 0 else '-') + _rupiah_id2(abs(a - r)),
-                'ach': ach,
-                'ach_disp': _pct2(ach),
-            })
-        out.sort(key=lambda x: x['actual'], reverse=True)
-        return out
-    except Exception:
-        return []
+# Achievement badge tiers, shared by both ranking levels.
+ACH_TIERS = (
+    (100, 'high'),    # >= 100%  green
+    (90, 'mid'),      # 90-99.99% amber
+)
+ACH_TIER_LOW = 'low'  # < 90%  red
 
 
-def _rupiah_id2(v):
-    try:
-        x = float(v)
-    except (TypeError, ValueError):
-        return 'Rp0'
-    a = abs(x)
-    sign = '-' if x < 0 else ''
-    def t(n):
-        s = f'{n:.1f}'
-        return s[:-2] if s.endswith('.0') else s.replace('.', ',')
-    if a >= 1e12:
-        return f'{sign}Rp{t(a/1e12)} T'
-    if a >= 1e9:
-        return f'{sign}Rp{t(a/1e9)} M'
-    if a >= 1e6:
-        return f'{sign}Rp{t(a/1e6)} jt'
-    return f'{sign}Rp{a:,.0f}'.replace(',', '.')
+def _ach_tier(achievement):
+    if achievement is None:
+        return 'na'
+    for threshold, tier in ACH_TIERS:
+        if achievement >= threshold:
+            return tier
+    return ACH_TIER_LOW
+
+
+# ---------------------------------------------------------------------------
+# Rupiah presentation for the ranking.
+#
+# The amount columns of a row (RKA / Actual, and the same pair in every
+# PP+account detail row) are rendered with ONE unit chosen from the largest
+# value in that group. Picking the unit per value is what made the columns
+# unreadable: a Rp5,95 M budget and a Rp5,52 M realisation could land in
+# different units and would no longer be comparable by eye.
+#
+# Formatting is presentation only: every input is the raw Decimal read from
+# the database, and nothing here feeds back into a calculation.
+# ---------------------------------------------------------------------------
+_ID_SEPARATORS = str.maketrans({',': '.', '.': ','})
+_DISPLAY_PLACES = Decimal('0.01')
+MILLION = Decimal('1_000_000')
+BILLION = Decimal('1_000_000_000')
+TRILLION = Decimal('1_000_000_000_000')
+
+
+def rupiah_unit(amounts):
+    """Display unit shared by a group of amounts -> (suffix, divisor).
+
+    The unit comes from the LARGEST amount in the group, so every value in the
+    row is expressed on the same scale: ('M', 1e9) from a billion up,
+    ('jt', 1e6) below that, and ('', 1) under a million — where trailing
+    "0,00 jt" would misrepresent a small but non-zero amount as nothing.
+    """
+    peak = Decimal('0')
+    for value in amounts:
+        if value is None:
+            continue
+        magnitude = abs(Decimal(str(value)))
+        if magnitude > peak:
+            peak = magnitude
+    if peak >= TRILLION:
+        return 'T', TRILLION
+    if peak >= BILLION:
+        return 'M', BILLION
+    if peak >= MILLION:
+        return 'jt', MILLION
+    return '', Decimal('1')
+
+
+def _scaled(value, unit):
+    """(digit string, negative?, suffix) for `value` rendered in `unit`."""
+    suffix, divisor = unit
+    if suffix:
+        places, pattern = _DISPLAY_PLACES, ',.2f'
+    else:
+        # Whole rupiah: decimals below a million would only add noise.
+        places, pattern = Decimal('1'), ',.0f'
+    amount = (Decimal(str(value if value is not None else 0)) / divisor).quantize(
+        places, rounding=ROUND_HALF_UP)
+    digits = f'{abs(amount):{pattern}}'.translate(_ID_SEPARATORS)
+    return digits, amount < 0, (f' {suffix}' if suffix else '')
+
+
+def rupiah_amount(value, unit):
+    """'Rp5,95 M' / 'Rp559,50 jt' — same unit for the whole row."""
+    digits, negative, suffix = _scaled(value, unit)
+    return f'{"-" if negative else ""}Rp{digits}{suffix}'
+
+
+
+def _revenue_ranking(tahun):
+    """Organization revenue ranking with nested PP/account detail.
+
+    Aggregation lives in finance.services.financial_overview.revenue_ranking
+    (frozen snapshots + live GL for actual, active RKA phasing for budget);
+    this wrapper only resolves the year filter and adds display strings.
+    """
+    from finance.models import FinancialPeriod
+    from finance.services.financial_overview import revenue_ranking
+
+    if isinstance(tahun, str) and tahun != 'Semua':
+        try:
+            tahun = int(tahun)
+        except ValueError:
+            tahun = 'Semua'
+    if not isinstance(tahun, int):
+        # 'Semua' (no year filter): report the most recent year on file.
+        tahun = FinancialPeriod.objects.order_by('-year').values_list('year', flat=True).first()
+    if tahun is None:
+        return None
+    period = FinancialPeriod.objects.filter(year=tahun).order_by('-month').first()
+    if period is None:
+        # Explicit year selected but not on file: no data to report.
+        return None
+
+    data = revenue_ranking(period.year, period.month)
+    if not data['orgs']:
+        return None
+
+    for org in data['orgs']:
+        # One unit for both amount columns of a row, so RKA and Actual are
+        # directly comparable.
+        unit = rupiah_unit([org['rka'], org['actual']])
+        org['rka_disp'] = rupiah_amount(org['rka'], unit)
+        org['actual_disp'] = rupiah_amount(org['actual'], unit)
+        org['ach_disp'] = _pct2(org['achievement'])
+        org['ach_tier'] = _ach_tier(org['achievement'])
+        # Progress bar: capped at 120% so an over-achiever cannot overflow.
+        org['ach_width'] = min(int(org['achievement'] or 0), 120)
+        org['rows'] = [_display_row(row) for row in org['rows']]
+
+    data['tahun_label'] = str(period.year)
+    data['month_label'] = MONTHS[period.month - 1]
+    return data
+
+
+def _display_row(row):
+    """Attach the display strings for one PP+account detail row.
+
+    Same two amount columns as the summary, same shared-unit rule.
+    """
+    unit = rupiah_unit([row['rka'], row['actual']])
+    row['rka_disp'] = rupiah_amount(row['rka'], unit)
+    row['actual_disp'] = rupiah_amount(row['actual'], unit)
+    row['ach_disp'] = _pct2(row['achievement'])
+    row['ach_tier'] = _ach_tier(row['achievement'])
+    row['ach_width'] = min(int(row['achievement'] or 0), 120)
+    return row
 
 
 def _pct2(v):

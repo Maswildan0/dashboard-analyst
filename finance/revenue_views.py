@@ -13,7 +13,10 @@ from django.shortcuts import get_object_or_404, render
 from dashboard.views import _assets_head, _fonts_head
 
 from .models import FinancialPeriod, Project, SimkugSyncLog
+from .manual_views import page_context as manual_page_context
+from .permissions import capabilities
 from .selectors import revenue_selectors as rsel
+from .services import manual_revenue as mr
 from .services import revenue_service as rs
 from .services import revenue_project_service as rps
 from .services.revenue_context import RevenueContext, month_name
@@ -21,22 +24,32 @@ from .services.formatters import format_rupiah_compact, format_percent
 
 
 def _ctx_from_request(request):
+    # Let RevenueContext read params itself so both plain (?year=) and
+    # bracketed (?tahun[]=) styles resolve; None args = read from request.
     return RevenueContext(
         request,
-        year=request.GET.get('year'),
-        month=request.GET.get('month'),
-        revenue_type=request.GET.get('type'),
-        organization_id=request.GET.get('org'),
-        pp_code=request.GET.get('pp'),
-        account_code=request.GET.get('account'),
+        years=None, months=None, revenue_types=None,
+        organization_ids=None, pp_codes=None, account_codes=None,
     )
 
 
 def _base_ctx(request, ctx=None, active_tab='revenue_overview'):
     ctx = ctx or _ctx_from_request(request)
     years, months = rsel.period_options()
-    opts = rsel.cascade_options(ctx.organization, ctx.revenue_type)
+    # Full option sets: never narrowed by the FIRST selected parent, so the
+    # client-side cascade can offer every value of every selected parent
+    # (multi-select). Empty selection == all parent values.
+    opts = rsel.cascade_options()
     last_sync = SimkugSyncLog.objects.filter(status__in=['SUCCESS', 'PARTIAL']).order_by('-finished_at').first()
+    # Dropdown option sets (master rows); PP/Account follow their parents
+    # below so cascading works even before the client JS runs.
+    jenis = [('TF', 'TF'), ('NTF_RESEARCH', 'NTF Research'), ('NTF_PROJECT', 'NTF Project')]
+    # Cascade the option lists server-side too: PP options follow the selected
+    # Organizations, Account options follow the selected Jenis Revenue. With
+    # multiple parents this is the UNION of their children; with no parent
+    # selected everything is offered (client JS keeps cascading live).
+    _org_ids = {o.pk for o in ctx.organizations}
+    _cat_ids = {c.pk for c in ctx.categories}
     return {
         'ctx': ctx,
         'years': years,
@@ -45,6 +58,14 @@ def _base_ctx(request, ctx=None, active_tab='revenue_overview'):
         'organizations': opts['organizations'],
         'pps': opts['pps'],
         'accounts': opts['accounts'],
+        'jenis_options': jenis,
+        'tahun_options': years,
+        'bulan_options': [{'value': m, 'label': month_name(m)} for m in months],
+        'org_options': opts['organizations'],
+        'pp_options': [p for p in opts['pps']
+                       if not _org_ids or p.organization_unit_id in _org_ids],
+        'account_options': [a for a in opts['accounts']
+                            if not _cat_ids or a.revenue_category_id in _cat_ids],
         'last_sync': last_sync,
         'assets_head': _assets_head(),
         'fonts_head': _fonts_head(),
@@ -103,6 +124,67 @@ _GL_SORTABLE = ['organization', 'pp_code', 'kode_akun', 'nama_akun',
 _GL_PER_PAGE = [20, 50, 100]
 
 
+def _finalize_tf_rows(rows):
+    """Shared display finalizer for every tf_program-shaped row (TF / NTF
+    Research / NTF Project / unified Data Revenue). Guarantees IDENTICAL
+    column values across pages (spec: consistency test #28).
+
+    Row semantics:
+      Nilai Proyek       = project value (Project Master, never GL);
+                           '—' when unmapped.
+      Pendapatan Diakui  = revenue recognised in the SELECTED MONTH only.
+      Total Pendapatan   = lifetime recognized up to period end.
+      progress           = PROJECT total revenue / project value.
+    """
+    for r in rows:
+        if r.get('mode') == 'tf_program':
+            if r.get('detail_mode') == 'PERIOD_ONLY':
+                # Pendaftaran: batch of the month -> Total = the month itself
+                total_val = r['total_pendapatan'] or r['realisasi_bulan']
+                _nv = r['nilai'] or 0
+                r['nilai_disp'] = _rupiah(_nv) if _nv > 0 else '—'
+                r['total_disp'] = _rupiah(total_val)
+                r['berjalan_disp'] = _rupiah(r['pendapatan_berjalan'])  # month
+                _pct_prog = 100 if _nv > 0 else 0
+            else:
+                total_val = r['total_pendapatan']   # lifetime up to period
+                _nv = r['nilai'] or 0
+                r['nilai_disp'] = '—' if _nv <= 0 else _rupiah(_nv)
+                r['total_disp'] = _rupiah(total_val)
+                r['berjalan_disp'] = _rupiah(r['pendapatan_berjalan'])  # month
+                # Progress = PROJECT total revenue (all accounts, up to
+                # period) / project value; multi-account rows share ONE
+                # project progress.
+                _ptot = r.get('project_total_pendapatan') or r['total_pendapatan']
+                if _nv > 0:
+                    try:
+                        _pct_prog = int(round(float(_ptot) / max(1.0, float(_nv)) * 100))
+                    except (TypeError, ValueError):
+                        _pct_prog = 0
+                else:
+                    _pct_prog = 0
+        elif r.get('mode') == 'account_month':
+            total = r['total_pendapatan']
+            r['nilai_disp'] = _rupiah(total)
+            r['total_disp'] = _rupiah(total)
+            r['berjalan_disp'] = _rupiah(total)
+            _pct_prog = 100
+        else:
+            r['nilai_disp'] = 'Rp0'
+            r['total_disp'] = _rupiah(r['total_pendapatan'])
+            r['berjalan_disp'] = _rupiah(r['pendapatan_berjalan'])
+            try:
+                _pct_prog = int(round(float(r['pendapatan_berjalan']) / max(1.0, float(r['total_pendapatan'])) * 100))
+            except (TypeError, ValueError):
+                _pct_prog = 0
+        if not r.get('akun_disp'):
+            r['akun_disp'] = '-'
+        r['progress_width'] = min(100, _pct_prog)
+        r['progress_color'] = _progress_color(_pct_prog)
+        r['no'] = None  # filled by template via counter
+    return rows
+
+
 def _gl_list(request, revenue_type):
     """TF / NTF Research page.
 
@@ -113,12 +195,9 @@ def _gl_list(request, revenue_type):
     it is received), so Total Pendapatan == Pendapatan Berjalan == sum of the
     detail rows.
     """
-    ctx = _ctx_from_request(request)
-    if ctx.revenue_type in ('', 'all', 'Semua'):
-        ctx = RevenueContext(year=ctx.year, month=ctx.month, revenue_type=revenue_type,
-                             organization_id=ctx.organization.pk if ctx.organization else None,
-                             pp_code=ctx.pp.pp_code if ctx.pp else None,
-                             account_code=ctx.revenue_account.account_code if ctx.revenue_account else None)
+    # Page type is FIXED (TF / NTF Research): force it while keeping every
+    # other multi-select dimension (tahun/bulan/org/pp/akun) from the request.
+    ctx = RevenueContext(request, revenue_types=[revenue_type])
 
     search = (request.GET.get('q') or '').strip()
     sort = request.GET.get('sort') if request.GET.get('sort') in _NTF_SORTABLE else ''
@@ -130,16 +209,21 @@ def _gl_list(request, revenue_type):
     except (TypeError, ValueError):
         per_page = 20
 
-    if revenue_type == 'TF':
-        # Data TF = per program (Project TF-) x PP: one row per real TF
-        # program (Pendaftaran PIN SMBB, QRMO, Pusat Bahasa, …). Nilai =
-        # program's RKA allocation; figures from mapped GL (like NTF).
-        all_rows = rps.tf_program_rows(ctx, search=search,
-                                       sort=sort, direction=direction)
-    else:
-        # NTF Research = per objek hibah/penelitian (Project RS-) x PP.
-        all_rows = rps.research_object_rows(ctx, search=search,
-                                            sort=sort, direction=direction)
+    # Multi-period: one batch per selected (year, month); rows carry the
+    # period they belong to so Tahun/Bulan are exact under multi-select.
+    all_rows = []
+    for _year, _month in ctx.periods or [(ctx.year, ctx.month)]:
+        pctx = ctx.for_period(_year, _month)
+        if revenue_type == 'TF':
+            # Data TF = per program (Project TF-) x PP
+            all_rows += rps.tf_program_rows(pctx, search=search)
+        else:
+            # NTF Research = per objek hibah/penelitian (Project RS-) x PP
+            all_rows += rps.research_object_rows(pctx, search=search)
+    if sort:
+        _key = _row_sort_key(sort)
+        if _key is not None:
+            all_rows.sort(key=_key, reverse=(direction == 'desc'))
 
     # Normalise once for ALL rows (grand totals + page slice) so both the
     # row list and the grand-total line see the aliased fields.
@@ -153,7 +237,7 @@ def _gl_list(request, revenue_type):
             r['nama'] = r.get('nama_akun') or r.get('nama') or '-'
             r['total_pendapatan'] = r.get('realisasi_bulan', Decimal('0'))
             r['pendapatan_berjalan'] = r.get('realisasi_ytd', Decimal('0'))
-            r['month'] = ctx.month
+            r['month'] = r.get('month') or ctx.month
         r['nama'] = r['nama'] or '-'
         r['nama_proyek'] = (r.get('nama_proyek') or '').strip() or '-'
         # Pendapatan Pendaftaran (4111101, PERIOD_ONLY) is a period-specific
@@ -174,7 +258,7 @@ def _gl_list(request, revenue_type):
     pages = max(1, -(-total // per_page))
     page = min(page, pages)
     start = (page - 1) * per_page
-    rows = all_rows[start:start + per_page]
+    rows = _attach_manual_flags(all_rows[start:start + per_page], request)
 
     for r in rows:
         if r.get('mode') == 'tf_program':
@@ -273,18 +357,7 @@ def _gl_list(request, revenue_type):
     tab = 'revenue_tf' if revenue_type == 'TF' else 'revenue_ntf_research'
 
     def query_base():
-        q = {'year': ctx.year, 'month': ctx.month}
-        if ctx.organization is not None:
-            q['org'] = ctx.organization.pk
-        if ctx.pp is not None:
-            q['pp'] = ctx.pp.pp_code
-        if ctx.revenue_account is not None:
-            q['account'] = ctx.revenue_account.account_code
-        if search:
-            q['q'] = search
-        if per_page != 20:
-            q['per_page'] = per_page
-        return q
+        return _filter_query(ctx, search, per_page, 20)
 
     def sort_url(col):
         q = query_base()
@@ -297,8 +370,10 @@ def _gl_list(request, revenue_type):
         q['page'] = pg
         return request.path + '?' + _qs(q)
 
+    page_key = 'tf' if revenue_type == 'TF' else 'ntf_research'
     return render(request, 'finance/revenue/account_list.html', {
         **_base_ctx(request, ctx, tab),
+        **manual_page_context(request, page_key),
         'ctx': ctx,
         'rows': rows,
         'grand': grand,
@@ -346,6 +421,10 @@ _NTF_SORTABLE = ['tahun', 'bulan', 'unit', 'no_proyek', 'kode_pp',
                  'organization', 'nama', 'nama_proyek', 'akun',
                  'nilai', 'total_pendapatan', 'pendapatan_berjalan']
 _NTF_PER_PAGE = [20, 50, 100]
+_DATA_SORTABLE = ['tahun', 'bulan', 'jenis', 'unit', 'no_proyek', 'kode_pp',
+                  'organization', 'nama', 'nama_proyek', 'akun',
+                  'nilai', 'total_pendapatan', 'pendapatan_berjalan']
+_DATA_PER_PAGE = [25, 50, 100]
 
 
 def ntf_project_list(request):
@@ -362,9 +441,17 @@ def ntf_project_list(request):
     except (TypeError, ValueError):
         per_page = 20
 
-    # NTF Project = contract projects (P-) + layanan/sertifikasi objek (SRV-)
-    all_rows = rps.project_rows(ctx, search=search, sort=sort, direction=direction)
-    all_rows += rps.service_object_rows(ctx, search=search, sort=sort, direction=direction)
+    # NTF Project = contract projects (P-) + layanan/sertifikasi objek (SRV-);
+    # one batch per selected (year, month) so multi-period selections work.
+    all_rows = []
+    for _year, _month in ctx.periods or [(ctx.year, ctx.month)]:
+        pctx = ctx.for_period(_year, _month)
+        all_rows += rps.project_rows(pctx, search=search)
+        all_rows += rps.service_object_rows(pctx, search=search)
+    if sort:
+        _key = _row_sort_key(sort)
+        if _key is not None:
+            all_rows.sort(key=_key, reverse=(direction == 'desc'))
     # contract projects reuse the same objek-row display shape
     for r in all_rows:
         if 'project_number' not in r:
@@ -389,7 +476,7 @@ def ntf_project_list(request):
     pages = max(1, -(-total // per_page))
     page = min(page, pages)
     start = (page - 1) * per_page
-    rows = all_rows[start:start + per_page]
+    rows = _attach_manual_flags(all_rows[start:start + per_page], request)
     for r in rows:
         r['bulan'] = month_name(r['bulan'])
         # text cells: empty -> dash
@@ -435,18 +522,7 @@ def ntf_project_list(request):
     }
 
     def query_base():
-        q = {'year': ctx.year, 'month': ctx.month}
-        if ctx.organization is not None:
-            q['org'] = ctx.organization.pk
-        if ctx.pp is not None:
-            q['pp'] = ctx.pp.pp_code
-        if ctx.revenue_account is not None:
-            q['account'] = ctx.revenue_account.account_code
-        if search:
-            q['q'] = search
-        if per_page != 20:
-            q['per_page'] = per_page
-        return q
+        return _filter_query(ctx, search, per_page, 20)
 
     def sort_url(col):
         q = query_base()
@@ -461,6 +537,7 @@ def ntf_project_list(request):
 
     return render(request, 'finance/revenue/account_list.html', {
         **_base_ctx(request, ctx, 'revenue_ntf_project'),
+        **manual_page_context(request, 'ntf_project'),
         'page_name': 'NTF Project',
         'ctx': ctx,
         'rows': rows,
@@ -486,13 +563,145 @@ def ntf_project_list(request):
 
 
 def _qs(query):
+    """Serialize a query dict to a URL query string.
+
+    Values may be scalars or lists; list items repeat the key so the
+    multi-select params survive sort / pagination links
+    (e.g. {'bulan[]': [7, 8]} -> 'bulan[]=7&bulan[]=8').
+    """
     import urllib.parse
     parts = []
     for k, v in query.items():
-        if v is None:
-            continue
-        parts.append(f'{k}={urllib.parse.quote(str(v), safe="")}')
+        items = v if isinstance(v, (list, tuple, set)) else [v]
+        for item in items:
+            if item is None:
+                continue
+            parts.append(f'{k}={urllib.parse.quote(str(item), safe="")}')
     return '&'.join(parts)
+
+
+def _filter_query(ctx, search, per_page, per_page_default):
+    """Query params preserving ALL multi-select filters + search + page size.
+
+    Used to build sort / pagination links so no selection is dropped when the
+    user re-sorts or moves between pages.
+    """
+    q = dict(ctx.query_args())
+    if search:
+        q['q'] = [search]
+    if per_page != per_page_default:
+        q['per_page'] = [per_page]
+    return q
+
+
+def _row_sort_key(sort):
+    """Row sort key for every revenue table (TF / Research / Project / Data)."""
+    return {
+        'tahun': lambda r: r.get('tahun') or 0,
+        'bulan': lambda r: r.get('bulan') or 0,
+        'jenis': lambda r: r.get('jenis') or '',
+        'unit': lambda r: (r.get('unit') or '').lower(),
+        'no_proyek': lambda r: r.get('no_proyek') or '',
+        'kode_pp': lambda r: r.get('pp_code') or '',
+        'organization': lambda r: (r.get('organization') or '').lower(),
+        'nama': lambda r: (r.get('nama') or '').lower(),
+        'nama_proyek': lambda r: (r.get('nama_proyek') or '').lower(),
+        'akun': lambda r: r.get('akun') or '',
+        'nilai': lambda r: r.get('nilai') or Decimal('0'),
+        'total_pendapatan': lambda r: r.get('total_pendapatan') or Decimal('0'),
+        'pendapatan_berjalan': lambda r: r.get('pendapatan_berjalan') or Decimal('0'),
+    }.get(sort)
+
+
+def project_source_coordinates(project, *, account_code=None):
+    """Organization / PP / account / category of a project (§9).
+
+    A correction started from one transaction line has no table row to copy
+    the coordinates from, so they are resolved here from the project's own
+    mapped GL — the same source of truth every other reader uses.
+    """
+    account = mr.project_account_for(project)
+    return {
+        'org_id': (project.organization_unit_id
+                   or (project.pp.organization_unit_id if project.pp else '')
+                   or ''),
+        'pp': project.pp.pp_code if project.pp else '',
+        # The corrected row may be one account of the project; without one,
+        # fall back to the account its GL is keyed on.
+        'account': account_code or (account.account_code if account else ''),
+        'type': account.revenue_category.code if account and account.revenue_category else '',
+    }
+
+
+def _attach_manual_flags(rows, request=None):
+    """Annotate project-grain rows with manual provenance for the row menu.
+
+    One query for the whole page: which projects carry manual entries (and how
+    many), and whether the project master itself is MANUAL. The template then
+    renders the provenance badge and the correct action menu (§17, §37) without
+    a query per row.
+    """
+    from collections import Counter
+    from .models import ManualRevenueEntry
+    pids = [r['project'].pk for r in rows if r.get('project') is not None]
+    counts = Counter()
+    if pids:
+        counts = Counter(ManualRevenueEntry.objects
+                         .filter(project_id__in=pids, status='POSTED')
+                         .values_list('project_id', flat=True))
+    voided = Counter()
+    if pids:
+        voided = Counter(ManualRevenueEntry.objects
+                         .filter(project_id__in=pids, status='VOID')
+                         .values_list('project_id', flat=True))
+    caps = capabilities(request.user) if request is not None else {}
+    try:
+        period = _selected_period(request) if request is not None else None
+    except Exception:
+        period = None
+    writable = not (period and period.is_closed)
+    for r in rows:
+        project = r.get('project')
+        if project is None:
+            r['manual_count'] = 0
+            r['void_count'] = 0
+            r['project_source'] = ''
+            r['has_row_menu'] = False
+            continue
+        r['manual_count'] = counts.get(project.pk, 0)
+        r['void_count'] = voided.get(project.pk, 0)
+        r['project_source'] = project.source_type
+        r['has_row_menu'] = _row_menu_visible(r, caps, writable)
+        # Master coordinates the row menus hand to the dialogs, so "Tambah
+        # Pengakuan" / "Koreksi / Adjustment" open on THIS object's PP,
+        # account and organization instead of an empty cascade (§8, §27).
+        # `jenis_code` is the category code the endpoints expect (Data Revenue
+        # keeps a display label in `jenis`); `akun` may be a composite
+        # 'CODE Nama' label, so only its first token is handed over.
+        r['manual_type'] = r.get('jenis_code') or r.get('jenis') or ''
+        r['manual_pp'] = project.pp.pp_code if project.pp else ''
+        r['manual_org_id'] = (project.organization_unit_id
+                              or (project.pp.organization_unit_id if project.pp else '')
+                              or '')
+        r['manual_account'] = (r.get('akun') or '').split(' ')[0]
+        r['manual_project_id'] = project.pk
+    return rows
+
+
+def _row_menu_visible(row, caps, writable):
+    """Whether this row's ⋮ menu would hold at least one item.
+
+    A menu button that opens an empty panel is never rendered (§10). An
+    imported row always offers "Lihat Detail"; a manual row only has items when
+    the user may edit/add/delete (period permitting) or read the audit trail.
+    """
+    if row.get('project') is None:
+        return False
+    if not row.get('manual_count'):
+        return True
+    return bool(caps.get('view_audit')
+                or (writable and (caps.get('edit') or caps.get('create')
+                                  or caps.get('void'))))
 
 
 def _progress_color(pct):
@@ -557,17 +766,30 @@ def project_recognitions(request, project_id):
         'account_code': h['account_code'],
         'account_name': h['account_name'],
         'amount': 'Rp' + f'{int(h["amount"]):,}'.replace(',', '.'),
+        # Provenance is visible on manual lines; an imported GL row keeps its
+        # own voucher in the No Bukti column and gets no badge (§37, §44).
+        'is_manual': h.get('source_type') == 'MANUAL',
+        'is_adjustment': h.get('source_type') == 'ADJUSTMENT',
+        'source_type': h.get('source_type', 'IMPORTED'),
+        # Manual lines carry the entry they came from, which is what the
+        # per-transaction action menu acts on. An imported GL line has no entry
+        # but does have the ledger it was read from, which is the source a
+        # correction started from this row must reference (§9, §12).
+        'entry_id': h.get('entry_id'),
+        'ledger_id': h.get('ledger_id'),
     } for h in history]
     month_full = month_name(ctx.month)
     month_short = month_name(ctx.month)[:3] if ctx.month else ''
     detail_mode = 'PERIOD_ONLY' if is_period_only else 'HISTORICAL'
     is_tf_program = project.project_number.startswith('TF-')
     acc_name = summary.get('acc_name', '')
+    # Summary figures render in FULL rupiah (never compact 'M'/'T') so the
+    # recognition history panel shows exact amounts, e.g. Rp2.969.515.120.
     ctx_disp = {
-        'month': format_rupiah_compact(summary['recognized_month']),
-        'ytd': format_rupiah_compact(summary['ytd']),
-        'lifetime': format_rupiah_compact(summary['lifetime']),
-        'remaining': format_rupiah_compact(summary['remaining']),
+        'month': _rupiah(summary['recognized_month']),
+        'ytd': _rupiah(summary['ytd']),
+        'lifetime': _rupiah(summary['lifetime']),
+        'remaining': _rupiah(summary['remaining']),
         'pct': format_percent(summary['recognition_pct']),
         'detail_mode': detail_mode,
         'is_tf_program': is_tf_program,
@@ -582,6 +804,13 @@ def project_recognitions(request, project_id):
         'project': project, 'history': history_disp, 'history_disp': history_disp,
         'summary': summary, 'summary_disp': ctx_disp, 'ctx': ctx,
         'month_full': month_full, 'month_short': month_short, 'dash': '-',
+        # The per-transaction action menu needs the same permission set the
+        # page used, and the reported period's lock state.
+        'perms': capabilities(request.user),
+        'manual_period_closed': bool(ctx.period and ctx.period.is_closed),
+        # Same coordinates a table row exposes, so a correction started from a
+        # transaction line prefills its project without a second lookup (§9).
+        'coords': project_source_coordinates(project, account_code=acc_filter),
     }
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         from django.template.loader import render_to_string
@@ -590,6 +819,175 @@ def project_recognitions(request, project_id):
         **_base_ctx(request, ctx, 'revenue_ntf_project'),
         **frag_ctx,
     })
+
+
+# --------------------------------------------------------------------------
+# DATA REVENUE — unified master/detail table of EVERY revenue category
+# (TF + NTF Research + NTF Project in one page).
+# Every row comes from the SAME per-(project x PP x account) builders used by
+# the per-category pages, so column values are IDENTICAL to Data TF / NTF
+# Research / NTF Project (shared _finalize_tf_rows display logic).
+# --------------------------------------------------------------------------
+_DATA_JENIS = {'TF': 'TF', 'NTF_RESEARCH': 'NTF Research', 'NTF_PROJECT': 'NTF Project'}
+
+
+def data_revenue_list(request):
+    ctx = _ctx_from_request(request)
+
+    search = (request.GET.get('q') or '').strip()
+    sort = request.GET.get('sort') if request.GET.get('sort') in _DATA_SORTABLE else ''
+    # default: Total Pendapatan DESC (biggest revenue first)
+    direction = 'desc' if (request.GET.get('dir') or 'desc').lower() != 'asc' else 'asc'
+    if not sort:
+        sort = 'total_pendapatan'
+        direction = 'desc'
+    try:
+        per_page = int(request.GET.get('per_page', '25'))
+        if per_page not in _DATA_PER_PAGE:
+            per_page = 25
+    except (TypeError, ValueError):
+        per_page = 25
+
+    # Multi-period: one row set per selected (year, month); rows carry the
+    # period they belong to so Tahun/Bulan columns reflect each selection.
+    rtype_values = ctx.type_values or ['all']
+    all_rows = []
+    for year, month in ctx.periods:
+        pctx = ctx.for_period(year, month)
+        if 'all' in rtype_values or 'TF' in rtype_values:
+            all_rows += rps.tf_program_rows(pctx, search=search)
+        if 'all' in rtype_values or 'NTF_RESEARCH' in rtype_values:
+            all_rows += rps.research_object_rows(pctx, search=search)
+        if 'all' in rtype_values or 'NTF_PROJECT' in rtype_values:
+            # Contract projects (P-) and service objects (SRV-) are disjoint
+            # project-number ranges, so both builders are concatenated below.
+            # research_object_rows() is NEVER added for this category: the
+            # RS- prefix is exclusive to NTF Research, keeping every row in
+            # this unified table backed by exactly ONE page builder (§16).
+            all_rows += rps.project_rows(pctx, search=search)
+            all_rows += rps.service_object_rows(pctx, search=search)
+
+# normalize every row to the shared display shape (identical to detail pages)
+    for r in all_rows:
+        r['bulan'] = month_name(r['bulan'])
+        if 'kode_akun' in r:
+            r['akun'] = r.get('kode_akun') or ''
+            r['akun_nama'] = r.get('nama_akun') or ''
+            r['nama'] = r.get('nama_akun') or r.get('nama') or '-'
+            r['total_pendapatan'] = r.get('realisasi_bulan', Decimal('0'))
+            r['pendapatan_berjalan'] = r.get('realisasi_ytd', Decimal('0'))
+            r['month'] = r.get('month') or ctx.month
+        r['nama'] = r['nama'] or '-'
+        r['nama_proyek'] = (r.get('nama_proyek') or '').strip() or '-'
+        # Pendaftaran PERIOD_ONLY: month batch => all three columns = month
+        if r.get('detail_mode') == 'PERIOD_ONLY':
+            _m = r.get('realisasi_bulan') or Decimal('0')
+            r['nilai'] = _m
+            r['total_pendapatan'] = _m
+            r['pendapatan_berjalan'] = _m
+        # Jenis Revenue column (from Revenue Category mapping via project prefix)
+        r['jenis'] = _DATA_JENIS.get(r.get('jenis') or '', r.get('jenis') or '-')
+        if r.get('mode') == 'tf_program':
+            r['akun_disp'] = r['akun']
+            r['kode_akun'] = (r['akun'] or '').split(' ')[0] if r['akun'] else ''
+        else:
+            r['akun_disp'] = (r['akun'] + ' ' + (r.get('akun_nama') or '')).strip() if r['akun'] != '' else ''
+        for _k in ('unit', 'no_proyek', 'pp_code', 'organization'):
+            r[_k] = (r.get(_k) or '').strip() or '-'
+
+    # search across organization/pp/name/number/account
+    if search:
+        sq = search.lower()
+        all_rows = [r for r in all_rows
+                    if sq in (r.get('organization') or '').lower()
+                    or sq in (r.get('pp_code') or '').lower()
+                    or sq in (r.get('nama_proyek') or '').lower()
+                    or sq in (r.get('no_proyek') or '').lower()
+                    or sq in (r.get('akun') or '').lower()
+                    or sq in (r.get('nama') or '').lower()]
+
+    # shared sort (same key map as TF / NTF Research / NTF Project lists)
+    _key = _row_sort_key(sort)
+    if _key is not None:
+        all_rows.sort(key=_key, reverse=(direction == 'desc'))
+
+    total = len(all_rows)
+    try:
+        page = max(1, int(request.GET.get('page', '1')))
+    except (TypeError, ValueError):
+        page = 1
+    pages = max(1, -(-total // per_page))
+    page = min(page, pages)
+    start = (page - 1) * per_page
+    rows = _attach_manual_flags(_finalize_tf_rows(all_rows[start:start + per_page]), request)
+
+    # Grand totals (distinct Nilai per project; Total/Diakui = sum rows)
+    _seen = set()
+    g_nilai = Decimal('0')
+    for r in all_rows:
+        pk = r.get('project') and getattr(r['project'], 'pk', None)
+        if pk is not None:
+            if pk in _seen:
+                continue
+            _seen.add(pk)
+        g_nilai += r.get('nilai') or Decimal('0')
+    g_total = sum(r.get('total_pendapatan') or Decimal('0') for r in all_rows)
+    g_berjalan = sum(r.get('pendapatan_berjalan') or Decimal('0') for r in all_rows)
+    grand = {
+        'nilai_disp': _rupiah(g_nilai) if g_nilai > 0 else '—',
+        'total_disp': _rupiah(g_total),
+        'berjalan_disp': _rupiah(g_berjalan),
+    }
+    # mini summary counts (compact, non-KPI): per category record counts
+    from collections import Counter
+    _cnt = Counter(r.get('jenis') for r in all_rows)
+    mini = {'total': total,
+            'TF': _cnt.get('TF', 0),
+            'NTF Research': _cnt.get('NTF Research', 0),
+            'NTF Project': _cnt.get('NTF Project', 0)}
+
+    def query_base():
+        return _filter_query(ctx, search, per_page, 25)
+
+    def sort_url(col):
+        q = query_base()
+        q['sort'] = col
+        q['dir'] = 'desc' if (sort == col and direction == 'asc') else 'asc'
+        return request.path + '?' + _qs(q)
+
+    def page_url(pg):
+        q = query_base()
+        q['page'] = pg
+        return request.path + '?' + _qs(q)
+
+    return render(request, 'finance/revenue/data_revenue.html', {
+        **_base_ctx(request, ctx, 'revenue_data'),
+        **manual_page_context(request, 'data'),
+        'ctx': ctx,
+        'rows': rows,
+        'grand': grand,
+        'mini': mini,
+        'total': total,
+        'page': page,
+        'pages': pages,
+        'per_page': per_page,
+        'per_page_options': _DATA_PER_PAGE,
+        'q': search,
+        'sort': sort,
+        'dir': direction,
+        'sortUrl': sort_url,
+        'pageUrl': page_url,
+        'first_display': min(start + 1, total) if total else 0,
+        'last_display': min(start + per_page, total),
+        'prev_page': max(1, page - 1),
+        'next_page': min(pages, page + 1),
+        'arrow_map': {c: ('▲' if sort == c and direction == 'asc' else '▼' if sort == c else '') for c in _DATA_SORTABLE},
+        'page_name': 'Revenue',
+        'is_data_revenue': True,
+        'month_label': month_name(ctx.month),
+        'page_list': _page_list(page, pages),
+    })
+
 
 
 # --------------------------------------------------------------------------

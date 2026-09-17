@@ -1,0 +1,295 @@
+/* ==================================================================
+   Manual revenue data management (Input Manual / Edit / Hapus / Restore /
+   Riwayat / Adjustment) — shared by Data Revenue, Data TF, Data NTF Research
+   and Data NTF Project.
+
+   Additive only: it reuses the existing palette (--primary, --danger,
+   --border, --light-gray, Inter/Cousine) and never restyles the tables.
+   ================================================================== */
+
+/* ---------- Action area (above the table, right-aligned) ---------- */
+.rm-actionbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: -4px 0 14px;
+    flex-wrap: wrap;
+}
+.rm-actionbar-left { display: flex; align-items: center; gap: 10px; }
+.rm-actionbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+.rm-period-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; padding: 5px 10px;
+    border-radius: 999px; border: 1px solid var(--border,#E2E8F0);
+    background: #F8FAFC; color: #475569; white-space: nowrap;
+}
+.rm-period-open { color: #047857; background: rgba(16,185,129,.10); border-color: rgba(16,185,129,.25); }
+.rm-period-locked { color: #B45309; background: rgba(250,204,21,.14); border-color: rgba(250,204,21,.35); }
+.rm-period-locked i, .rm-period-open i { font-size: 11px; }
+
+/* ---------- Buttons ---------- */
+.rm-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    height: 34px; padding: 0 14px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    border: 1px solid transparent; background: #fff; color: #0F172A;
+    font-family: inherit; white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s, opacity .15s;
+}
+.rm-btn i { font-size: 13px; }
+.rm-btn-primary { background: var(--primary,#C8102E); border-color: var(--primary,#C8102E); color: #fff; }
+.rm-btn-primary:hover:not(:disabled) { background: var(--primary-dark,#8B0D24); border-color: var(--primary-dark,#8B0D24); }
+.rm-btn-outline { border-color: var(--border,#E2E8F0); color: #334155; }
+.rm-btn-outline:hover:not(:disabled) { border-color: #94A3B8; background: #F8FAFC; }
+.rm-btn-ghost { border-color: transparent; color: #475569; }
+.rm-btn-ghost:hover:not(:disabled) { background: #F1F5F9; }
+.rm-btn-danger { background: #DC2626; border-color: #DC2626; color: #fff; }
+.rm-btn-danger:hover:not(:disabled) { background: #B91C1C; border-color: #B91C1C; }
+.rm-btn:disabled { opacity: .5; cursor: not-allowed; }
+.rm-btn-mini { height: 28px; padding: 0 11px; font-size: 12px; border-radius: 7px; }
+
+/* ---------- Modals ---------- */
+.rm-modal { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+.rm-modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); }
+.rm-modal-dialog {
+    position: relative; background: #fff; border-radius: 14px; width: 100%;
+    max-width: 640px; margin: auto 0;
+    box-shadow: 0 24px 48px rgba(15,23,42,.18);
+    display: flex; flex-direction: column; max-height: calc(100vh - 80px);
+}
+.rm-modal-lg { max-width: 820px; }
+.rm-modal-xl { max-width: 1120px; }
+.rm-modal-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+    padding: 18px 20px; border-bottom: 1px solid var(--border,#E2E8F0);
+}
+.rm-modal-title { font-size: 16px; font-weight: 700; color: #0F172A; margin: 0; }
+.rm-modal-sub { font-size: 12.5px; color: #64748B; margin: 4px 0 0; max-width: 620px; line-height: 1.45; }
+.rm-modal-x { border: 0; background: transparent; color: #94A3B8; cursor: pointer; font-size: 15px; padding: 4px 6px; border-radius: 6px; }
+.rm-modal-x:hover { background: #F1F5F9; color: #334155; }
+.rm-modal-body { padding: 16px 20px 20px; overflow: auto; }
+
+/* ---------- Form ---------- */
+.rm-form { padding: 16px 20px 18px; overflow: auto; }
+.rm-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 14px; }
+.rm-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rm-field-wide { grid-column: 1 / -1; }
+.rm-label { font-size: 12px; font-weight: 600; color: #334155; }
+.rm-label b { color: var(--danger,#DC2626); }
+.rm-input {
+    width: 100%; min-width: 0; height: 36px; padding: 0 10px;
+    border: 1px solid var(--border,#E2E8F0); border-radius: 8px;
+    font-size: 13px; color: #0F172A; background: #fff; font-family: inherit;
+}
+.rm-input:focus { outline: none; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+.rm-input:disabled { background: #F8FAFC; color: #94A3B8; cursor: not-allowed; }
+.rm-input.is-invalid { border-color: var(--danger,#DC2626); background: #FEF2F2; }
+.rm-textarea { height: auto; padding: 8px 10px; resize: vertical; line-height: 1.45; }
+.rm-money { font-family: 'Cousine', ui-monospace, monospace; letter-spacing: -.2px; }
+.rm-hint { font-size: 11px; color: #94A3B8; line-height: 1.4; }
+.rm-hint.rm-hint-error { color: var(--danger,#DC2626); font-weight: 600; }
+.rm-fieldset { border: 1px solid var(--border,#E2E8F0); border-radius: 10px; padding: 12px 14px 14px; margin: 14px 0 0; }
+.rm-fieldset legend { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748B; padding: 0 6px; }
+.rm-form-error {
+    background: #FEF2F2; border: 1px solid #FECACA; color: #B91C1C;
+    border-radius: 8px; padding: 9px 12px; font-size: 12.5px; font-weight: 600; margin-bottom: 12px;
+}
+.rm-form-error.rm-form-ok { background: #ECFDF5; border-color: #A7F3D0; color: #047857; }
+
+/* Mode switch (new object vs recognition on an existing project) */
+.rm-segment { display: inline-flex; background: #F1F5F9; border-radius: 9px; padding: 3px; gap: 3px; margin-bottom: 14px; }
+.rm-segment-btn {
+    border: 0; background: transparent; cursor: pointer; font-family: inherit;
+    font-size: 12.5px; font-weight: 600; color: #64748B;
+    padding: 7px 13px; border-radius: 7px; white-space: nowrap;
+}
+.rm-segment-btn.is-active { background: #fff; color: #0F172A; box-shadow: 0 1px 2px rgba(15,23,42,.09); }
+
+.rm-modal-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border,#E2E8F0);
+    flex-wrap: wrap;
+}
+.rm-foot-note { font-size: 11.5px; color: #64748B; display: inline-flex; align-items: center; gap: 6px; }
+.rm-danger-note { color: #B45309; }
+.rm-foot-btns { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.rm-spinner {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.45); border-top-color: #fff;
+    animation: rm-spin .6s linear infinite; display: inline-block;
+}
+@keyframes rm-spin { to { transform: rotate(360deg); } }
+
+/* Recap block inside confirm dialogs */
+.rm-recap { background: #F8FAFC; border: 1px solid var(--border,#E2E8F0); border-radius: 9px; padding: 10px 12px; margin-bottom: 12px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px 14px; }
+.rm-recap-item { font-size: 12px; color: #334155; display: flex; gap: 6px; min-width: 0; }
+.rm-recap-item span:first-child { color: #64748B; }
+.rm-recap-item b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Row provenance badge + row menu ---------- */
+.rm-badge {
+    display: inline-block; font-size: 9.5px; font-weight: 700; line-height: 1;
+    padding: 3px 6px; border-radius: 5px; letter-spacing: .03em;
+    text-transform: uppercase; vertical-align: middle; white-space: nowrap;
+}
+.rm-badge-manual { background: rgba(37,99,235,.12); color: #1D4ED8; }
+.rm-badge-adj { background: rgba(180,83,9,.14); color: #B45309; }
+.rm-badge-imported { background: #F1F5F9; color: #64748B; }
+.rm-badge-type { background: #F1F5F9; color: #334155; font-size: 10px; }
+.rm-prov { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+
+/* Action column of the main grid: 40px, icon centred, never grows (§17). */
+.rm-rowmenu { position: relative; display: flex; justify-content: center; }
+/* While open the panel is moved to <body> (see revenue-manual.js) so the
+   table's scroll port cannot clip it; it is then positioned fixed against the
+   button. z-index sits above the sticky topbar (50) but below the modals. */
+.rm-rowmenu-panel.rm-rowmenu-portal {
+    position: fixed; top: 0; left: 0; right: auto; z-index: 1100;
+}
+.rm-rowmenu-inline { justify-content: flex-end; }
+.rm-rowmenu-inline .rm-rowmenu-panel:not(.rm-rowmenu-portal) { top: 26px; }
+/* Per-transaction action header/cell of the expanded recognition table. */
+.rev-rec-act { width: 44px; text-align: right; padding-right: 10px; }
+.rev-rec-act .rm-rowmenu-btn { width: 24px; height: 24px; font-size: 13px; }
+.rm-rowmenu-btn {
+    border: 0; background: transparent; cursor: pointer; color: #94A3B8;
+    width: 26px; height: 26px; border-radius: 6px; font-size: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.rm-rowmenu-btn:hover { background: #F1F5F9; color: #334155; }
+.rm-rowmenu-panel {
+    position: absolute; top: 30px; right: 0; z-index: 60;
+    background: #fff; border: 1px solid var(--border,#E2E8F0); border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(15,23,42,.14); padding: 5px; min-width: 208px;
+}
+.rm-rowmenu-item {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    border: 0; background: transparent; cursor: pointer; font-family: inherit;
+    font-size: 12.5px; font-weight: 500; color: #334155;
+    padding: 8px 10px; border-radius: 7px; text-align: left;
+}
+.rm-rowmenu-item:hover { background: #F1F5F9; }
+.rm-rowmenu-item i { font-size: 13px; color: #64748B; width: 15px; }
+.rm-rowmenu-danger { color: var(--danger,#DC2626); }
+.rm-rowmenu-danger i { color: var(--danger,#DC2626); }
+
+/* ---------- Source transaction picker (Adjustment) ----------
+   A scrollable list with its own search box, so a project with a long
+   transaction history stays usable: the query is narrowed on the SERVER (see
+   revenue-manual.js / option_ledger), never by rendering every row. */
+.rm-src {
+    border: 1px solid var(--border,#E2E8F0); border-radius: 10px;
+    background: #fff; overflow: hidden;
+}
+.rm-src-search {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 11px; border-bottom: 1px solid var(--border,#E2E8F0); background: #F8FAFC;
+}
+.rm-src-search i { color: #94A3B8; font-size: 13px; }
+.rm-src-input {
+    flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
+    font-size: 13px; font-family: inherit; color: #0F172A; height: 24px;
+}
+.rm-src-selected {
+    padding: 8px 11px; font-size: 12.5px; font-weight: 600; color: #1D4ED8;
+    background: rgba(37,99,235,.07); border-bottom: 1px solid var(--border,#E2E8F0);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rm-src-list { max-height: 260px; overflow-y: auto; }
+.rm-src-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 10px;
+    width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+    padding: 9px 11px; border: 0; border-bottom: 1px solid #F1F5F9; background: #fff;
+}
+.rm-src-row:last-child { border-bottom: 0; }
+.rm-src-row:hover { background: #F8FAFC; }
+.rm-src-row.is-selected { background: rgba(37,99,235,.08); }
+.rm-src-date { font-size: 11px; color: #64748B; grid-column: 1 / 2; }
+.rm-src-id {
+    grid-column: 1 / 2; font-size: 12.5px; font-weight: 700; color: #0F172A;
+    font-family: 'Cousine', ui-monospace, monospace;
+}
+.rm-src-desc {
+    grid-column: 1 / 2; font-size: 12px; color: #475569;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rm-src-amount {
+    grid-column: 2 / 3; grid-row: 1 / 4; align-self: center;
+    font-size: 12.5px; font-weight: 700; color: #0F172A; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.rm-src .rm-empty { padding: 18px; }
+
+/* ---------- Fragment tables (deleted data / history) ---------- */
+.rm-table-wrap { overflow-x: auto; }
+.rm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.rm-table thead th {
+    background: #F8FAFC; color: #334155; font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em; text-align: left;
+    padding: 9px 12px; border-bottom: 1px solid var(--border,#E2E8F0); white-space: nowrap;
+}
+.rm-table tbody td { padding: 10px 12px; border-bottom: 1px solid #F1F5F9; vertical-align: middle; color: #334155; }
+.rm-table tbody tr:hover { background: #FCFCFD; }
+.rm-table .num { text-align: right; }
+.rm-table .nowrap { white-space: nowrap; }
+.rm-table .mono { font-family: 'Cousine', ui-monospace, monospace; font-size: 11.5px; font-weight: 700; color: #475569; }
+.rm-cell-name { max-width: 260px; }
+.rm-cell-reason { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rm-sub { display: block; font-size: 10.5px; color: #94A3B8; }
+.rm-muted, .rm-locked { color: #94A3B8; font-size: 11.5px; }
+.rm-locked { display: inline-flex; align-items: center; gap: 4px; color: #B45309; font-weight: 600; }
+.rm-empty { padding: 26px; text-align: center; color: #94A3B8; font-size: 12.5px; }
+
+/* ---------- Audit timeline ---------- */
+.rm-timeline { display: flex; flex-direction: column; gap: 2px; }
+.rm-tl-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #F1F5F9; }
+.rm-tl-item:last-child { border-bottom: 0; }
+.rm-tl-marker { width: 8px; height: 8px; border-radius: 50%; background: #94A3B8; margin-top: 6px; flex: 0 0 8px; }
+.rm-tl-create { background: #10B981; }
+.rm-tl-update { background: #2563EB; }
+.rm-tl-delete { background: var(--danger,#DC2626); }
+.rm-tl-restore { background: #B45309; }
+.rm-tl-adjustment { background: #7C3AED; }
+.rm-tl-body { flex: 1; min-width: 0; }
+.rm-tl-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.rm-tl-action { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 3px 7px; border-radius: 5px; background: #F1F5F9; color: #334155; }
+.rm-tl-badge-create { background: rgba(16,185,129,.14); color: #047857; }
+.rm-tl-badge-update { background: rgba(37,99,235,.12); color: #1D4ED8; }
+.rm-tl-badge-delete { background: rgba(220,38,38,.12); color: #B91C1C; }
+.rm-tl-badge-restore { background: rgba(180,83,9,.14); color: #B45309; }
+.rm-tl-badge-adjustment { background: rgba(124,58,237,.12); color: #6D28D9; }
+.rm-tl-date { font-size: 12px; font-weight: 600; color: #0F172A; }
+.rm-tl-user { font-size: 11.5px; color: #64748B; }
+.rm-tl-changes { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.rm-tl-change { display: flex; align-items: center; gap: 7px; font-size: 12px; flex-wrap: wrap; }
+.rm-tl-label { color: #64748B; min-width: 132px; }
+.rm-tl-before { color: #B91C1C; text-decoration: line-through; text-decoration-color: rgba(185,28,28,.4); }
+.rm-tl-after { color: #047857; font-weight: 600; }
+.rm-tl-change i { font-size: 11px; color: #94A3B8; }
+.rm-tl-reason { margin-top: 5px; font-size: 12px; color: #475569; display: flex; align-items: center; gap: 6px; }
+
+/* Read-only notice for imported source rows */
+.rm-readonly-note { font-size: 12px; color: #64748B; background: #F8FAFC; border: 1px solid var(--border,#E2E8F0); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; }
+
+/* ---------- Toasts (uses the existing design language) ---------- */
+.rm-toasts { position: fixed; right: 20px; bottom: 20px; z-index: 1300; display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+.rm-toast {
+    display: flex; align-items: flex-start; gap: 9px;
+    background: #0F172A; color: #fff; border-radius: 10px;
+    padding: 11px 14px; font-size: 12.5px; font-weight: 500; line-height: 1.45;
+    box-shadow: 0 12px 28px rgba(15,23,42,.25); animation: rm-toast-in .18s ease;
+}
+.rm-toast i { font-size: 14px; margin-top: 1px; }
+.rm-toast-ok { background: #065F46; }
+.rm-toast-err { background: #991B1B; }
+@keyframes rm-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 768px) {
+    .rm-grid { grid-template-columns: minmax(0,1fr); }
+    .rm-actionbar-right { width: 100%; justify-content: flex-end; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .rm-toast, .rm-detail { animation: none; }
+}

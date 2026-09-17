@@ -1,0 +1,55 @@
+{% comment %}
+Deleted (VOID) manual rows (§22) — one page's relevant records only.
+"Restore" is shown only when the period is still OPEN and the user holds the
+restore permission; the server re-checks both on submit (§24).
+{% endcomment %}
+{% if rows %}
+<div class="rm-table-wrap">
+    <table class="rm-table">
+        <thead>
+            <tr>
+                <th>Tanggal Hapus</th>
+                <th>Jenis Revenue</th>
+                <th>Kode PP</th>
+                <th>Project</th>
+                <th>Akun</th>
+                <th class="num">Nominal</th>
+                <th>Dihapus Oleh</th>
+                <th>Alasan</th>
+                <th class="num">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr data-rm-deleted-row="{{ r.id }}">
+                <td class="nowrap">{{ r.deleted_at|date:"d M Y H:i"|default:'—' }}</td>
+                <td><span class="rm-badge rm-badge-type">{{ r.jenis }}</span></td>
+                <td class="mono">{{ r.pp }}</td>
+                <td class="rm-cell-name" title="{{ r.project }}">
+                    {{ r.project|default:'—' }}
+                    {% if r.project_number %}<span class="rm-sub">{{ r.project_number }}</span>{% endif %}
+                </td>
+                <td class="mono">{{ r.account }}</td>
+                <td class="num tabular-nums">{{ r.amount_disp }}</td>
+                <td>{{ r.deleted_by }}</td>
+                <td class="rm-cell-reason" title="{{ r.reason }}">{{ r.reason }}</td>
+                <td class="num">
+                    {% if r.can_restore %}
+                    <button type="button" class="rm-btn rm-btn-mini rm-btn-primary"
+                            data-rm-restore="{{ r.id }}">Restore</button>
+                    {% elif not r.period_open %}
+                    <span class="rm-locked" title="Data berada pada periode yang sudah ditutup dan tidak dapat dipulihkan secara langsung.">
+                        <i class="bi bi-lock-fill"></i> CLOSED
+                    </span>
+                    {% else %}
+                    <span class="rm-muted">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="rm-empty">Belum ada data manual yang dihapus pada halaman ini.</div>
+{% endif %}

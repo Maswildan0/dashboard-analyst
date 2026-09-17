@@ -10,8 +10,14 @@ export default defineConfig({
     publicDir: false,
     build: {
         outDir: 'public/build',
-        emptyOutDir: true,
-        manifest: true,
+        // The dashboard resolves entry hashes from /build/manifest.json (see
+        // dashboard.views._asset_url), so the manifest must be written there
+        // rather than into Vite's default .vite/ subdirectory.
+        manifest: 'manifest.json',
+        // Never wipe the output directory: public/build also holds committed
+        // static assets this config does not regenerate (the Inter webfonts
+        // referenced by _fonts_head), which emptyOutDir would delete.
+        emptyOutDir: false,
         rollupOptions: {
             input: {
                 app: 'resources/js/app.js',

@@ -1,0 +1,144 @@
+{% comment %}
+Adjustment dialog (§27, §28). Corrects an IMPORTED source (SIMKUG GL / NTF
+import) by writing a NEW ADJUSTMENT row; the original imported row is never
+touched. A signed amount is allowed so the correction can add or subtract.
+
+Example: imported Rp500.000.000 + adjustment Rp25.000.000 -> Rp525.000.000.
+{% endcomment %}
+<div class="rm-modal" data-rm-modal="adjustment" hidden>
+    <div class="rm-modal-backdrop" data-rm-close></div>
+    <div class="rm-modal-dialog rm-modal-lg" role="dialog" aria-modal="true"
+         aria-labelledby="rm-adjust-title">
+        <div class="rm-modal-head">
+            <div>
+                <h3 class="rm-modal-title" id="rm-adjust-title">Koreksi / Adjustment</h3>
+                <p class="rm-modal-sub">
+                    Koreksi dicatat sebagai baris baru. Data sumber import tetap utuh
+                    dan tidak diubah.
+                </p>
+            </div>
+            <button type="button" class="rm-modal-x" data-rm-close aria-label="Tutup">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <form class="rm-form" data-rm-form="adjustment" novalidate>
+            {% csrf_token %}
+            <div class="rm-form-error" data-rm-error hidden></div>
+            <div class="rm-recap" data-rm-recap></div>
+
+            <div class="rm-grid">
+                <label class="rm-field">
+                    <span class="rm-label">Periode <b>*</b></span>
+                    <select name="period" class="rm-input" data-rm-period-select required></select>
+                    <span class="rm-hint" data-rm-period-hint></span>
+                </label>
+                <label class="rm-field">
+                    <span class="rm-label">Jenis Revenue <b>*</b></span>
+                    <select name="revenue_type" class="rm-input" data-rm-type required></select>
+                    <span class="rm-hint" data-rm-type-hint></span>
+                </label>
+                <label class="rm-field">
+                    <span class="rm-label">Organization <b>*</b></span>
+                    <select name="organization" class="rm-input" data-rm-org required>
+                        <option value="">— Pilih Organization —</option>
+                    </select>
+                </label>
+                <label class="rm-field">
+                    <span class="rm-label">Kode PP <b>*</b></span>
+                    <select name="pp" class="rm-input" data-rm-pp required disabled>
+                        <option value="">— Pilih Organization dahulu —</option>
+                    </select>
+                </label>
+                <label class="rm-field rm-field-wide">
+                    <span class="rm-label">Revenue Account <b>*</b></span>
+                    <select name="revenue_account" class="rm-input" data-rm-account required disabled>
+                        <option value="">— Pilih Jenis Revenue dahulu —</option>
+                    </select>
+                </label>
+                <label class="rm-field rm-field-wide">
+                    <span class="rm-label">Project / Objek yang Dikoreksi <b>*</b></span>
+                    <select name="project" class="rm-input" data-rm-project required disabled>
+                        <option value="">— Pilih PP &amp; Akun dahulu —</option>
+                    </select>
+                    <span class="rm-hint">Koreksi selalu ditujukan pada objek yang sudah ada.</span>
+                </label>
+                <div class="rm-field rm-field-wide">
+                    <span class="rm-label">Transaksi Sumber (import)</span>
+                    {% comment %}
+                    The hidden field carries the ledger id the server validates;
+                    the picker only ever offers rows mapped to this project.
+                    {% endcomment %}
+                    <input type="hidden" name="reference_ledger" data-rm-ledger>
+                    <div class="rm-src" data-rm-ledger-picker>
+                        <div class="rm-src-search">
+                            <i class="bi bi-search"></i>
+                            <input type="text" class="rm-src-input" data-rm-ledger-search
+                                   placeholder="Cari No Bukti, dokumen, keterangan, nominal..."
+                                   autocomplete="off" aria-label="Cari transaksi sumber">
+                        </div>
+                        <div class="rm-src-selected" data-rm-ledger-label hidden></div>
+                        <div class="rm-src-list" data-rm-ledger-list role="listbox">
+                            <div class="rm-empty">Pilih project terlebih dahulu.</div>
+                        </div>
+                    </div>
+                    <span class="rm-hint" data-rm-ledger-hint></span>
+                </div>
+            </div>
+
+            <fieldset class="rm-fieldset">
+                <legend>Nilai Koreksi</legend>
+                <div class="rm-grid">
+                    <label class="rm-field">
+                        <span class="rm-label">Tanggal Koreksi <b>*</b></span>
+                        <input type="date" name="transaction_date" class="rm-input" required>
+                    </label>
+                    <label class="rm-field">
+                        <span class="rm-label">Nominal Koreksi (+/-) <b>*</b></span>
+                        <input type="text" name="amount" class="rm-input rm-money"
+                               inputmode="decimal" placeholder="cth. 25000000 atau -25000000" required>
+                        <span class="rm-hint">Positif menambah, negatif mengurangi nilai aktual.</span>
+                    </label>
+                    <label class="rm-field">
+                        <span class="rm-label">No Bukti</span>
+                        <input type="text" name="evidence_number" class="rm-input" maxlength="60">
+                    </label>
+                    <label class="rm-field">
+                        <span class="rm-label">No Dokumen</span>
+                        <input type="text" name="document_number" class="rm-input" maxlength="60">
+                    </label>
+                    <label class="rm-field rm-field-wide">
+                        <span class="rm-label">Alasan Koreksi <b>*</b></span>
+                        <select name="reason" class="rm-input" required>
+                            <option value="">— Pilih alasan —</option>
+                            {% for reason in adjustment_reasons %}
+                            <option value="{{ reason }}">{{ reason }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="rm-field rm-field-wide" data-rm-other-wrap hidden>
+                        <span class="rm-label">Alasan Lainnya <b>*</b></span>
+                        <textarea name="reason_other" class="rm-input rm-textarea" rows="2"
+                                  placeholder="Tuliskan alasan koreksi"></textarea>
+                    </label>
+                    <label class="rm-field rm-field-wide">
+                        <span class="rm-label">Keterangan</span>
+                        <textarea name="description" class="rm-input rm-textarea" rows="2"></textarea>
+                    </label>
+                </div>
+            </fieldset>
+
+            <div class="rm-modal-foot">
+                <span class="rm-foot-note">
+                    <i class="bi bi-info-circle"></i> Data import tidak pernah ditimpa.
+                </span>
+                <div class="rm-foot-btns">
+                    <button type="button" class="rm-btn rm-btn-ghost" data-rm-close>Batal</button>
+                    <button type="submit" class="rm-btn rm-btn-primary" data-rm-submit>
+                        <span class="rm-spinner" hidden></span><span data-rm-submit-text>Simpan Koreksi</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

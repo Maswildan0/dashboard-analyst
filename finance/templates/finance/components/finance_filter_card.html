@@ -43,8 +43,8 @@
         <div class="df-field">
             <label class="df-label" for="f-unit">Organisasi</label>
             <select id="f-unit" name="unit" class="df-select df-native-select">
-                <option value="all" {% if filters.unit == 'all' %}selected{% endif %}>All Unit</option>
-                {% for u in units %}<option value="{{ u.id }}" {% if filters.unit == u.id|stringformat:'s' %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+                <option value="all" data-campus="all" {% if filters.unit == 'all' %}selected{% endif %}>All Unit</option>
+                {% for u in units %}<option value="{{ u.id }}" data-campus="{{ u.campus.code }}" {% if filters.campus and u.campus_id != filters.campus.id %}hidden{% endif %} {% if filters.unit == u.id|stringformat:'s' %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
             </select>
         </div>
 

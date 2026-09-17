@@ -51,6 +51,16 @@ def index(value, i):
     except (TypeError, IndexError, KeyError):
         return ''
 
+
+@register.filter
+def dict_get(value, key):
+    """Look up a mapping with a variable key (templates cannot index by
+    variable), e.g. {{ revenue_links|dict_get:kpi.link }}."""
+    try:
+        return value.get(key)
+    except (AttributeError, TypeError):
+        return None
+
 @register.simple_tag(takes_context=True)
 def sort_link(context, col):
     """Render a sort-column URL from the view-provided sortUrl callable."""
