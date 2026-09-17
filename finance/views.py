@@ -40,7 +40,10 @@ def _default_filters(request):
     """Resolve period/campus/organization from GET against the master data."""
     latest = sel.get_latest_period()
     if latest is None:
-        return _empty_filters(request, None, None)
+        # No period on file at all: the page renders its empty state, which is
+        # the same filter shape with no period attached. There is nothing to
+        # default the year/month from, so both stay None.
+        return _resolve_scope(request, None, None, None)
 
     # An explicitly requested year/month is honoured literally: when no
     # FinancialPeriod matches, the page reports "no data" instead of silently

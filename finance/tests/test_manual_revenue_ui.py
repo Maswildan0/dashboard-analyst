@@ -20,6 +20,7 @@ on a template's source text.
 """
 import re
 from html.parser import HTMLParser
+from urllib.parse import quote
 
 from django.contrib.auth.models import Permission, User
 from django.test import TestCase, override_settings
@@ -86,6 +87,8 @@ class _GridChildCounter(HTMLParser):
 class ManualRevenueUiRegressionTest(ManualRevenueBase):
     def setUp(self):
         super().setUp()
+        # The application is private now, so the regression assertions below
+        # run as a signed-in operator rather than an anonymous visitor.
         self.client.force_login(self.editor)
         # A populated table is what the regression is about: with no rows the
         # pages render their empty state and no grid exists to check.
@@ -239,13 +242,17 @@ class ManualRevenueUiRegressionTest(ManualRevenueBase):
         self.assertIn('data-can-create="1"', html)
         self.assertIn('data-can-edit="1"', html)
 
-    def test_bootstrap_never_applies_to_an_anonymous_visitor(self):
-        """Authentication is never part of the bootstrap: an anonymous request
-        must not see a single gated control."""
+    def test_anonymous_visitor_never_reaches_the_page_at_all(self):
+        """Authentication is never part of the bootstrap, and since the whole
+        application is private an anonymous request does not even receive the
+        page: it is redirected to the login form (see finance.middleware)."""
         self._unassign_every_manual_permission()
-        html = self.client_class().get(PAGES['data']).content.decode()
-        self.assertNotIn('data-rm-open="create"', html)
-        self.assertIn('data-can-create="0"', html)
+        resp = self.client_class().get(PAGES['data'])
+        self.assertEqual(resp.status_code, 302)
+        # The fixture URL carries period filters; the path is preserved as-is
+        # and only the query string is escaped, so a deep link survives login.
+        self.assertEqual(resp.headers['Location'],
+                         '/login/?next=' + quote(PAGES['data'], safe='/'))
 
     def test_bootstrap_switches_itself_off_once_permissions_are_assigned(self):
         """Assigning the operator permissions ends the bootstrap for everyone,

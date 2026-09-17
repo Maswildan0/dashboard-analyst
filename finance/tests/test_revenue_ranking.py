@@ -17,6 +17,7 @@ test are the production ones.
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
@@ -48,6 +49,8 @@ class RankingBase(TestCase):
     """
 
     def setUp(self):
+        # Private application: the page test below needs a signed-in analyst.
+        self.client.force_login(User.objects.create_user('analyst', password='x'))
         self.period = FinancialPeriod.objects.create(
             year=2026, month=8, period_start=date(2026, 8, 1), period_end=date(2026, 8, 31),
             is_closed=False)

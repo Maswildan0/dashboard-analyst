@@ -450,6 +450,9 @@ class TestAmountValidation(ManualRevenueBase):
 class TestPermissions(ManualRevenueBase):
     def test_write_endpoints_need_auth_and_permission(self):
         entry = self.create_manual()
+        # The fixture row is the only entry that may ever exist here: every
+        # refused write below must leave the table exactly as it was.
+        before = ManualRevenueEntry.objects.count()
         payload = {
             'period': '2026-08', 'revenue_type': 'NTF_PROJECT',
             'organization': str(self.org.pk), 'pp': self.pp.pp_code,
@@ -457,8 +460,22 @@ class TestPermissions(ManualRevenueBase):
             'transaction_date': '2026-08-20', 'amount': '1000',
             'project_name': 'X',
         }
+        # Anonymous: the private-application gate intercepts before the view,
+        # so the write is refused by redirect rather than by the permission
+        # check (finance.middleware). Nothing is committed either way.
         anonymous = self.client.post(self.url('create'), payload)
-        self.assertEqual(anonymous.status_code, 403)
+        self.assertEqual(anonymous.status_code, 302)
+        self.assertEqual(anonymous.headers['Location'],
+                         f'/login/?next={self.url("create")}')
+        self.assertEqual(ManualRevenueEntry.objects.count(), before)
+
+        # An AJAX write is told 401 in JSON so the UI cannot mistake a login
+        # page for a successful save.
+        ajax = self.client.post(self.url('create'), payload,
+                                HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(ajax.status_code, 401)
+        self.assertFalse(ajax.json()['ok'])
+        self.assertEqual(ManualRevenueEntry.objects.count(), before)
 
         self.client.force_login(self.viewer)  # view_audit only
         denied = self.client.post(self.url('create'), payload)

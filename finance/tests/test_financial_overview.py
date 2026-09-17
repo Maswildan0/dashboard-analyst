@@ -19,6 +19,7 @@ the rendered "Rp n,0 M" strings are checkable.
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
@@ -54,6 +55,9 @@ class FinancialOverviewBase(TestCase):
     """
 
     def setUp(self):
+        # The application is private (finance.middleware); page assertions
+        # below need a signed-in analyst.
+        self.client.force_login(User.objects.create_user('analyst', password='x'))
         self.bdg = Campus.objects.create(code='BDG', name='Bandung')
         self.jkt = Campus.objects.create(code='JKT', name='Jakarta')
         self.org_bdg = OrganizationUnit.objects.create(

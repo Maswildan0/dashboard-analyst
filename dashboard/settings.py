@@ -8,6 +8,7 @@ Hosts two applications:
 """
 
 import os
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -18,7 +19,16 @@ import dj_database_url  # noqa: E402 (parses DATABASE_URL -> Django settings)
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g(r9e+!%wd$#q+2wn)@nzaq0e4bf#=mk=0r9kub9%m5x6u$&wc')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
+#
+# DJANGO_DEBUG decides explicitly when it is set. When it is NOT set the
+# default is safe-by-deployment: a management command (`runserver`, `test`,
+# `migrate`) is a local invocation and gets DEBUG on, while a deployed
+# server (Vercel imports `dashboard.wsgi`) gets DEBUG off. Defaulting to True
+# everywhere meant production served Django's technical error pages and its
+# settings dump — the leak recorded in §16.
+_INVOKED_BY_MANAGEMENT_COMMAND = len(sys.argv) > 1
+DEBUG = os.environ.get('DJANGO_DEBUG', 'true' if _INVOKED_BY_MANAGEMENT_COMMAND else 'false'
+                       ).lower() in ('1', 'true', 'yes')
 
 # Bootstrap fallback for the manual-revenue CRUD UI. Until an administrator
 # assigns one of the six manual permissions to a user or group, an all-false
@@ -54,6 +64,13 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # PRIVATE BY DEFAULT: every view of this application requires a signed-in
+    # user unless it opts out with @login_not_required. This is the single
+    # enforcement point (see finance/middleware.py); must sit directly after
+    # AuthenticationMiddleware so request.user is already resolved, and before
+    # the response middleware below.
+    'finance.middleware.AjaxLoginRequiredMiddleware',
+    'dashboard.middleware.PrivateCacheMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
 ]
 
@@ -143,10 +160,12 @@ else:
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/ref/settings/#static-files
 
-# Operator sign-in. Writes are still authorized server-side per request; these
-# only route an unauthenticated visitor to the login form instead of a 403.
+# Operator sign-in. The whole application is private (see finance/middleware),
+# so these settings decide where an unauthenticated visitor is sent and where a
+# fresh sign-in lands: the Financial Overview at "/" (§2, §9). A valid ?next=
+# still wins over LOGIN_REDIRECT_URL, which is how a deep link survives login.
 LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/dashboard/revenue/data/'
+LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
 STATIC_URL = 'static/'

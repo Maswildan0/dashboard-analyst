@@ -16,6 +16,7 @@ disabled, so /static/ (the logo) is served directly from public/ here.
 
 from django.conf import settings
 from django.contrib import admin
+from django.contrib.auth.decorators import login_not_required
 from django.http import FileResponse, Http404
 from django.urls import include, path, re_path
 
@@ -31,11 +32,16 @@ def _serve_file(request, root, path):
     return FileResponse(candidate.open('rb'))
 
 
+# Assets are PUBLIC by design (§5): the login page itself needs the Telkom
+# logo, and the stylesheet that renders the form. They carry no user data, so
+# they are the only views in this project that opt out of the login gate.
+@login_not_required
 def _build_file(request, path):
     """Serve a file from public/build (Vite output)."""
     return _serve_file(request, settings.BASE_DIR / 'public' / 'build', path)
 
 
+@login_not_required
 def _static_file(request, path):
     """Serve a file from public/ (static assets like the logo) so the app
     works without collectstatic when DEBUG=False."""

@@ -93,7 +93,22 @@ body {
     position: sticky; top: 0; z-index: 50;
 }
 .topbar-title { font-weight: 700; font-size: 16px; color: var(--dark); }
-.topbar-right { margin-left: auto; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+/* Signed-in operator + sign-out. The form is inline so the topbar keeps its
+   single-row layout; POST (not a link) is what Django's LogoutView accepts. */
+.topbar-user { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.topbar-user-name {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; color: var(--gray);
+    max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.topbar-logout {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--white); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--dark);
+    font-family: inherit; cursor: pointer;
+}
+.topbar-logout:hover { border-color: var(--primary); color: var(--primary); }
 .period-chip {
     display: inline-flex; align-items: center; gap: 6px;
     background: var(--light-gray); border: 1px solid var(--border);

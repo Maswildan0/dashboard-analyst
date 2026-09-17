@@ -24,6 +24,20 @@
             </div>
             <div class="topbar-right">
                 {% if not empty %}<span class="period-chip"><i class="bi bi-calendar3"></i> {{ m.month_name }} {{ m.year }}</span>{% endif %}
+                {% comment %}
+                Sign-out lives in the topbar so it is reachable from every page.
+                It is a POST form: Django 5+ only accepts POST for logout, and
+                a GET link would let any page sign the operator out.
+                {% endcomment %}
+                <form method="post" action="{% url 'logout' %}" class="topbar-user">
+                    {% csrf_token %}
+                    <span class="topbar-user-name" title="{{ request.user.get_username }}">
+                        <i class="bi bi-person-circle"></i> {{ request.user.get_username }}
+                    </span>
+                    <button type="submit" class="topbar-logout" title="Keluar">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </button>
+                </form>
             </div>
         </header>
         <main class="content">

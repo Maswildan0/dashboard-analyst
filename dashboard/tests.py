@@ -5,6 +5,7 @@ import re
 from html import unescape
 from urllib.parse import parse_qs
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 
 from finance.models import (
@@ -26,6 +27,8 @@ class RevenueOverviewCardTest(TestCase):
     TF_PATH = '/dashboard/revenue/tf/'
 
     def setUp(self):
+        # Revenue Overview is private; these tests assert its content.
+        self.client.force_login(User.objects.create_user('analyst', password='x'))
         self.campus = Campus.objects.create(code='BDG', name='Bandung')
         self.period = FinancialPeriod.objects.create(
             year=2026, month=8, period_start='2026-08-01', period_end='2026-08-31')
@@ -163,6 +166,9 @@ class RevenueOverviewCardTest(TestCase):
 
 class RevenueOverviewNoDataTest(TestCase):
     """Without finance data the cards still render; only the period is dropped."""
+
+    def setUp(self):
+        self.client.force_login(User.objects.create_user('analyst', password='x'))
 
     def test_links_fall_back_to_destination_defaults(self):
         resp = self.client.get('/dashboard/')

@@ -25,6 +25,7 @@
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 
 from finance.models import (
@@ -70,6 +71,9 @@ def make_period(year, month, closed=False):
 
 class RevenueBase(TestCase):
     def setUp(self):
+        # The application is private (finance.middleware), so every page test
+        # needs a signed-in user; these tests assert page content, not access.
+        self.client.force_login(User.objects.create_user('analyst', password='x'))
         self.campus = Campus.objects.create(code='BDG', name='Bandung')
         self.org = OrganizationUnit.objects.create(
             code='RI-CCSL', name='RI-CCSL', campus=self.campus, unit_type='OTHER')
