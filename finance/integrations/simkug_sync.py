@@ -26,10 +26,8 @@ from finance.models import (
     RevenueAccount,
     RevenueBudget,
     RevenueBudgetMonthly,
-    RevenueCategory,
     RevenueLedger,
     RkaVersion,
-    SimkugSyncLog,
 )
 from finance.services.account_classification import normalize_description
 

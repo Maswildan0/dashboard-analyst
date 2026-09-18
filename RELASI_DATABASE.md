@@ -3,7 +3,8 @@
 Dokumen read-only: menjelaskan seluruh tabel, foreign key, dan alur data
 dari General Ledger (SIMKUG) sampai tampilan dashboard.
 
-DB aktif: `db.sqlite3` (dev) / `financial_dashboard` (MySQL via `DB_ENGINE=mysql`).
+DB aktif: PostgreSQL/Neon via `DATABASE_URL` (deployment & dev), MariaDB XAMPP
+`financial_dashboard` untuk management command lokal. Lihat `README.md`.
 Prefix tabel: `finance_` (aplikasi `finance`), sisanya framework Django.
 
 ---

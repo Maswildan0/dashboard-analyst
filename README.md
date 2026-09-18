@@ -6,7 +6,9 @@ Aplikasi monitoring & analisis kinerja keuangan organisasi/universitas — Reven
 
 ## Teknologi
 
-- MariaDB/MySQL (XAMPP `financial_dashboard`, default) — SQLite hanya utk Vercel cold start
+- PostgreSQL / Neon (`DATABASE_URL`) untuk production dan pengembangan
+- MariaDB/MySQL XAMPP `financial_dashboard` sebagai default **lokal** (management
+  command saja); SQLite `/tmp` hanya untuk cold start Vercel tanpa DATABASE_URL
 - Apache ECharts (trend chart)
 - Bootstrap Icons + CSS kustom corporate
 
@@ -98,7 +100,7 @@ Model terdaftar di Django admin: Campus, OrganizationUnit, FinancialPeriod, Reve
 python manage.py test finance
 ```
 
-## Postgres production
+## Database
 
 `DATABASE_URL` takes precedence and requires PostgreSQL with SSL. Vercel cannot
 fall back to temporary SQLite. Configure `DJANGO_SECRET_KEY` on Vercel; never

@@ -20,12 +20,9 @@ def generate_financial_insights(metrics):
     insights = []
     rev_yoy = metrics.get('revenue_yoy')
     exp_yoy = metrics.get('expense_yoy')
-    shu_yoy = metrics.get('shu_yoy')
     shu_margin_achievement = metrics.get('shu_margin_achievement')
     or_status = metrics.get('or_status')
-    composition = metrics.get('composition') or {}
     year = metrics.get('year')
-    month = metrics.get('month')
     prev_year = (year or 0) - 1
 
     def yoy_label(v):

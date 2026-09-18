@@ -225,13 +225,9 @@ def _build_payload(tipe: str, direktorat: str, kode_pp: str, tahun):
     realisasi = [rand(70, 100) for _ in range(12)]
 
     sum_realisasi = sum(realisasi[:8])
-    sum_rka = sum(rka) * 1_000_000
-    total_realisasi = sum_realisasi * 1_000_000
-    target_rka = sum_rka
     realisasi_bulan = realisasi[7] * 1_000_000
     target_rka_bulan = rka[7] * 1_000_000
 
-    capaian_total = int(round(sum_realisasi / sum(rka) * 100))
     capaian_bulan = int(round(realisasi[7] / rka[7] * 100))
 
     q, q_r, q_rka = [], [], []

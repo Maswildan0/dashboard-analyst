@@ -10,14 +10,12 @@ import re
 
 from decimal import Decimal
 
-from django.db.models import Sum
 
 from finance.models import (
     FinancialPeriod,
     GLProjectMapping,
     NtfReportSnapshot,
     Project,
-    ProjectAlias,
 )
 
 from . import manual_revenue as mr
@@ -230,13 +228,9 @@ def _bulk_unit_map(projects):
     pids = [p.pk for p in projects]
     if not pids:
         return {}
-    # latest snapshot per project by (year, month, loaded_at)
+    # Latest snapshot per project, taken as the max id per project (loaded_at
+    # is monotonic in the seed, so the newest row carries the current unit).
     from django.db.models import Max
-    latest = (NtfReportSnapshot.objects.filter(project_id__in=pids)
-              .values('project_id')
-              .annotate(mkey=Max('period__year') * 10000 + Max('period__month') * 100)
-              .values_list('project_id', flat=True))
-    # simpler: pick max id group per project (loaded_at monotonic in seed)
     from finance.models import NtfReportSnapshot as _N
     sub = (_N.objects.filter(project_id__in=pids)
            .values('project_id')
@@ -930,7 +924,6 @@ def program_rows(ctx, *, prefixes=('TF-',), categories=(), search='', sort='',
     N+1 round-trips (critical on remote PostgreSQL/Neon where latency makes
     hundreds of tiny queries unusably slow).
     """
-    from django.db.models import Q as _Q
     from datetime import date as _date
     import calendar as _cal
     from collections import defaultdict as _dd
@@ -942,7 +935,6 @@ def program_rows(ctx, *, prefixes=('TF-',), categories=(), search='', sort='',
     qs = _scope_projects(qs, ctx, prefixes=prefixes, categories=categories)
     projects = list(qs.distinct().order_by('pp__pp_code', 'project_number'))
     pids = [p.pk for p in projects]
-    unit_map = _bulk_unit_map(projects)
     period_end = _date(ctx.year, ctx.month, _cal.monthrange(ctx.year, ctx.month)[1])
 
     # ---- ONE bulk fetch of all mappings + ledgers for these projects ----

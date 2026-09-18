@@ -34,7 +34,6 @@ from finance.models import (
     RevenueAccount,
     RevenueBudget,
     RevenueBudgetMonthly,
-    RevenueCategory,
     RevenueLedger,
     RevenueMonthlySnapshot,
     ProjectMonthlySnapshot,
@@ -342,7 +341,6 @@ class Command(BaseCommand):
         """Create TF program Projects + their GL rows (per real program
         names). Pendaftaran (4111101, PP 3101) is recognised every month as
         PIN SMBB channels; other programs recognise in their month."""
-        reg_acc = self.accounts.get('4111101')
         seq = {}
         for acc_code, pp_code, name, month, _base in TF_PROGRAMS:
             pp = self.pp_by_code.get(pp_code)
@@ -410,7 +408,7 @@ class Command(BaseCommand):
             if number in PROJECT_2026:
                 lifetime_share = PROJECT_2026[number]
                 # subtract what 2025 already delivered
-                already = (share_2025 := PROJECT_2025.get(number, D('0')))
+                already = PROJECT_2025.get(number, D('0'))
                 remaining_share = max(D('0'), lifetime_share - already)
                 self._project_terms(proj, 2026, remaining_share, main_acc, extra_acc)
 

@@ -9,7 +9,6 @@ endpoint, and the write validation — is scoped by it.
 from datetime import date
 from decimal import Decimal
 
-from django.test import TestCase
 
 from finance.models import (
     GLProjectMapping,
