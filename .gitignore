@@ -22,5 +22,11 @@ node_modules/
 Thumbs.db
 .idea/
 .vscode/
-.vercel
-.env*
+
+# Migration material may contain financial data, user records and credentials.
+.vercel/
+.migration-artifacts/
+backups/
+*.sql
+*.dump
+*.sql.gz

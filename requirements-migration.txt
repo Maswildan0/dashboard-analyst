@@ -1,0 +1,3 @@
+-r requirements.txt
+# Install on the migration workstation / for the existing MySQL fallback.
+mysqlclient>=2.2,<3
