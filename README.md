@@ -124,6 +124,11 @@ riwayat upload. File `.xlsx` dibaca pada endpoint upload saja; halaman analisis
 membaca data dari `StudentIntakeTrend` setelah import, dengan snapshot JSON
 sebagai fallback awal sebelum database berisi data.
 
+Sebelum mengaktifkan upload di deployment, jalankan `python manage.py migrate`
+agar tabel `StudentIntakeTrend` dan `StudentIntakeImportLog` tersedia. Jalankan
+ulang `python manage.py seed_revenue_operator` untuk menambahkan permission
+upload ke group Revenue Operator yang sudah ada.
+
 ## Aturan bisnis penting
 
 - **YoY membandingkan window yang sama** — halaman ini memakai YTD vs YTD
