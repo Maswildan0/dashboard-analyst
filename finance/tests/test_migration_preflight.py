@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,11 @@ from finance.management.commands.audit_migration_database import (
 )
 from finance.models import Campus
 from scripts.compare_migration_audits import compare
+
+# Drivers that would make Vercel compile a MySQL client at build time. None of
+# them belongs in the production requirement set (see ProductionRequirements).
+MYSQL_DRIVERS = {'mysqlclient', 'mysql-connector', 'mysql-connector-python',
+                 'pymysql', 'mariadb'}
 
 
 class ConfigurationTests(SimpleTestCase):
@@ -137,3 +143,44 @@ class ReconciliationTests(SimpleTestCase):
             self.assertEqual(canonical(value), {'decimal': '123456789012345678901234567890.12'})
         self.assertNotEqual(canonical(datetime(2026, 8, 1, microsecond=123456, tzinfo=timezone.utc)),
                             canonical(datetime(2026, 8, 1, microsecond=123457, tzinfo=timezone.utc)))
+
+
+class ProductionRequirementsTests(SimpleTestCase):
+    """The Vercel Python builder discovers `requirements.txt`, converts it into
+    a throwaway uv project named "app", and installs it with `uv sync --no-dev`.
+    Every entry in that file is therefore a production dependency.
+
+    A MySQL driver must never land there: mysqlclient publishes no Linux wheel,
+    so the deployment would compile it against libmariadb, fail to find the
+    headers through pkg-config, and abort the build. Legacy MySQL access stays
+    in requirements-migration.txt, which Vercel does not read.
+    """
+
+    root = Path(__file__).resolve().parents[2]
+
+    def _declared_names(self, filename):
+        """Distribution names in a requirements file, ignoring comments and -r."""
+        names = set()
+        for raw in (self.root / filename).read_text(encoding='utf-8').splitlines():
+            line = raw.split('#', 1)[0].strip()
+            if line and not line.startswith('-'):
+                names.add(re.split(r'[<>=!~;\[\s]', line, maxsplit=1)[0]
+                          .lower().replace('_', '-').replace('.', '-'))
+        return names
+
+    def test_production_requires_no_mysql_driver(self):
+        self.assertEqual(self._declared_names('requirements.txt') & MYSQL_DRIVERS, set())
+
+    def test_production_requires_no_extra_install_source(self):
+        # A `-r requirements-dev.txt` here would re-import them behind everyone's back.
+        for line in (self.root / 'requirements.txt').read_text(encoding='utf-8').splitlines():
+            self.assertFalse(line.split('#', 1)[0].strip().startswith('-'),
+                             f'requirements.txt must not include another file: {line!r}')
+
+    def test_production_keeps_the_postgres_runtime(self):
+        # Guards the opposite mistake: passing the build by deleting psycopg.
+        self.assertLessEqual({'django', 'psycopg', 'dj-database-url'},
+                             self._declared_names('requirements.txt'))
+
+    def test_mysql_driver_stays_available_to_migration_tooling(self):
+        self.assertIn('mysqlclient', self._declared_names('requirements-migration.txt'))

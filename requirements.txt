@@ -1,3 +1,13 @@
+# Production runtime only. Vercel installs exactly this file: @vercel/python
+# discovers requirements.txt, converts it into a throwaway uv project, and
+# syncs it with `uv sync --no-dev`. Every entry here is a production
+# dependency, so no MySQL/MariaDB driver may appear in this file.
+#
+# mysqlclient ships no Linux wheel, so a listing here makes Vercel compile it
+# against libmariadb. pkg-config then fails to find the headers and the build
+# aborts. Legacy MySQL access lives in requirements-migration.txt, which Vercel
+# never reads. The regression guard is in
+# finance/tests/test_migration_preflight.py (ProductionRequirementsTests).
 Django>=6.1,<7
 psycopg[binary]>=3.2,<4
 dj-database-url>=3,<4

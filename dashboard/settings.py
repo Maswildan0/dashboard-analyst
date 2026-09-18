@@ -8,7 +8,6 @@ Hosts two applications:
 """
 
 import os
-import sys
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured

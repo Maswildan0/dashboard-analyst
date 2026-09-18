@@ -26,7 +26,7 @@ GitHub schema matches uncommitted local changes.
 | Production deployment | WARNING | Not changed. Must wait for real backup, reconciliation and Preview validation. |
 | Dashboard smoke test | FAIL | Three Preview routes return HTTP 500. Runtime log access and protected fetch are denied by Vercel (403); cause unconfirmed. Production not probed or changed. |
 | Rollback | PASS / WARNING | Plan below; MySQL not accessed or modified. Live rollback cannot be rehearsed without access. |
-| Other issues | WARNING | Linux MySQL driver build needs system development libraries. Windows workstation requires a compatible mysqlclient wheel/build. |
+| Other issues | PASS | MySQL driver build needs system development libraries (`pkg-config`, `libmariadb`), which Vercel does not provide. It is therefore kept out of `requirements.txt`; production installs PostgreSQL only. |
 
 Local test environment: Python 3.13.14, Django 6.1.1, psycopg 3.3.5.
 `python manage.py test finance --noinput`: **70 tests passed** (58 existing + 12
@@ -52,7 +52,8 @@ or another initialization issue are possibilities, not confirmed diagnoses.
 - Vercel fails closed if database configuration is missing. No `/tmp` SQLite fallback.
 - Added PostgreSQL driver, URL parser, and explicit local dotenv loading.
 - Kept legacy MySQL configuration and its MariaDB backend. Its driver is an
-  explicit migration/fallback dependency in `requirements-migration.txt`.
+  explicit migration-only dependency in `requirements-migration.txt`. Vercel
+  reads only `requirements.txt`, so the deployment never installs it.
 - Pinned Python selection to 3.13. Vercel requires an environment-provided
   `DJANGO_SECRET_KEY` and defaults to debug disabled.
 - Removed the legacy custom 15 MB Python bundle cap to allow the PostgreSQL
@@ -220,8 +221,11 @@ access/configuration gate, not permission to cut over Production.
   deployment/configuration. Remove `DATABASE_URL` (and direct URL where used)
   from that deployment's runtime selection and restore `DB_ENGINE=mysql` and
   the original `DB_*` variables through Vercel's secure environment interface.
-  Ensure the rollback runtime includes mysqlclient and can reach that MySQL
-  host. A local `127.0.0.1` MySQL instance is not reachable from Vercel.
+  A local `127.0.0.1` MySQL instance is not reachable from Vercel.
+- Vercel cannot serve the MySQL rollback itself: `requirements.txt` is
+  PostgreSQL-only and must stay that way, and `mysqlclient` has no Linux wheel,
+  so installing it there aborts the build. Roll back by restoring a recorded
+  deployment, or run the MySQL runtime off Vercel.
 - Changing project environment variables requires a new deployment; it does
   not retroactively change an already-built deployment. Verify DB vendor and
   run the same smoke tests after rollback.

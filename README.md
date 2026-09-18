@@ -110,6 +110,12 @@ Legacy `DB_ENGINE=postgres` / `DB_ENGINE=mysql` with `DB_NAME DB_USER DB_PASSWOR
 DB_HOST DB_PORT` remains available when `DATABASE_URL` is absent. MySQL also
 requires `pip install -r requirements-migration.txt` on that workstation/runtime.
 
+Vercel installs `requirements.txt` and nothing else, so it stays PostgreSQL-only.
+Keep it that way: `mysqlclient` has no Linux wheel, so listing it there makes the
+deployment compile it against `libmariadb`, fail `pkg-config`, and abort.
+`requirements-migration.txt` is the only file that may carry a MySQL driver, and
+`ProductionRequirementsTests` fails the suite if one is added back.
+
 To load one local file explicitly, set `DJANGO_ENV_FILE` to its path. Process
 environment variables take precedence. For a migration audit, prefer
 `scripts/run_migration_preflight.py`, which selects the source and target files
