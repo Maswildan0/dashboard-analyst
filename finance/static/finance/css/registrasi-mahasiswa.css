@@ -1,3 +1,11 @@
+/* Page heading action row. */
+.regm-page-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; margin-bottom: 18px;
+}
+.regm-page-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.regm-page-actions .df-btn { text-decoration: none; }
+
 /* ==================================================================
    Registrasi Mahasiswa — quota / registration / BPP tariff analysis.
    Its own `regm-` prefix: the `.rm-*` namespace belongs to the manual
@@ -74,4 +82,80 @@
     .regm-summary { grid-template-columns: 1fr; }
     .regm-chart { height: 300px; }
     .regm-stat-value { font-size: 20px; }
+}
+
+/* ---------- Excel upload / preview ---------- */
+.regm-upload-modal { position: fixed; inset: 0; z-index: 100; }
+.regm-upload-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.55); }
+.regm-upload-dialog {
+    position: relative; width: min(1180px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px); overflow: auto; margin: 24px auto;
+    background: #fff; border-radius: 14px; box-shadow: 0 24px 60px rgba(15,23,42,.25);
+}
+.regm-upload-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; padding: 20px 24px; border-bottom: 1px solid #E2E8F0;
+}
+.regm-upload-head h2 { margin: 0; font-size: 18px; color: #0F172A; }
+.regm-upload-head p { margin: 5px 0 0; color: #64748B; font-size: 13px; }
+.regm-upload-close {
+    border: 0; background: transparent; color: #64748B; cursor: pointer;
+    font-size: 26px; line-height: 1; padding: 0 4px;
+}
+.regm-upload-form, .regm-preview { padding: 20px 24px 24px; }
+.regm-upload-file { display: flex; flex-direction: column; gap: 7px; color: #334155; font-size: 12px; font-weight: 600; }
+.regm-upload-file input {
+    width: 100%; border: 1px solid #CBD5E1; border-radius: 9px;
+    padding: 10px; font: inherit; background: #F8FAFC;
+}
+.regm-template-link {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+    color: #C8102E; font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.regm-template-link:hover { text-decoration: underline; }
+.regm-upload-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.regm-upload-message {
+    margin-top: 14px; padding: 10px 12px; border-radius: 8px;
+    background: #FEF2F2; border: 1px solid #FECACA; color: #B91C1C;
+    font-size: 13px; font-weight: 600;
+}
+.regm-preview-summary {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px; margin-bottom: 16px;
+}
+.regm-preview-stat {
+    padding: 12px; border: 1px solid #E2E8F0; border-radius: 9px;
+    background: #F8FAFC;
+}
+.regm-preview-stat-label { color: #64748B; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.regm-preview-stat-value { margin-top: 4px; color: #0F172A; font-size: 20px; font-weight: 700; }
+.regm-preview-table-wrap { overflow-x: auto; max-height: 390px; border: 1px solid #E2E8F0; border-radius: 9px; }
+.regm-preview-table { min-width: 980px; }
+.regm-preview-table th, .regm-preview-table td { vertical-align: top; }
+.regm-status {
+    display: inline-block; padding: 3px 7px; border-radius: 999px;
+    font-size: 10px; font-weight: 800; letter-spacing: .04em;
+}
+.regm-status-new { background: #DCFCE7; color: #166534; }
+.regm-status-update { background: #DBEAFE; color: #1E40AF; }
+.regm-status-error { background: #FEE2E2; color: #991B1B; }
+.regm-preview-error { color: #B91C1C; white-space: normal; min-width: 220px; }
+.regm-preview-limit { color: #64748B; font-size: 12px; margin: 10px 0 0; }
+.regm-history-card { margin-top: 18px; padding: 20px; }
+.regm-history-table { min-width: 760px; }
+.regm-history-status {
+    display: inline-block; padding: 3px 7px; border-radius: 999px;
+    font-size: 10px; font-weight: 800;
+}
+.regm-status-previewed { background: #FEF3C7; color: #92400E; }
+.regm-status-success { background: #DCFCE7; color: #166534; }
+.regm-status-failed { background: #FEE2E2; color: #991B1B; }
+
+@media (max-width: 720px) {
+    .regm-page-head { flex-direction: column; }
+    .regm-page-actions { width: 100%; }
+    .regm-page-actions .df-btn { flex: 1; justify-content: center; }
+    .regm-upload-dialog { width: calc(100vw - 20px); margin: 10px auto; max-height: calc(100vh - 20px); }
+    .regm-upload-head, .regm-upload-form, .regm-preview { padding-left: 16px; padding-right: 16px; }
+    .regm-preview-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

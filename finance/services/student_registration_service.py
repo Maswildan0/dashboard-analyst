@@ -1,9 +1,13 @@
 """Student registration analysis (quota, registration, BPP tariff).
 
-Reads the tidy `Data Long` dataset shipped in `finance/data/`. The workbook is
-the current source because there is no database table for it yet; this module is
-the only place that knows the source, so Phase 2 can swap the loader for a
-database-backed import without touching the views or the template.
+Reads the shipped tidy `Data Long` dataset until the first successful import.
+Once `StudentIntakeTrend` has rows, the same service reads those database rows
+instead. The service boundary deliberately hides that storage choice so Phase 2
+can replace the loader without changing views, JSON or templates.
+
+The current JSON is the source snapshot supplied for this page; it is not dummy
+or random data. Uploads are the authoritative replacement only after a user
+confirms an all-or-nothing import.
 
 Aggregation rules (agreed with the requester):
 
@@ -22,6 +26,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from functools import lru_cache
 from pathlib import Path
 
+from django.db.utils import OperationalError, ProgrammingError
+
 DATA_FILE = Path(__file__).resolve().parent.parent / 'data' / 'student_registration.json'
 
 # Sentinel for "no filter" in the JSON payload and query strings.
@@ -30,22 +36,60 @@ ONE = Decimal(1)
 TENTH = Decimal('0.1')
 
 
-@lru_cache(maxsize=1)
-def _records():
-    """Parsed rows, each carrying a non-empty identity key.
-
-    Eight rows in the workbook have a blank `Kode Prodi` but a real program and
-    real quota/registration (the Jakarta campus D3 programme). Their data must
-    count towards the aggregates, but a blank code cannot be the dropdown value:
-    it would collide with the "Semua Program Studi" sentinel and make that
-    programme impossible to select. Those rows therefore fall back to a
-    namespaced key built from the program name, which no real code can match.
-    """
+def _file_records():
     with DATA_FILE.open(encoding='utf-8') as fh:
         records = json.load(fh)['records']
     for row in records:
         row['key'] = row['code'] or 'nama:' + row['study_program']
     return tuple(records)
+
+
+@lru_cache(maxsize=1)
+def _records():
+    """Prefer imported DB rows; fall back to the shipped source dataset.
+
+    The fallback keeps first deployment useful before the new migration has
+    been applied. Once an import creates rows, every page reads the database.
+    """
+    try:
+        from finance.models import StudentIntakeTrend
+        db_rows = list(StudentIntakeTrend.objects.values(
+            'study_program_code', 'faculty_name', 'study_program_name',
+            'year', 'tariff', 'quota', 'registration',
+        ))
+        if db_rows:
+            return tuple({
+                'code': row['study_program_code'],
+                'key': row['study_program_code'],
+                'faculty': row['faculty_name'],
+                'study_program': row['study_program_name'],
+                'year': row['year'],
+                'tariff': (
+                    None if row['tariff'] is None else int(row['tariff'])
+                ),
+                'quota': row['quota'] or 0,
+                'registration': row['registration'] or 0,
+            } for row in db_rows)
+    except (OperationalError, ProgrammingError):
+        # The deploy can serve the shipped dataset before its migration runs.
+        pass
+    return _file_records()
+
+
+def clear_records_cache():
+    """Force the next request to observe a successful import."""
+    _records.cache_clear()
+
+
+def using_database():
+    """Whether the current process has imported rows to serve."""
+    try:
+        from finance.models import StudentIntakeTrend
+        return StudentIntakeTrend.objects.exists()
+    except (OperationalError, ProgrammingError):
+        return False
+
+
 
 
 def get_years():

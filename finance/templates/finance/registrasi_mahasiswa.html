@@ -8,8 +8,20 @@
 {% block content %}
 <div class="px-8 py-6">
     <div class="regm-page-head">
-        <h1 class="regm-page-title">Registrasi Mahasiswa</h1>
-        <p class="regm-page-sub">Analisis Kuota, Registrasi, dan Tarif BPP</p>
+        <div>
+            <h1 class="regm-page-title">Registrasi Mahasiswa</h1>
+            <p class="regm-page-sub">Analisis Kuota, Registrasi, dan Tarif BPP</p>
+        </div>
+        {% if can_upload %}
+        <div class="regm-page-actions">
+            <a class="df-btn df-btn-outline" href="{{ template_url }}">
+                <i class="bi bi-download"></i> Download Template
+            </a>
+            <button type="button" class="df-btn df-btn-primary" id="regm-upload-open">
+                <i class="bi bi-upload"></i> Upload Data Excel
+            </button>
+        </div>
+        {% endif %}
     </div>
 
     {# ---------- Filter ---------- #}
@@ -136,9 +148,97 @@
             </div>
         </div>
     </div>
+    {% if can_upload and import_logs %}
+    <div class="card regm-history-card">
+        <h2 class="regm-card-title">Riwayat Upload</h2>
+        <div class="rev-table-wrap">
+            <table class="rev-table regm-history-table">
+                <thead>
+                    <tr>
+                        <th>Tanggal</th>
+                        <th>File</th>
+                        <th>User</th>
+                        <th class="regm-num">Total</th>
+                        <th class="regm-num">New</th>
+                        <th class="regm-num">Update</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in import_logs %}
+                    <tr>
+                        <td>{{ log.uploaded_at|date:"d/m/Y H:i" }}</td>
+                        <td>{{ log.file_name }}</td>
+                        <td>{{ log.uploaded_by|default:"-" }}</td>
+                        <td class="regm-num">{{ log.total_rows }}</td>
+                        <td class="regm-num">{{ log.new_rows }}</td>
+                        <td class="regm-num">{{ log.updated_rows }}</td>
+                        <td><span class="regm-history-status regm-status-{{ log.status|lower }}">{{ log.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if can_upload %}
+    <div id="regm-upload-modal" class="regm-upload-modal" hidden aria-hidden="true">
+        <div class="regm-upload-backdrop" data-regm-close></div>
+        <section class="regm-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="regm-upload-title">
+            <div class="regm-upload-head">
+                <div>
+                    <h2 id="regm-upload-title">Upload Data Registrasi, Kuota &amp; BPP</h2>
+                    <p>Validasi dan preview terlebih dahulu. Database tidak berubah sampai Import Data dikonfirmasi.</p>
+                </div>
+                <button type="button" class="regm-upload-close" data-regm-close aria-label="Tutup">&times;</button>
+            </div>
+            <form id="regm-upload-form" class="regm-upload-form" method="post"
+                  enctype="multipart/form-data"
+                  data-preview-url="{{ upload_preview_url }}"
+                  data-confirm-url="{{ upload_confirm_url }}">
+                {% csrf_token %}
+                <label class="regm-upload-file">
+                    <span>File Excel (.xlsx)</span>
+                    <input type="file" name="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                </label>
+                <a class="regm-template-link" href="{{ template_url }}">
+                    <i class="bi bi-download"></i> Download Template Excel
+                </a>
+                <div id="regm-upload-message" class="regm-upload-message" hidden role="alert"></div>
+                <div class="regm-upload-actions">
+                    <button type="button" class="df-btn df-btn-ghost" data-regm-close>Batal</button>
+                    <button type="submit" class="df-btn df-btn-primary" id="regm-preview-btn">Preview Data</button>
+                </div>
+            </form>
+
+            <div id="regm-preview" class="regm-preview" hidden>
+                <div class="regm-preview-summary" id="regm-preview-summary"></div>
+                <div class="regm-preview-table-wrap">
+                    <table class="rev-table regm-preview-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th><th>Kode Prodi</th><th>Fakultas / Kampus</th>
+                                <th>Program Studi</th><th>Tahun</th><th>Tarif</th>
+                                <th>Kuota</th><th>Registrasi</th><th>Validation</th>
+                            </tr>
+                        </thead>
+                        <tbody id="regm-preview-body"></tbody>
+                    </table>
+                </div>
+                <p class="regm-preview-limit" id="regm-preview-limit"></p>
+                <div class="regm-upload-actions">
+                    <button type="button" class="df-btn df-btn-ghost" id="regm-preview-back">Pilih File Lain</button>
+                    <button type="button" class="df-btn df-btn-primary" id="regm-confirm-btn" disabled>Import Data</button>
+                </div>
+            </div>
+        </section>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="{% static 'finance/js/registrasi-mahasiswa.js' %}"></script>
+{% if can_upload %}<script src="{% static 'finance/js/registrasi-mahasiswa-upload.js' %}"></script>{% endif %}
 {% endblock %}

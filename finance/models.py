@@ -723,3 +723,95 @@ class ManualRevenueEntry(models.Model):
 
     def __str__(self):
         return f'{self.transaction_date} {self.source_type} {self.amount} #{self.pk}'
+
+
+class StudentIntakeTrend(models.Model):
+    """One quota/registration/tariff observation per programme and year.
+
+    The unique programme/year key is the import upsert grain. Tariff is nullable
+    because a blank BPP in the workbook means "not recorded", not zero.
+    """
+
+    study_program_code = models.CharField(max_length=80)
+    faculty_name = models.CharField(max_length=200)
+    study_program_name = models.CharField(max_length=255)
+    year = models.PositiveSmallIntegerField()
+    tariff = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    quota = models.PositiveIntegerField(default=0)
+    registration = models.PositiveIntegerField(default=0)
+    source_file_name = models.CharField(max_length=255, blank=True, default='')
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='student_intake_rows',
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['year', 'faculty_name', 'study_program_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['study_program_code', 'year'],
+                name='student_intake_code_year_unique',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(year__gte=1900, year__lte=2200),
+                name='student_intake_year_range',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tariff__isnull=True) | models.Q(tariff__gte=0),
+                name='student_intake_tariff_nonnegative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quota__gte=0),
+                name='student_intake_quota_nonnegative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(registration__gte=0),
+                name='student_intake_registration_nonnegative',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['faculty_name', 'year']),
+            models.Index(fields=['study_program_code', 'year']),
+        ]
+
+    def __str__(self):
+        return f'{self.study_program_code} {self.year}'
+
+
+class StudentIntakeImportLog(models.Model):
+    """Preview/import audit entry; no raw workbook is stored."""
+
+    STATUSES = [
+        ('PREVIEWED', 'Previewed'),
+        ('SUCCESS', 'Success'),
+        ('FAILED', 'Failed'),
+    ]
+
+    file_name = models.CharField(max_length=255)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='student_intake_imports',
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    total_rows = models.PositiveIntegerField(default=0)
+    new_rows = models.PositiveIntegerField(default=0)
+    updated_rows = models.PositiveIntegerField(default=0)
+    error_rows = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=12, choices=STATUSES, default='PREVIEWED')
+    message = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f'{self.file_name} {self.status}'

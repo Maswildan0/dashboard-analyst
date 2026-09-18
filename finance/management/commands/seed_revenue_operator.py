@@ -3,8 +3,8 @@
 Without an operator account every gated manual-revenue control disappears:
 finance.permissions.capabilities returns all-false, so "+ Input Manual" and the
 row-action menu entries never render and the feature looks broken. This command
-grants exactly the six permissions the feature checks.
-
+grants every configured Revenue Operator permission, including the student
+intake upload permission.
 Run:
     python manage.py seed_revenue_operator                      # admin / random
     python manage.py seed_revenue_operator --username wildan --password rahasia

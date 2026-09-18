@@ -112,6 +112,18 @@ Endpoint: `/dashboard/registrasi-mahasiswa/data/` (JSON agregat) dan
 `/dashboard/registrasi-mahasiswa/program-studi/?faculty=...` (dropdown
 dependent). Halaman ini privat seperti halaman lain (lihat `finance/middleware.py`).
 
+Pengguna dengan permission `finance.add_studentintaketrend` mendapat tombol
+**Upload Data Excel**. Alurnya selalu:
+
+`Upload .xlsx → validasi → preview (NEW/UPDATE/ERROR) → konfirmasi → upsert`
+
+Template resmi tersedia di
+`/dashboard/registrasi-mahasiswa/template/`. Import bersifat all-or-nothing,
+menggunakan key `Kode Prodi + Tahun`, tidak menghapus baris lama, dan mencatat
+riwayat upload. File `.xlsx` dibaca pada endpoint upload saja; halaman analisis
+membaca data dari `StudentIntakeTrend` setelah import, dengan snapshot JSON
+sebagai fallback awal sebelum database berisi data.
+
 ## Aturan bisnis penting
 
 - **YoY membandingkan window yang sama** — halaman ini memakai YTD vs YTD
@@ -145,8 +157,8 @@ requires `pip install -r requirements-migration.txt` on that workstation/runtime
 Vercel installs `requirements.txt` and nothing else, so it stays PostgreSQL-only.
 Keep it that way: `mysqlclient` has no Linux wheel, so listing it there makes the
 deployment compile it against `libmariadb`, fail `pkg-config`, and abort.
-`requirements-migration.txt` is the only file that may carry a MySQL driver, and
-`ProductionRequirementsTests` fails the suite if one is added back.
+The dev/migration requirement files may carry the driver only for local legacy
+tooling, and `ProductionRequirementsTests` fails the suite if one is added back.
 
 To load one local file explicitly, set `DJANGO_ENV_FILE` to its path. Process
 environment variables take precedence. For a migration audit, prefer

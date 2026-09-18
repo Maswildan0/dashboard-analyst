@@ -41,13 +41,13 @@ from functools import wraps
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 
-# Model-level permission codenames used by the manual revenue feature.
 PERM_CREATE = 'finance.add_manualrevenueentry'
 PERM_EDIT = 'finance.change_manualrevenueentry'
 PERM_VOID = 'finance.delete_manualrevenueentry'
 PERM_RESTORE = 'finance.restore_entry'
 PERM_ADJUST = 'finance.create_adjustment'
 PERM_VIEW_AUDIT = 'finance.view_audit'
+PERM_UPLOAD_STUDENT_INTAKE = 'finance.add_studentintaketrend'
 
 # Human labels for the UI (button visibility / disabled tooltips).
 ACTION_PERMS = {
@@ -57,6 +57,7 @@ ACTION_PERMS = {
     'restore': PERM_RESTORE,
     'adjustment': PERM_ADJUST,
     'view_audit': PERM_VIEW_AUDIT,
+    'upload_intake': PERM_UPLOAD_STUDENT_INTAKE,
 }
 
 
@@ -162,3 +163,25 @@ def authenticated_required(view):
         require_authenticated(request.user)
         return view(request, *args, **kwargs)
     return wrapper
+
+
+def can_upload_student_intake(user):
+    """Strict upload gate: viewer accounts never inherit the bootstrap fallback."""
+    return bool(
+        user
+        and user.is_authenticated
+        and user.is_active
+        and (user.is_superuser or user.has_perm(PERM_UPLOAD_STUDENT_INTAKE))
+    )
+
+
+def require_student_intake_upload(user):
+    """Raise 403 unless the caller has the dedicated import permission."""
+    if not user or not user.is_authenticated:
+        raise PermissionDenied('Autentikasi diperlukan.')
+    if not user.is_active:
+        raise PermissionDenied('Akun tidak aktif.')
+    if not can_upload_student_intake(user):
+        raise PermissionDenied(
+            f'Anda tidak memiliki izin upload ({PERM_UPLOAD_STUDENT_INTAKE}).'
+        )
