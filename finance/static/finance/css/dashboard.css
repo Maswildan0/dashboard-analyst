@@ -244,7 +244,7 @@ main.content .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
    ------------------------------------------------------------------ */
 main.content,
 main.content > div,
-.df-card,
+.df-card { width: 100%; max-width: 100%; min-width: 0; }
 
 /* ------------------------------------------------------------------
    Project revenue table reusable grid class.
