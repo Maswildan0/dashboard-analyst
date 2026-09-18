@@ -17,6 +17,7 @@
         <a class="menu-item disabled" href="#"><i class="bi bi-graph-up-arrow"></i> SHU Analysis</a>
 
         <div class="menu-group-label">Analytics</div>
+        <a class="menu-item {% if active_tab == 'registrasi_mahasiswa' %}active{% endif %}" href="{% url 'registration:index' %}"><i class="bi bi-mortarboard"></i> Registrasi Mahasiswa</a>
         <a class="menu-item disabled" href="#"><i class="bi bi-graph-up"></i> Financial Journey</a>
         <a class="menu-item disabled" href="#"><i class="bi bi-bar-chart"></i> YoY Analysis</a>
         <a class="menu-item disabled" href="#"><i class="bi bi-arrows-angle-expand"></i> Variance Analysis</a>

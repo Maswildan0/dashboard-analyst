@@ -1,0 +1,77 @@
+/* ==================================================================
+   Registrasi Mahasiswa — quota / registration / BPP tariff analysis.
+   Its own `regm-` prefix: the `.rm-*` namespace belongs to the manual
+   revenue modal, and reusing it would leak that modal's layout in here.
+   ================================================================== */
+
+.regm-page-head { margin-bottom: 18px; }
+.regm-page-title { font-size: 20px; font-weight: 700; color: #0F172A; margin: 0; }
+.regm-page-sub { font-size: 13px; color: #64748B; margin: 4px 0 0; }
+
+/* Native selects styled like the dashboard's custom ones: this page uses real
+   <select> elements so it works without JS (progressive enhancement). */
+.regm-native-select { appearance: auto; }
+
+/* ---------- Summary cards ---------- */
+.regm-summary {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px; margin: 18px 0;
+}
+.regm-stat { padding: 16px 18px; min-width: 0; }
+.regm-stat-label {
+    font-size: 11px; font-weight: 600; color: #64748B;
+    text-transform: uppercase; letter-spacing: .04em;
+}
+.regm-stat-value {
+    font-size: 24px; font-weight: 700; color: #0F172A;
+    margin-top: 6px; font-variant-numeric: tabular-nums;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.regm-stat-sub { font-size: 12px; color: #94A3B8; margin-top: 4px; }
+
+/* ---------- Chart ---------- */
+.regm-chart-card { padding: 20px; margin-bottom: 18px; }
+.regm-card-title { font-size: 16px; font-weight: 700; color: #222; margin: 0 0 12px; }
+.regm-chart { width: 100%; height: 380px; }
+
+/* ---------- Table ---------- */
+.regm-table-card { padding: 20px; }
+.regm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.regm-table th {
+    text-align: left; font-size: 11px; font-weight: 700; color: #334155;
+    text-transform: uppercase; letter-spacing: .04em;
+    padding: 10px; border-bottom: 1px solid var(--border, #E5E7EB);
+    background: #F8FAFC; white-space: nowrap;
+}
+.regm-table td {
+    padding: 9px 10px; border-bottom: 1px solid var(--border, #E5E7EB);
+    color: var(--dark, #222); white-space: nowrap;
+}
+.regm-num { text-align: right; font-variant-numeric: tabular-nums; }
+.regm-pos { color: #16A34A; font-weight: 600; }
+.regm-neg { color: #DC2626; font-weight: 600; }
+/* A year with no intake in this scope: shown, but not read as a real 0. */
+.regm-row-empty td { color: #94A3B8; }
+
+/* ---------- Empty state ---------- */
+.regm-empty {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 12px; padding: 64px 20px; text-align: center;
+}
+.regm-empty-icon {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: #F1F5F9; color: #94A3B8;
+    display: flex; align-items: center; justify-content: center;
+}
+.regm-empty-title { font-size: 16px; font-weight: 700; color: #0F172A; margin: 0; }
+.regm-empty-desc { font-size: 14px; color: #64748B; margin: 0; max-width: 560px; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1100px) {
+    .regm-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+    .regm-summary { grid-template-columns: 1fr; }
+    .regm-chart { height: 300px; }
+    .regm-stat-value { font-size: 20px; }
+}

@@ -80,6 +80,38 @@ Rekonsiliasi development:
 python manage.py reconcile_financial_overview --year 2026 --month 8 --campus BDG
 ```
 
+## Registrasi Mahasiswa
+
+Halaman `/dashboard/registrasi-mahasiswa/` menganalisis kuota, registrasi, dan
+tarif BPP per tahun (2019–2026) dengan filter Fakultas dan Program Studi
+(dropdown Prodi mengikuti Fakultas yang dipilih).
+
+Sumber data: `finance/data/student_registration.json`, hasil ekstraksi sheet
+**Data Long** (821 baris, 115 program studi, 10 fakultas/kampus). Belum ada
+tabel database untuk data ini, jadi file tersebut adalah sumbernya untuk saat
+ini; seluruh pembacaan terpusat di
+`finance/services/student_registration_service.py`, sehingga tahap berikutnya
+(upload Excel) cukup mengganti loader tanpa mengubah view atau template.
+
+Aturan agregasi:
+
+| Ukuran | Aturan |
+|---|---|
+| Kuota | **SUM** antar program studi |
+| Registrasi | **SUM** antar program studi |
+| Tarif BPP | **AVERAGE** dari tarif non-null — **tidak pernah dijumlah** |
+| Capaian | Registrasi / Kuota × 100; Kuota 0 → tampil `-` |
+| Selisih | Registrasi − Kuota |
+
+Tarif kosong tetap `null` (bukan 0). Kuota/registrasi kosong dianggap 0. Baris
+yang ketiganya kosong dibuang. Tarif `0` yang tertulis eksplisit di workbook
+tetap ikut dirata-ratakan, jadi rata-rata 2019 tampak rendah karena 23 dari 82
+program memang bertarif 0 pada tahun itu.
+
+Endpoint: `/dashboard/registrasi-mahasiswa/data/` (JSON agregat) dan
+`/dashboard/registrasi-mahasiswa/program-studi/?faculty=...` (dropdown
+dependent). Halaman ini privat seperti halaman lain (lihat `finance/middleware.py`).
+
 ## Aturan bisnis penting
 
 - **YoY membandingkan window yang sama** — halaman ini memakai YTD vs YTD

@@ -58,6 +58,8 @@ urlpatterns = [
     path('dashboard/data/export', views.export, name='realisasi-export'),
     # Revenue module (database-driven; replaces mock on /dashboard/ stepwise).
     path('dashboard/revenue/', include('finance.urls_revenue')),
+    # Registrasi Mahasiswa: quota / registration / BPP tariff analysis.
+    path('dashboard/registrasi-mahasiswa/', include('finance.urls_registration')),
     # Operator sign-in/out. Django's own views; the template lives in
     # templates/registration/login.html.
     path('', include('django.contrib.auth.urls')),

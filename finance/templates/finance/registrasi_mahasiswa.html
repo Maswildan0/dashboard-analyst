@@ -1,0 +1,144 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+{% load dashboard_filters %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'finance/css/registrasi-mahasiswa.css' %}?v=1">{% endblock %}
+{% block title %}Registrasi Mahasiswa{% endblock %}
+{% block topbar_title %}Registrasi Mahasiswa{% endblock %}
+
+{% block content %}
+<div class="px-8 py-6">
+    <div class="regm-page-head">
+        <h1 class="regm-page-title">Registrasi Mahasiswa</h1>
+        <p class="regm-page-sub">Analisis Kuota, Registrasi, dan Tarif BPP</p>
+    </div>
+
+    {# ---------- Filter ---------- #}
+    <div class="df-card">
+        <div class="df-card-head">
+            <div class="df-head-left">
+                <span class="df-head-icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 3.5h13M4 8h8M6.5 12.5h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </span>
+                <div>
+                    <div class="df-head-title">Filter Data</div>
+                    <div class="df-head-desc">Pilih fakultas dan program studi yang ingin dianalisis</div>
+                </div>
+            </div>
+            <button type="button" class="df-btn df-btn-ghost" id="regm-reset-btn">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 8a7 7 0 111.2 3.9M1 1v3h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Reset
+            </button>
+        </div>
+
+        <form id="regm-filter-form" class="df-form df-form-finance" method="get"
+              action="{% url 'registration:index' %}"
+              data-data-url="{% url 'registration:data' %}"
+              data-programs-url="{% url 'registration:programs' %}">
+            <div class="df-field">
+                <label class="df-label" for="regm-faculty">Fakultas</label>
+                <select id="regm-faculty" name="faculty" class="df-select regm-native-select">
+                    <option value="">Semua Fakultas</option>
+                    {% for f in faculties %}
+                    <option value="{{ f }}" {% if f == selected_faculty %}selected{% endif %}>{{ f }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="df-field">
+                <label class="df-label" for="regm-program">Program Studi</label>
+                <select id="regm-program" name="study_program" class="df-select regm-native-select">
+                    <option value="">Semua Program Studi</option>
+                    {% for p in study_programs %}
+                    <option value="{{ p.value }}" {% if p.value == selected_study_program %}selected{% endif %}>{{ p.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="df-field df-apply">
+                <span class="df-label df-label-empty" aria-hidden="true"></span>
+                <button type="submit" class="df-btn df-btn-primary" id="regm-apply-btn">
+                    <svg class="df-btn-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span class="df-btn-text">Terapkan</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div id="regm-empty" class="regm-empty" {% if trend.has_data %}hidden{% endif %}>
+        <div class="regm-empty-icon" aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><path d="M4 19V5m0 14h16M8 19v-6m4 6V8m4 11v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </div>
+        <h3 class="regm-empty-title">Tidak ada data Registrasi Mahasiswa</h3>
+        <p class="regm-empty-desc">Tidak ada data Registrasi Mahasiswa untuk filter yang dipilih.</p>
+    </div>
+
+    <div id="regm-body" {% if not trend.has_data %}hidden{% endif %}>
+        {# ---------- Summary cards ---------- #}
+        <div class="regm-summary" id="regm-summary">
+            <div class="card regm-stat">
+                <div class="regm-stat-label">Kuota</div>
+                <div class="regm-stat-value" id="regm-s-quota">{{ trend.summary.disp.quota }}</div>
+                <div class="regm-stat-sub">Tahun <span id="regm-s-year">{{ trend.summary.year }}</span></div>
+            </div>
+            <div class="card regm-stat">
+                <div class="regm-stat-label">Registrasi</div>
+                <div class="regm-stat-value" id="regm-s-registration">{{ trend.summary.disp.registration }}</div>
+                <div class="regm-stat-sub">Tahun <span id="regm-s-year-2">{{ trend.summary.year }}</span></div>
+            </div>
+            <div class="card regm-stat">
+                <div class="regm-stat-label">Capaian Registrasi</div>
+                <div class="regm-stat-value" id="regm-s-achievement">{{ trend.summary.disp.achievement }}</div>
+                <div class="regm-stat-sub">Registrasi / Kuota</div>
+            </div>
+            <div class="card regm-stat">
+                <div class="regm-stat-label">Rata-rata BPP</div>
+                <div class="regm-stat-value" id="regm-s-tariff" data-value="{{ trend.summary.tariff_average|default_if_none:'' }}">{{ trend.summary.disp.tariff_average }}</div>
+                <div class="regm-stat-sub">Tarif tahun terbaru</div>
+            </div>
+        </div>
+
+        {# ---------- Chart ---------- #}
+        <div class="card regm-chart-card">
+            <h2 class="regm-card-title" id="regm-chart-title">Tren Kuota, Registrasi, dan Tarif BPP{% if chart_label %} {{ chart_label }}{% endif %}</h2>
+            <div id="regm-chart" class="regm-chart" role="img"
+                 aria-label="Grafik tren kuota, registrasi, dan tarif BPP per tahun"></div>
+            <script type="application/json" id="regm-chart-data">{{ trend_json|safe }}</script>
+        </div>
+
+        {# ---------- Table ---------- #}
+        <div class="card regm-table-card">
+            <h2 class="regm-card-title">Ringkasan per Tahun</h2>
+            <div class="rev-table-wrap">
+                <table class="rev-table regm-table">
+                    <thead>
+                        <tr>
+                            <th>Tahun</th>
+                            <th class="regm-num">Kuota</th>
+                            <th class="regm-num">Registrasi</th>
+                            <th class="regm-num">Selisih</th>
+                            <th class="regm-num">Capaian</th>
+                            <th class="regm-num">Rata-rata BPP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="regm-table-body">
+                        {% for row in trend.table %}
+                        <tr{% if not row.programs %} class="regm-row-empty"{% endif %}>
+                            <td>{{ row.year }}</td>
+                            <td class="regm-num">{{ row.disp.quota }}</td>
+                            <td class="regm-num">{{ row.disp.registration }}</td>
+                            <td class="regm-num {% if row.difference > 0 %}regm-pos{% elif row.difference < 0 %}regm-neg{% endif %}">{{ row.disp.difference }}</td>
+                            <td class="regm-num">{{ row.disp.achievement }}</td>
+                            <td class="regm-num">{{ row.disp.tariff_average }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'finance/js/registrasi-mahasiswa.js' %}"></script>
+{% endblock %}
